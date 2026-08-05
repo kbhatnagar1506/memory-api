@@ -146,3 +146,26 @@ def test_infer_scaling_detects_the_saturation_point():
 def test_every_provider_has_a_documented_assumption():
     for name, rule in ASSUMED_RULES.items():
         assert rule.note.startswith("assumed"), name
+
+
+def test_pretest_cache_key_includes_payload():
+    """Regression: probe ids collide across runs whose content differs.
+
+    gate-01 and gate-02 both had a probe called `band_label-00`, drawn from
+    different graphs. A cache key without the payload hash served gate-01's
+    answer for gate-02's canvas, producing a fake 87% on band_label and a fake
+    20% on date_read. The key must bind to the bytes actually sent.
+    """
+    import hashlib
+
+    from mapi_ablation.pretest import build_probes
+
+    a = build_probes({"band_label": 1}, seed=1)[0]
+    b = build_probes({"band_label": 1}, seed=2)[0]
+    assert a.pid == b.pid, "precondition: same probe id"
+
+    def key(p):
+        h = hashlib.sha256(p.png()).hexdigest()[:16]
+        return f"m|{p.pid}|cold|v|1540|{h}|{p.answer}"
+
+    assert key(a) != key(b), "same-id probes with different canvases must not collide"

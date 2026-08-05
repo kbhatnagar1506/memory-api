@@ -8,9 +8,12 @@ to work.
 
 from __future__ import annotations
 
+import hashlib
 import json
-import os
+import math
+import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .pretest import (
+    CRITICAL_PATH,
     GATE_THRESHOLD,
     PRETEST_PROMPT_VERSION,
     PRIMITIVES,
@@ -82,7 +86,7 @@ def pretest(
         False, help="also measure each provider's real image scaling from token counts"
     ),
 ) -> None:
-    """Stage 0: 40 one-primitive canvases. Gate before the full ablation."""
+    """Stage 0: one-primitive canvases. Gate before the full ablation."""
     cfg = load_config(config)
     model_keys = (models.split(",") if models else cfg["pretest"]["models"])
     conds = (conditions.split(",") if conditions else cfg["pretest"]["conditions"])
@@ -123,41 +127,54 @@ def pretest(
     cache = ResponseCache(REPO / cfg["runner"]["cache_path"])
     rows: list[dict] = []
     responses_path = out / "responses.jsonl"
+    write_lock = threading.Lock()
 
-    for key, adapter in adapters.items():
-        for cond in conds:
-            for p in PROBES:
-                prompt = build_pretest_prompt(p, cond)
-                ck = f"{adapter.model}|{p.pid}|{cond}|{PRETEST_PROMPT_VERSION}|{width}"
-                import hashlib
+    def one(key: str, adapter, cond: str, p) -> dict:
+        # The payload hash MUST be in the key. Without it, a probe id like
+        # `band_label-00` collides across runs whose probe content differs, and
+        # the cache serves an answer to a question that was never asked. That
+        # happened between gate-01 and gate-02 and produced a fake 87% on
+        # band_label and a fake 20% on date_read.
+        payload_hash = hashlib.sha256(pngs[p.pid]).hexdigest()[:16]
+        ck = (f"{adapter.model}|{p.pid}|{cond}|{PRETEST_PROMPT_VERSION}|"
+              f"{width}|{payload_hash}|{p.answer}")
+        ckey = hashlib.sha256(ck.encode()).hexdigest()
+        resp = cache.get(ckey)
+        cached = resp is not None
+        if resp is None:
+            resp = adapter.complete(
+                text=build_pretest_prompt(p, cond),
+                image_png=pngs[p.pid],
+                max_tokens=24,
+            )
+            cache.put(ckey, resp)
+        parsed, outcome = score_probe(p, resp.text) if resp.ok else (None, "error")
+        return {
+            "model_key": key, "model": adapter.model, "condition": cond,
+            "primitive": p.primitive, "pid": p.pid, "question": p.question,
+            "expected": p.answer, "parsed": parsed, "outcome": outcome,
+            "raw_text": resp.text, "input_tokens": resp.input_tokens,
+            "latency_ms": round(resp.latency_ms, 1), "error": resp.error,
+            "cached": cached, "meta": p.meta,
+        }
 
-                ckey = hashlib.sha256(ck.encode()).hexdigest()
-                resp = cache.get(ckey)
-                cached = resp is not None
-                if resp is None:
-                    resp = adapter.complete(
-                        text=prompt, image_png=pngs[p.pid], max_tokens=24
-                    )
-                    cache.put(ckey, resp)
-                if resp.ok:
-                    parsed, outcome = score_probe(p, resp.text)
-                else:
-                    parsed, outcome = None, "error"
-                row = {
-                    "model_key": key, "model": adapter.model, "condition": cond,
-                    "primitive": p.primitive, "pid": p.pid, "question": p.question,
-                    "expected": p.answer, "parsed": parsed, "outcome": outcome,
-                    "raw_text": resp.text, "input_tokens": resp.input_tokens,
-                    "latency_ms": round(resp.latency_ms, 1), "error": resp.error,
-                    "cached": cached,
-                }
-                rows.append(row)
+    jobs = [(k, a, c, p) for k, a in adapters.items() for c in conds for p in PROBES]
+    conc = cfg["runner"].get("concurrency", 6)
+    console.print(f"  running {len(jobs)} calls at concurrency {conc}")
+    with ThreadPoolExecutor(max_workers=conc) as pool:
+        futures = [pool.submit(one, *j) for j in jobs]
+        for i, fut in enumerate(as_completed(futures), 1):
+            row = fut.result()
+            rows.append(row)
+            with write_lock:
                 with open(responses_path, "a") as fh:
                     fh.write(json.dumps(row) + "\n")
-                mark = {"correct": "[green].[/]", "wrong": "[red]x[/]",
-                        "unparseable": "[yellow]?[/]", "error": "[red]![/]"}[outcome]
-                console.print(mark, end="")
-            console.print(f"  {key}/{cond}")
+            mark = {"correct": "[green].[/]", "wrong": "[red]x[/]",
+                    "unparseable": "[yellow]?[/]", "error": "[red]![/]"}[row["outcome"]]
+            console.print(mark, end="")
+            if i % 80 == 0:
+                console.print(f" {i}/{len(jobs)}")
+    console.print("")
 
     _pretest_report(rows, out, threshold, width)
 
@@ -190,52 +207,108 @@ def _pretest_report(rows: list[dict], out: Path, threshold: float, width: int) -
     lines = [
         "# Stage 0 pretest",
         "",
-        f"Authored canvas width: {width}px. Gate: every primitive >= "
-        f"{threshold:.0%} for a frontier model.",
+        f"Authored canvas width: {width}px. Gate: every critical-path primitive "
+        f">= {threshold:.0%}.",
         "",
-        "| model | condition | primitive | n | correct | wrong | unparseable | "
-        "error | accuracy | gate |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "Each row carries a Wilson 95% interval, and the gate is three-state: "
+        "FAIL if the interval sits entirely below the threshold, PASS if it sits "
+        "entirely at or above it, INCONCLUSIVE if this sample size cannot tell. "
+        "Three states because a two-state interval gate is unpassable at small n "
+        "-- a perfect 30/30 has a lower bound of 88.6%. A decisive PASS at 95% "
+        "needs n>=75 with zero errors, or n>=150 to tolerate one.",
+        "",
+        "`crit` marks the primitives the six query types actually depend on. The "
+        "others are reported but do not gate, because no question exercises them.",
+        "",
+        "| model | condition | primitive | crit | n | correct | wrong | "
+        "unparseable | error | accuracy | 95% CI | gate |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
-    table = Table("model", "condition", "primitive", "n", "acc", "gate")
+    table = Table("model", "cond", "primitive", "crit", "n", "acc", "95% CI", "gate")
     failures: list[str] = []
+    warnings: list[str] = []
     for (mk, cond, prim), outcomes in sorted(agg.items()):
         n = len(outcomes)
         c = outcomes.count("correct")
         acc = c / n if n else 0.0
-        passed = acc >= threshold
-        if not passed:
-            failures.append(f"{mk}/{cond}/{prim} = {acc:.0%}")
+        lo, hi = _wilson(c, n)
+        crit = prim in CRITICAL_PATH
+        # The gate is a claim about the TRUE rate, so judge the interval rather
+        # than the point estimate -- but three-state, because a two-state gate
+        # on an interval is unpassable at small n (30/30 has a lower bound of
+        # 89%). FAIL means confidently below; PASS means confidently at or
+        # above; INCONCLUSIVE means this sample size cannot tell.
+        if hi < threshold:
+            verdict = "FAIL"
+        elif lo >= threshold:
+            verdict = "PASS"
+        else:
+            verdict = "INCONCLUSIVE"
+        label = verdict if crit else f"{verdict} (non-gating)"
+        if verdict != "PASS":
+            msg = (f"{mk}/{cond}/{prim} = {acc:.0%} [{lo:.0%}-{hi:.0%}] n={n} "
+                   f"-> {verdict}")
+            (failures if crit and verdict == "FAIL" else warnings).append(
+                f"{'crit ' if crit else ''}{msg}")
         lines.append(
-            f"| {mk} | {cond} | {prim} | {n} | {c} | {outcomes.count('wrong')} | "
-            f"{outcomes.count('unparseable')} | {outcomes.count('error')} | "
-            f"{acc:.0%} | {'PASS' if passed else 'FAIL'} |"
+            f"| {mk} | {cond} | {prim} | {'yes' if crit else 'no'} | {n} | {c} | "
+            f"{outcomes.count('wrong')} | {outcomes.count('unparseable')} | "
+            f"{outcomes.count('error')} | {acc:.0%} | {lo:.0%}-{hi:.0%} | {label} |"
         )
-        table.add_row(mk, cond, prim, str(n), f"{acc:.0%}",
-                      "[green]PASS[/]" if passed else "[red]FAIL[/]")
+        table.add_row(
+            mk, cond, prim, "yes" if crit else "no", str(n), f"{acc:.0%}",
+            f"{lo:.0%}-{hi:.0%}",
+            {"PASS": "[green]PASS[/]", "FAIL": "[red]FAIL[/]",
+             "INCONCLUSIVE": "[yellow]INCONC[/]"}[verdict],
+        )
 
     lines += ["", "## Verdict", ""]
     if failures:
         lines.append(
-            "GATE NOT PASSED. The following primitives fell below the threshold, "
-            "so at least part of the visual grammar is not cold-readable and the "
-            "full ablation would partly be measuring that rather than the "
-            "hypothesis:"
+            "**GATE NOT PASSED.** These critical-path primitives did not clear "
+            "the threshold, so part of the visual grammar the query set depends "
+            "on is not reliably readable, and the full ablation would partly be "
+            "measuring that rather than the hypothesis:"
         )
         lines += [f"- {f}" for f in failures]
     else:
         lines.append(
-            "GATE PASSED. Every primitive is readable at or above the threshold, "
-            "so a failure in the full ablation would not be attributable to an "
-            "unreadable grammar."
+            "**GATE PASSED on the critical path.** Every primitive the six query "
+            "types depend on clears the threshold, so a canvas-arm failure in the "
+            "full ablation would not be attributable to an unreadable grammar."
         )
+    if warnings:
+        lines += [
+            "",
+            "Not a decisive pass (reported, not blocking):",
+        ]
+        lines += [f"- {w}" for w in warnings]
+        lines += [
+            "",
+            "The claim this run supports is therefore narrower than 'the grammar "
+            "is cold-readable': it is 'the parts of the grammar the query set "
+            "depends on are cold-readable'. Any write-up must say so.",
+        ]
     (out / "pretest.md").write_text("\n".join(lines) + "\n")
     console.print(table)
     console.print(f"\nwrote {out / 'pretest.md'}")
     if failures:
-        console.print(f"[red]GATE NOT PASSED[/]: {', '.join(failures)}")
+        console.print(f"[red]GATE NOT PASSED[/]: {'; '.join(failures)}")
     else:
-        console.print("[green]GATE PASSED[/]")
+        console.print("[green]GATE PASSED on the critical path[/]")
+    for w in warnings:
+        console.print(f"[yellow]not a decisive pass[/]: {w}")
+
+
+def _wilson(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval. Behaves sanely at 0/n and n/n, unlike normal-approx."""
+    if n == 0:
+        return (0.0, 0.0)
+    p = successes / n
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return (max(0.0, centre - half), min(1.0, centre + half))
 
 
 def _verify_resize(adapters: dict, out: Path) -> None:

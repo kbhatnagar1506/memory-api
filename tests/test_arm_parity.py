@@ -121,3 +121,28 @@ def test_canvas_render_is_collision_free_at_measured_configs(payload_sets):
     """A collision means two node boxes overlap, which is a broken canvas."""
     for _, payloads in payload_sets:
         assert payloads["canvas"].meta["collisions"] == []
+
+
+def test_every_pretest_probe_renders_cleanly():
+    """No probe may have overlapping boxes or an occluded connector.
+
+    edge_type-04 and -19 originally placed two same-band nodes one date-step
+    apart: the boxes touched, the dashed `contradicts` connector had zero
+    visible span, and the model scored it `caused`. That reads as a grammar
+    failure but is a broken probe.
+    """
+    import math
+
+    from mapi_ablation.pretest import PROBES
+    from mapi_ablation.render.layout import RenderConfig, compute_layout
+
+    for p in PROBES:
+        p.png()  # asserts no truncation and no collisions
+        if not p.graph.edges:
+            continue
+        lay = compute_layout(p.graph, RenderConfig(width=1540, subrows=1))
+        e = p.graph.edges[0]
+        a, b = lay.placements[e.src], lay.placements[e.dst]
+        dx = max(abs(a.cx - b.cx) - lay.geom.node_w, 0)
+        span = math.hypot(dx, abs(a.cy - b.cy))
+        assert span > 40, f"{p.pid}: connector visible span only {span:.0f}px"

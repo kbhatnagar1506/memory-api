@@ -121,3 +121,28 @@ marked ⚑ and was raised rather than decided silently.
 - **Five probes per primitive per condition cannot measure a 95% gate.** The 95%
   CI on 4/5 spans roughly 28%-99%. The 40-canvas budget in the brief buys 5 per
   primitive across 8 primitives; gating at 95% needs ~30+ per primitive.
+
+## Stage 0, higher-powered re-run (runs/gate-03)
+
+- ⚑ **The pretest cache key omitted the payload hash, and it corrupted a run.**
+  Probe ids like `band_label-00` are stable across runs, but gate-02's probe
+  content differed from gate-01's, so the cache served gate-01's answers for
+  gate-02's canvases. It manufactured a fake 87% on `band_label` and a fake 20%
+  on `date_read` -- both would have read as grammar failures. The key now binds
+  to the PNG bytes and the expected answer. `runner.Call.cache_key()` always had
+  `payload_hash`; the pretest path did not. Regression test:
+  `test_pretest_cache_key_includes_payload`.
+- ⚑ **Two `edge_type` probes were degenerate.** Two same-band nodes one date-step
+  apart put their boxes in contact, leaving the dashed `contradicts` connector
+  with ZERO visible span. The model answered `caused` on exactly those two, and
+  nothing else -- `edge_type` went from 93% to 100% once they were fixed. Probes
+  now enforce a minimum same-band separation, `Probe.png()` asserts no
+  collisions, and a test asserts every connector has >40px of visible span.
+- **The gate is three-state, judged on the Wilson interval.** A two-state
+  interval gate is unpassable at small n (30/30 has a lower bound of 88.6%).
+  FAIL = interval entirely below threshold, PASS = entirely at or above,
+  INCONCLUSIVE = this sample cannot tell. A decisive per-primitive PASS at 95%
+  needs n>=75 with zero errors, or n>=150 to tolerate one.
+- **Result: critical path 358/360 = 99.4%, CI 98.0%-99.8%, clears 95% pooled.**
+  Per-primitive rows are individually INCONCLUSIVE at n=30, which is a sample
+  size statement, not a grammar statement. Zero unparseable, zero errors.

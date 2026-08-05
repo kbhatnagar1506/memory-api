@@ -113,6 +113,15 @@ class Geometry:
     dash_off: int = 6
     chevron: int = 10
     edge_width: int = 2
+    #: White casing drawn under each connector, in px added to each side. Makes
+    #: a crossing readable: the line on top visibly passes over the one beneath,
+    #: so the eye (and the encoder) can follow one strand through a junction.
+    #: Standard cartographic practice. 0 disables it.
+    edge_casing: int = 3
+    #: Quadratic-bezier bow, as a fraction of chord length. Straight lines from
+    #: 33 edges over one canvas overlap into a mesh where no single edge can be
+    #: followed end to end; a consistent bow separates them. 0 = straight.
+    edge_curvature: float = 0.13
 
     # legend block
     legend_pad: int = 12

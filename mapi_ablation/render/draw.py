@@ -98,6 +98,74 @@ def _clip_to_box(cx: float, cy: float, w: float, h: float,
     return cx + dx * s, cy + dy * s
 
 
+def _curve(p0, p1, curvature: float, sign: int, steps: int = 24) -> list[tuple]:
+    """Quadratic bezier bowed perpendicular to the chord.
+
+    Straight center-to-center lines from 33 edges pile into a mesh in which no
+    individual edge can be followed from source to target. A consistent bow
+    keeps each strand separable. `sign` alternates deterministically so two
+    edges sharing a corridor bow apart rather than together.
+    """
+    if curvature == 0:
+        return [tuple(p0), tuple(p1)]
+    x0, y0 = p0
+    x1, y1 = p1
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    dx, dy = x1 - x0, y1 - y0
+    length = math.hypot(dx, dy) or 1.0
+    # perpendicular offset for the control point
+    cx = mx - dy / length * curvature * length * sign
+    cy = my + dx / length * curvature * length * sign
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        u = 1 - t
+        pts.append((
+            u * u * x0 + 2 * u * t * cx + t * t * x1,
+            u * u * y0 + 2 * u * t * cy + t * t * y1,
+        ))
+    return pts
+
+
+def _edge_sign(src: str, dst: str) -> int:
+    """Deterministic bow direction. Uses a content hash, not builtin hash(),
+    which is salted per process and would break render reproducibility."""
+    return 1 if sum(map(ord, src + dst)) % 2 == 0 else -1
+
+
+def _stroke(d: ImageDraw.ImageDraw, pts: list[tuple], colour, width: int,
+            casing: int) -> None:
+    if casing > 0:
+        d.line(pts, fill=G.BG, width=width + 2 * casing, joint="curve")
+    d.line(pts, fill=colour, width=width, joint="curve")
+
+
+def _stroke_dashed(d: ImageDraw.ImageDraw, pts: list[tuple], colour, width: int,
+                   casing: int, on: int, off: int) -> None:
+    if casing > 0:
+        d.line(pts, fill=G.BG, width=width + 2 * casing, joint="curve")
+    carry = 0.0
+    drawing = True
+    for a, b in zip(pts, pts[1:]):
+        seg = math.hypot(b[0] - a[0], b[1] - a[1])
+        pos = 0.0
+        while pos < seg:
+            limit = (on if drawing else off) - carry
+            step = min(limit, seg - pos)
+            if drawing:
+                t0, t1 = pos / seg, (pos + step) / seg
+                d.line(
+                    [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0,
+                     a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1],
+                    fill=colour, width=width,
+                )
+            pos += step
+            carry += step
+            if carry >= (on if drawing else off):
+                carry = 0.0
+                drawing = not drawing
+
+
 def _dashed_line(d: ImageDraw.ImageDraw, p0, p1, colour, width, on, off) -> None:
     x0, y0 = p0
     x1, y1 = p1
@@ -207,16 +275,22 @@ def render(g: Graph, config: RenderConfig | None = None, debug: bool = False
         p0 = _clip_to_box(a.cx, a.cy, a.w, a.h, b.cx, b.cy)
         p1 = _clip_to_box(b.cx, b.cy, b.w, b.h, a.cx, a.cy)
         colour = G.RELATION_COLOUR[e.rel]
+        sign = _edge_sign(e.src, e.dst)
+        pts = _curve(p0, p1, geom.edge_curvature, sign)
+        # Tangent at each end, so markers align with the curve rather than the
+        # chord -- an arrowhead pointing off-curve is worse than none.
+        head_from, tail_from = pts[-2], pts[1]
         if e.rel == "caused":
-            d.line([p0, p1], fill=colour, width=ew)
-            _arrowhead(d, p1, p0, colour, geom.arrow_head)
+            _stroke(d, pts, colour, ew, geom.edge_casing)
+            _arrowhead(d, pts[-1], head_from, colour, geom.arrow_head)
         elif e.rel == "contradicts":
-            _dashed_line(d, p0, p1, colour, ew, geom.dash_on, geom.dash_off)
-            _end_bar(d, p0, p1, colour, geom.arrow_head, ew)
-            _end_bar(d, p1, p0, colour, geom.arrow_head, ew)
+            _stroke_dashed(d, pts, colour, ew, geom.edge_casing,
+                           geom.dash_on, geom.dash_off)
+            _end_bar(d, pts[0], tail_from, colour, geom.arrow_head, ew)
+            _end_bar(d, pts[-1], head_from, colour, geom.arrow_head, ew)
         else:  # supersedes: src is the newer node, chevrons mark that end
-            d.line([p0, p1], fill=colour, width=ew)
-            _chevrons(d, p0, p1, colour, geom.chevron, ew)
+            _stroke(d, pts, colour, ew, geom.edge_casing)
+            _chevrons(d, pts[0], tail_from, colour, geom.chevron, ew)
         depicted_edges.append((e.src, e.dst, e.rel))
 
     # -- nodes -------------------------------------------------------------

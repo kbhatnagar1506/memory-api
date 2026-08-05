@@ -59,6 +59,10 @@ class Call:
     text: str = field(repr=False, default="")
     image_png: bytes | None = field(repr=False, default=None)
     system: str | None = field(repr=False, default=None)
+    #: Query covariates (hops, t_gap, pixel_dist, post-resize cap height...).
+    #: These ride along so the report can explain WHY an arm lost, not just
+    #: that it did. Not part of the cache key.
+    meta: dict = field(repr=False, default_factory=dict)
 
     def cache_key(self) -> str:
         raw = "|".join([
@@ -98,6 +102,7 @@ class Result:
             "latency_ms": round(self.response.latency_ms, 1),
             "error": self.response.error,
             "cached": self.cached,
+            **c.meta,
         }
 
 

@@ -36,10 +36,32 @@ class Interval:
         return f"{self.point:.1%} [{self.lo:.1%}-{self.hi:.1%}] n={self.n}"
 
 
+def answered(rows: list[dict]) -> list[dict]:
+    """Rows where we actually got a response from the model.
+
+    `error` means the call failed -- a 429, a timeout, a laptop going to sleep
+    mid-run. That is MISSING DATA, not a wrong answer, and counting it as
+    incorrect would let a network blip masquerade as a weak arm. It did exactly
+    that once: a dropped connection turned 160 canvas calls into apparent
+    failures and moved the arm's headline by 20 points.
+
+    `unparseable` is NOT excluded. There the model did answer, just not in the
+    required format, and that is a real failure of the arm.
+    """
+    return [r for r in rows if r["outcome"] != "error"]
+
+
 def accuracy(rows: list[dict]) -> float:
-    if not rows:
+    """Accuracy over answered calls. Errors are excluded, never counted wrong."""
+    ok = answered(rows)
+    if not ok:
         return 0.0
-    return sum(1 for r in rows if r["outcome"] == "correct") / len(rows)
+    return sum(1 for r in ok if r["outcome"] == "correct") / len(ok)
+
+
+def completeness(rows: list[dict]) -> tuple[int, int]:
+    """(answered, attempted). Any gap must be shown, never silently averaged."""
+    return len(answered(rows)), len(rows)
 
 
 def cluster_bootstrap_ci(
@@ -57,6 +79,9 @@ def cluster_bootstrap_ci(
     if not rows:
         return Interval(0.0, 0.0, 0.0, 0)
 
+    rows = answered(rows)
+    if not rows:
+        return Interval(0.0, 0.0, 0.0, 0)
     by_seed: dict[int, list[dict]] = defaultdict(list)
     for r in rows:
         by_seed[r["seed"]].append(r)
@@ -120,8 +145,9 @@ def mcnemar(rows_a: list[dict], rows_b: list[dict], arm_a: str, arm_b: str
     def key(r: dict):
         return (r["model_key"], r["condition"], r["seed"], r["n_nodes"], r["qid"])
 
-    a = {key(r): r for r in rows_a}
-    b = {key(r): r for r in rows_b}
+    # A pair is only informative if BOTH arms actually answered it.
+    a = {key(r): r for r in answered(rows_a)}
+    b = {key(r): r for r in answered(rows_b)}
     shared = sorted(set(a) & set(b))
 
     b_count = c_count = 0
@@ -185,13 +211,16 @@ def cost_table(rows: list[dict]) -> dict[str, dict]:
     that is cheap but wrong is not cheap.
     """
     out: dict[str, dict] = {}
-    for (arm,), rs in sorted(group(rows, "arm").items()):
+    for (arm,), rs_all in sorted(group(rows, "arm").items()):
+        rs = answered(rs_all)
         toks = [r["input_tokens"] for r in rs if r.get("input_tokens")]
         lats = [r["latency_ms"] for r in rs if r.get("latency_ms")]
         n_correct = sum(1 for r in rs if r["outcome"] == "correct")
         total_tokens = sum(toks)
         out[arm] = {
             "n": len(rs),
+            "attempted": len(rs_all),
+            "errors": len(rs_all) - len(rs),
             "mean_input_tokens": round(sum(toks) / len(toks), 1) if toks else None,
             "mean_latency_ms": round(sum(lats) / len(lats), 1) if lats else None,
             "accuracy": round(accuracy(rs), 4),
@@ -220,7 +249,7 @@ def canvas_failures(rows: list[dict]) -> list[dict]:
     """Every canvas-arm error, with the covariates needed to explain it."""
     out = []
     for r in rows:
-        if r["arm"] != "canvas" or r["outcome"] == "correct":
+        if r["arm"] != "canvas" or r["outcome"] in ("correct", "error"):
             continue
         out.append({
             "qid": r["qid"],

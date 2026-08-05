@@ -820,14 +820,22 @@ def _verdict(rows, canvas_rows, text_rows, best, stability_summary) -> list[str]
             f"{cd.b_count} pairs favouring canvas and {cd.c_count} favouring "
             f"layout_text (exact p = {cd.p_value:.3g}). "
             + (
-                "The two are not distinguishable here, which means the measured "
-                "benefit is attributable to the LAYOUT -- grouping by domain and "
-                "ordering by time -- rather than to raster pixels. That points at "
-                "a text formatter, not an image pipeline, and is a much cheaper "
-                "product."
+                "The two are not distinguishable here, which means whatever "
+                "benefit exists is attributable to the LAYOUT -- grouping by "
+                "domain and ordering by time -- rather than to raster pixels. "
+                "That points at a text formatter, not an image pipeline, and is "
+                "a much cheaper product."
                 if cd.p_value >= 0.05
-                else "The two are distinguishable, so the raster encoding is "
-                     "contributing something beyond spatial organisation in text."
+                else (
+                    "The two are distinguishable and the canvas is AHEAD, so the "
+                    "raster encoding contributes something beyond spatial "
+                    "organisation in text."
+                    if c_acc > lt_acc
+                    else "The two are distinguishable and the canvas is BEHIND, "
+                         "so rendering the same spatial organisation as pixels "
+                         "actively costs accuracy rather than adding any. The "
+                         "layout is not the problem; the raster encoding is."
+                )
             )
         )
 

@@ -30,9 +30,14 @@ def row(arm, qid, outcome, seed=0, model="m", cond="cold", **kw):
 
 
 def test_accuracy_basic():
+    """Denominator is ANSWERED calls: 1 correct of 3 answered, not of 4 attempted.
+
+    The errored call is missing data. `outcome_counts` still reports all four
+    so the gap stays visible rather than being quietly dropped.
+    """
     rows = [row("a", "1", "correct"), row("a", "2", "wrong"),
             row("a", "3", "unparseable"), row("a", "4", "error")]
-    assert accuracy(rows) == 0.25
+    assert accuracy(rows) == pytest.approx(1 / 3)
     assert outcome_counts(rows) == {
         "correct": 1, "wrong": 1, "unparseable": 1, "error": 1
     }
@@ -154,3 +159,47 @@ def test_failure_clustering_separates_unparseable_from_wrong():
     assert buckets["answered in prose rather than an ID"] == 1
     assert buckets["referenced nodes far apart on canvas (>900px)"] == 1
     assert buckets["long causal chain (>=3 hops)"] == 1
+
+
+def test_api_errors_are_missing_data_not_wrong_answers():
+    """A dropped connection must never make an arm look weak.
+
+    This happened for real: a laptop slept mid-run, 160 canvas calls returned
+    ConnectError, and counting them as incorrect moved the arm's headline
+    accuracy by 20 points.
+    """
+    from mapi_ablation.score import answered, completeness
+
+    rows = [row("canvas", str(i), "correct") for i in range(8)]
+    rows += [row("canvas", str(i + 8), "error") for i in range(12)]
+    assert accuracy(rows) == 1.0
+    assert completeness(rows) == (8, 20)
+    assert len(answered(rows)) == 8
+
+
+def test_unparseable_still_counts_against_the_arm():
+    """Unlike an API error, the model DID answer -- just not in the format."""
+    rows = [row("a", "1", "correct"), row("a", "2", "unparseable")]
+    assert accuracy(rows) == 0.5
+
+
+def test_mcnemar_drops_pairs_either_arm_failed_to_answer():
+    a = [row("canvas", "q1", "correct"), row("canvas", "q2", "error")]
+    b = [row("json", "q1", "wrong"), row("json", "q2", "correct")]
+    res = mcnemar(a, b, "canvas", "json")
+    assert res.n_pairs == 1
+    assert res.b_count == 1 and res.c_count == 0
+
+
+def test_bootstrap_excludes_errors():
+    rows = [row("a", str(i), "correct", seed=i % 3) for i in range(30)]
+    rows += [row("a", str(i + 30), "error", seed=i % 3) for i in range(30)]
+    ci = cluster_bootstrap_ci(rows, resamples=500)
+    assert ci.point == 1.0
+    assert ci.n == 30
+
+
+def test_cost_table_reports_the_error_gap():
+    rows = [row("a", "1", "correct"), row("a", "2", "error")]
+    t = cost_table(rows)
+    assert t["a"]["attempted"] == 2 and t["a"]["errors"] == 1 and t["a"]["n"] == 1

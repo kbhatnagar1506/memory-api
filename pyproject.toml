@@ -1,0 +1,36 @@
+[project]
+name = "mapi-ablation"
+version = "0.1.0"
+description = "Representation ablation harness: does a rendered 2D canvas beat serialized text for relational queries over a knowledge graph?"
+requires-python = ">=3.11"
+dependencies = [
+    "pillow>=10.0",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "anthropic[vertex]>=0.40",
+    "google-genai>=1.0",
+    "openai>=1.40",
+    "tenacity>=8.2",
+    "typer>=0.12",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mapi-ablation = "mapi_ablation.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mapi_ablation*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

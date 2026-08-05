@@ -95,7 +95,7 @@ class Geometry:
 
     # type -> border weight. Widely separated because thin strokes are the
     # first thing to vanish under downscaling. Listed in the legend.
-    border_weights: tuple[int, int, int, int] = (2, 4, 7, 10)
+    border_weights: tuple[int, int, int, int] = (2, 5, 8, 11)
 
     # typography. font_id is the largest because the ID is what the model has
     # to read off and emit; labels are secondary and degrade first.

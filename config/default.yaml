@@ -1,0 +1,67 @@
+# Experiment matrix, model candidates, budgets.
+#
+# Model IDs are CANDIDATES, not final answers. Each adapter resolves them
+# against the provider's live model list at run time and writes the resolved ID
+# into runs/<id>/manifest.json. Nothing here is trusted as a model ID from
+# memory; if none of the candidates resolve, the run fails loudly.
+
+models:
+  sonnet:
+    provider: anthropic
+    candidates: [claude-sonnet-4-6, claude-sonnet-4-5]
+    temperature: 0.0
+  opus:
+    provider: anthropic
+    candidates: [claude-opus-5, claude-opus-4-5]
+    temperature: 0.0
+  gemini:
+    provider: gemini
+    candidates: [gemini-2.5-pro, gemini-2.5-flash]
+    temperature: 0.0
+  openai:
+    provider: openai
+    candidates: [gpt-5, gpt-4o]
+    temperature: 0.0
+
+# Stage 1 of the sweep. Deliberately small: expand only if it shows a signal
+# or an ambiguity worth resolving.
+stage1:
+  models: [sonnet]
+  seeds: [0, 1, 2]
+  n_nodes: 40
+  width: 1540
+  arms: [prose, json, layout_text, canvas]
+  conditions: [cold, primed]
+
+# The full matrix, for cost projection. Never executed without confirmation.
+full:
+  models: [sonnet, opus, gemini, openai]
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  n_nodes: [20, 40, 80]
+  widths: [1540, 2560]
+  arms: [prose, json, layout_text, canvas]
+  conditions: [cold, primed]
+
+queries:
+  n_per_type: 8
+
+runner:
+  concurrency: 6
+  max_tokens: 16
+  # Hard cap on API calls in one run. Exceeding it requires confirmation.
+  max_calls: 4000
+  cache_path: .cache/responses.sqlite
+
+pretest:
+  models: [sonnet]
+  conditions: [cold, primed]
+  # Below this on ANY primitive, the grammar is broken and the ablation would
+  # only be measuring that.
+  gate_threshold: 0.95
+
+# Rough per-million-token prices used only for the pre-run cost projection
+# printed before execution. Not used in any results table.
+price_hint_usd_per_mtok:
+  anthropic: {input: 3.0, output: 15.0}
+  gemini: {input: 1.25, output: 10.0}
+  openai: {input: 2.5, output: 10.0}

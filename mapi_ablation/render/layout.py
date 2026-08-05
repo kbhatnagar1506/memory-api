@@ -155,6 +155,13 @@ def _legend_width(geom: G.Geometry) -> int:
         + [f.getlength("connectors")]
     )
     body = col_a + geom.legend_col_gap + col_b
+    if geom.legend_swatch_node_sized:
+        body = max(
+            len(G.TYPE_ORDER) * (geom.node_w + 12),
+            geom.legend_swatch_w + 12 + max(
+                f.getlength(f"{rel}: {desc}") for rel, desc in G.CONNECTOR_LEGEND
+            ),
+        )
     return int(round(max(header, body) + 2 * geom.legend_pad))
 
 
@@ -173,6 +180,9 @@ def compute_layout(g: Graph, config: RenderConfig | None = None) -> Layout:
 
     axis_y = geom.margin_top + len(DOMAINS) * band_h
     legend_h = geom.legend_rows * geom.legend_line + 2 * geom.legend_pad
+    if geom.legend_swatch_node_sized:
+        # header + type header + a full node-height row + connector header + 3
+        legend_h = 6 * geom.legend_line + geom.node_h + 8 + 2 * geom.legend_pad
     height = int(round(axis_y + geom.axis_height + legend_h + 2 * geom.legend_margin))
 
     legend_w = _legend_width(geom)

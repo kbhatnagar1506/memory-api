@@ -122,6 +122,13 @@ class Geometry:
     legend_col_gap: int = 22
     legend_swatch_w: int = 52
     legend_type_col_w: int = 96
+    #: Draw the type swatches at TRUE node-box size instead of as small chips.
+    #: Stage 0 showed border_weight at 40%/20% with small chips, and the errors
+    #: were almost all one step in the same direction -- consistent with the
+    #: model comparing stroke-width-relative-to-box rather than absolute stroke
+    #: width. A 52x28 chip and a 164x80 node carrying the same 11px border do
+    #: not look alike. This makes the comparison like-for-like.
+    legend_swatch_node_sized: bool = False
 
     def weight_for(self, node_type: str) -> int:
         return self.border_weights[TYPE_ORDER.index(node_type)]

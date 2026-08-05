@@ -26,7 +26,7 @@ models:
 # Stage 1 of the sweep. Deliberately small: expand only if it shows a signal
 # or an ambiguity worth resolving.
 stage1:
-  models: [sonnet]
+  models: [gemini]
   seeds: [0, 1, 2]
   n_nodes: 40
   width: 1540
@@ -53,7 +53,7 @@ runner:
   cache_path: .cache/responses.sqlite
 
 pretest:
-  models: [sonnet]
+  models: [gemini]
   conditions: [cold, primed]
   # Below this on ANY primitive, the grammar is broken and the ablation would
   # only be measuring that.

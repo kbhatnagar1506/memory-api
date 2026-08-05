@@ -291,19 +291,38 @@ def _draw_legend(d: ImageDraw.ImageDraw, lay: Layout, f) -> None:
         [f.getlength(t) for t in G.TYPE_ORDER] + [f.getlength("border weight = type")]
     )
     col_b = left + swatch + gap + type_col_w + geom.legend_col_gap
-    d.text((col_a, y0 + pad + line_h), "border weight = type",
-           font=f, fill=G.LEGEND_TEXT)
-    d.text((col_b, y0 + pad + line_h), "connectors", font=f, fill=G.LEGEND_TEXT)
+    conn_row0 = 2
 
-    for i, t in enumerate(G.TYPE_ORDER):
-        y = y0 + pad + (i + 2) * line_h
-        d.rounded_rectangle([col_a, y + 3, col_a + swatch, y + line_h - 3],
-                            radius=4, fill=G.NODE_FILL, outline=G.NODE_BORDER,
-                            width=geom.weight_for(t))
-        d.text((col_a + swatch + gap, y), t, font=f, fill=G.LEGEND_TEXT)
+    if geom.legend_swatch_node_sized:
+        # Swatches drawn at true node size so the comparison is like-for-like.
+        d.text((col_a, y0 + pad + line_h),
+               "border weight = type (boxes shown at true node size)",
+               font=f, fill=G.LEGEND_TEXT)
+        ty = y0 + pad + 2 * line_h
+        for i, t in enumerate(G.TYPE_ORDER):
+            bx = col_a + i * (geom.node_w + 12)
+            d.rounded_rectangle([bx, ty, bx + geom.node_w, ty + geom.node_h],
+                                radius=geom.node_radius, fill=G.NODE_FILL,
+                                outline=G.NODE_BORDER, width=geom.weight_for(t))
+            d.text((bx + geom.node_w / 2, ty + geom.node_h / 2), t,
+                   font=f, fill=G.LEGEND_TEXT, anchor="mm")
+        col_b = col_a
+        conn_row0 = 2 + (geom.node_h + 8) / line_h + 1
+        d.text((col_b, y0 + pad + (conn_row0 - 1) * line_h), "connectors",
+               font=f, fill=G.LEGEND_TEXT)
+    else:
+        d.text((col_a, y0 + pad + line_h), "border weight = type",
+               font=f, fill=G.LEGEND_TEXT)
+        d.text((col_b, y0 + pad + line_h), "connectors", font=f, fill=G.LEGEND_TEXT)
+        for i, t in enumerate(G.TYPE_ORDER):
+            y = y0 + pad + (i + 2) * line_h
+            d.rounded_rectangle([col_a, y + 3, col_a + swatch, y + line_h - 3],
+                                radius=4, fill=G.NODE_FILL, outline=G.NODE_BORDER,
+                                width=geom.weight_for(t))
+            d.text((col_a + swatch + gap, y), t, font=f, fill=G.LEGEND_TEXT)
 
     for i, (rel, desc) in enumerate(G.CONNECTOR_LEGEND):
-        y = y0 + pad + (i + 2) * line_h
+        y = y0 + pad + (i + conn_row0) * line_h
         cy = y + line_h / 2 - 2
         a, b = (col_b, cy), (col_b + swatch, cy)
         colour = G.RELATION_COLOUR[rel]

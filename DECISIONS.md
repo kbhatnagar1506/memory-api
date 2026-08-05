@@ -96,3 +96,28 @@ marked ⚑ and was raised rather than decided silently.
 - **Provider resize rules are labelled `assumed` until measured.** Every
   cap-height row carries its provenance. `pretest --verify-resize` measures the
   real scaling from reported `input_tokens` and writes `legibility.md`.
+
+## Stage 0 findings (runs/gate-01)
+
+- ⚑ **Gemini's measured image scaling contradicts the assumed rule.** Token cost
+  saturates at 3354 (= 13 x 258, i.e. a 13-tile cap): 1540x1568 and 1540x1826
+  cost identically, as do 1540x2400, 2560x1600 and 2560x2786. The assumed
+  "no downscale below 3072px long edge" was wrong, so `ASSUMED_RULES["gemini"]`
+  must not be used for any reported number. Measured table: runs/gate-01/legibility.md.
+- ⚑ **`border_weight` fails the gate (40% cold / 20% primed) and a targeted fix
+  did not help.** Rendering the legend swatches at true node size changed
+  nothing (identical error pattern), so the swatch-size hypothesis is rejected.
+  Controlled sweeps show the border *is* read but resolves only ~1 bit
+  (thin vs thick) across 4 authored levels, and label semantics fill the gap.
+  Full write-up: runs/gate-01/diagnosis.md. No query type reads node type, so
+  this is off the critical path -- flagged rather than fixed unilaterally,
+  because the brief specifies border weight as the type encoding.
+- **Gemini 2.5+ spend the answer budget on reasoning tokens.** At max_tokens=24
+  gemini-2.5-pro returned a truncated `'N'` (19 thought tokens), which would have
+  scored `unparseable` across the board and looked exactly like an unreadable
+  grammar. The adapter now reserves headroom on top of the caller's answer budget
+  and reports truncation as an error rather than letting it score as a wrong
+  answer. This is the class of bug that manufactures a false negative result.
+- **Five probes per primitive per condition cannot measure a 95% gate.** The 95%
+  CI on 4/5 spans roughly 28%-99%. The 40-canvas budget in the brief buys 5 per
+  primitive across 8 primitives; gating at 95% needs ~30+ per primitive.

@@ -480,6 +480,16 @@ def run(
     n_per_type = cfg["queries"]["n_per_type"]
 
     out = _run_dir(run_id, "run")
+    responses_path = out / "responses.jsonl"
+    if responses_path.exists() and not dry_run:
+        console.print(
+            f"[red]{responses_path} already exists.[/] responses.jsonl is "
+            "append-only, so writing here would interleave two runs into one "
+            "file -- which has happened: a backgrounded run outlived its shell "
+            "and appended 5 duplicate cells to a directory already re-run and "
+            "reported. Use a fresh --run-id, or delete the file to redo it."
+        )
+        raise typer.Exit(code=5)
     console.print(f"[bold]Ablation run[/] -> {out}")
     console.print(f"  models={model_keys} seeds={seed_list} arms={arm_list} "
                   f"conditions={cond_list} n_nodes={nn} width={w}")
@@ -529,7 +539,6 @@ def run(
         typer.confirm(f"Execute {n_calls} calls?", abort=True)
 
     cache = ResponseCache(REPO / cfg["runner"]["cache_path"])
-    responses_path = out / "responses.jsonl"
     runner = Runner(adapters, cache, concurrency=cfg["runner"]["concurrency"],
                     max_tokens=cfg["runner"]["max_tokens"],
                     responses_path=responses_path)

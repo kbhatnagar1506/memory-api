@@ -588,6 +588,62 @@ class Gemini:
         return await call()
 
 
+class AnthropicVertexJudge:
+    """Claude on Vertex, for CROSS-FAMILY grading.
+
+    A different capability tier of the same family (2.5-pro judging 2.5-flash)
+    breaks self-recognition, but both models share a training lineage, so a
+    shared blind spot -- a misread date format, a temporal expression parsed the
+    same wrong way -- is still graded as correct by a grader that makes the
+    identical mistake. A different vendor does not share that lineage, which is
+    what makes it the strongest independence available to us.
+
+    Reached through the same ADC as the Gemini path; needs the model enabled in
+    Model Garden and pinned to a region that serves it.
+    """
+
+    #: Anthropic-on-Vertex model ids carry an @version suffix, and the model is
+    #: regional. Getting either wrong returns an HTML 404 rather than a JSON API
+    #: error, which reads like "not provisioned" even when it is.
+    REGION = "us-east5"
+
+    def __init__(self, model: str, project: str | None) -> None:
+        from anthropic import AsyncAnthropicVertex
+
+        if not project:
+            raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for answer/judge")
+        # Async client, never the sync one under `to_thread`: that combination
+        # deadlocked a 500-corpus run, because a thread blocked on a socket read
+        # cannot be cancelled and each timeout permanently burned an executor
+        # slot. Same failure mode would apply here verbatim.
+        self.client = AsyncAnthropicVertex(
+            project_id=project, region=self.REGION, timeout=120.0
+        )
+        self.model = model
+
+    async def complete(self, prompt: str, *, max_tokens: int = 256) -> tuple[str, int]:
+        message = await self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(
+            block.text for block in message.content if getattr(block, "type", "") == "text"
+        )
+        return text, int(getattr(message.usage, "input_tokens", 0) or 0)
+
+
+#: Routed on the model id: anything Claude goes to Vertex's Anthropic publisher,
+#: everything else to the Gemini client. Keeping this in one place means
+#: `--judge-model` and `--answer-model` accept either family without the caller
+#: knowing which SDK backs it.
+def build_model_client(model: str, project: str | None) -> Gemini | AnthropicVertexJudge:
+    if model.startswith("claude"):
+        return AnthropicVertexJudge(model, project)
+    return Gemini(model, project)
+
+
 async def evaluate_end_to_end(
     corpora: list[Corpus],
     ingested: Ingested,
@@ -605,13 +661,13 @@ async def evaluate_end_to_end(
     measure_judge_bias: bool = True,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
-    answerer = Gemini(answer_model, project)
-    judge = Gemini(judge_model, project)
+    answerer = build_model_client(answer_model, project)
+    judge = build_model_client(judge_model, project)
     # Only a control arm when the judge is genuinely a different model. Pointing
     # both at the same model would "measure" a bias of exactly zero by
     # construction and read as evidence of impartiality.
     bias_judge = (
-        Gemini(answer_model, project)
+        build_model_client(answer_model, project)
         if measure_judge_bias and judge_model != answer_model
         else None
     )

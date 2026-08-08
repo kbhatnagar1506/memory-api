@@ -8,6 +8,7 @@ license = { text = "MIT" }
 authors = [{ name = "Krishna Bhatnagar" }]
 
 dependencies = [
+    "anthropic[vertex]>=0.69",  # cross-family benchmark judge (Claude on Vertex)
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",

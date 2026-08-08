@@ -352,9 +352,12 @@ async def main() -> int:
         # attributed to judge configuration, not to the memory engine. When
         # this differs from --answer-model the harness also runs the answerer
         # as a second grader and reports the measured gap.
-        default="gemini-2.5-pro",
-        help="grader; keep it different from --answer-model (default: a "
-        "stronger, non-self model, which also enables bias measurement)",
+        default="claude-sonnet-4-5@20250929",
+        help="grader; keep it different from --answer-model. Default is "
+        "CROSS-FAMILY (Anthropic on Vertex vs a Gemini answerer): a "
+        "different vendor shares no training lineage, so it does not "
+        "inherit the answerer's blind spots the way a same-family judge "
+        "does. Also enables self-preference measurement.",
     )
     parser.add_argument(
         "--strict-judge",

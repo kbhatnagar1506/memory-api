@@ -1,0 +1,554 @@
+[
+  {
+    "summary": "Mem0 is the most widely adopted memory layer for AI agents as of August 2026: an Apache-2.0 open-source library (~62.8k GitHub stars, ~7.3k forks) plus a hosted platform that extracts salient facts from conversations with an LLM, stores them in vector (and optionally graph) stores, and retrieves compact relevant memories at query time instead of replaying full conversation history. It raised a $24M combined seed + Series A (announced Oct 2025, led by Basis Set Ventures with Kindred Ventures, Peak XV, GitHub Fund, and Y Combinator), and third-party 2026 landscape reports describe it as the memory provider for AWS's Agent SDK with AWS-native backends (Neptune Analytics, ElastiCache for Valkey) and ~21 framework integrations. Its market position rests heavily on benchmark marketing (LoCoMo/LongMemEval) that has been publicly and credibly disputed by competitors, and notably its own paper shows a full-context baseline outscoring Mem0 on LoCoMo.",
+    "architecture": "WRITE PATH (per the paper, arXiv 2504.19413): a two-phase LLM pipeline. Extraction phase: for each new user-assistant message pair, an LLM (GPT-4o-mini in the paper) receives a prompt P = (asynchronously maintained global conversation summary S, the last m=10 messages, the new message pair) and extracts a set of candidate salient memories (atomic facts). Update phase: for each candidate fact, the system retrieves the top s=10 semantically similar existing memories via dense vector embeddings, then an LLM tool-call decides one of four operations \u2014 ADD (no semantic equivalent exists), UPDATE (augment an existing memory), DELETE (new info contradicts a stored memory), NOOP \u2014 and a resolver executes it. STORAGE: memories live as embedded text records in a pluggable vector store (Qdrant et al.) scoped by user/agent/session IDs with metadata, plus a history store; the graph variant Mem0-g additionally extracts entity-relation triplets into a graph DB (Neo4j-class stores; AWS Neptune Analytics support added Sept 2025). READ PATH: the query is embedded and run through vector similarity search filtered by user/agent/run IDs; ranked top-k memories are returned and injected into the agent's prompt (Mem0-g adds graph/entity traversal for relational queries). NOTE \u2014 ARCHITECTURE HAS DRIFTED: the platform's \"April 2026 algorithm\" (mem0.ai/research) describes \"ADD-only extraction\" (append-only writes, ~2x faster, no synchronous UPDATE/DELETE), hierarchical fact extraction, write-time temporal classification, asynchronous fire-and-forget memory decay/consolidation (sold as \"Dream\" on the Pro tier), and retrieval fusing three parallel signals: semantic, keyword, and entity. The current docs confirm the append-only model (\"new memories are added without overwriting or deleting existing memories\") with conflict handling pushed to retrieval-time ranking and async consolidation \u2014 so the shipping product no longer matches the ADD/UPDATE/DELETE/NOOP design the paper benchmarked.",
+    "token_strategy": "Mem0's pitch is substitution: instead of sending the full conversation history to the answering model, send only retrieved atomic facts. Paper numbers (vendor-measured): full raw conversations in LoCoMo average ~26,000 tokens, Mem0's memory representation ~7,000 tokens per conversation (~14,000 for Mem0-g), yielding the marketed \">90% token savings vs full-context\" and a 91% p95 latency reduction (total p95 1.44s vs 17.12s for full-context). The README/marketing trio is \"+26% accuracy vs OpenAI Memory, 91% faster, 90% fewer tokens.\" The 2026 research page restates this more modestly as ~6,900 tokens per retrieval call vs 25,000+ full-context, framed as \"3-4x lower token cost.\" Important caveats: the baseline is always full-context stuffing (the most token-expensive possible baseline), not conventional RAG, which in their own paper uses comparable or fewer tokens; and the 26% accuracy figure is relative to OpenAI's memory feature (J=52.90), not the strongest baseline. Write-side token costs (LLM calls for extraction and, historically, update decisions on every add) are real but not included in the savings framing; the 2026 shift to ADD-only extraction implicitly acknowledges this write amplification.",
+    "benchmarks": [
+      {
+        "benchmark": "LoCoMo (Mem0 paper, arXiv 2504.19413, LLM-as-a-Judge)",
+        "claim": "Mem0 overall J=66.88 (single-hop 67.13, multi-hop 51.15, open-domain 72.93, temporal 55.51); Mem0-g overall J=68.44 (single-hop 65.71, multi-hop 47.19, open-domain 75.71, temporal 58.13). Baselines: full-context 72.90, Zep 65.99, best RAG 60.97, LangMem 58.10, OpenAI Memory 52.90, A-Mem 48.38. Marketed as '26% relative improvement over OpenAI'.",
+        "source": "https://arxiv.org/html/2504.19413v1 (verified directly against the paper's tables)",
+        "caveats": "Full-context beats both Mem0 variants on overall J in Mem0's own paper; the headline 26% is vs OpenAI Memory, one of the weakest baselines. All numbers vendor-run with GPT-4o-mini."
+      },
+      {
+        "benchmark": "LoCoMo latency/tokens (Mem0 paper)",
+        "claim": "Mem0 total latency p50/p95 = 0.708s/1.440s vs full-context 9.87s/17.12s (91% p95 reduction); ~7K tokens per conversation vs ~26K full-context (>90% savings); Zep measured at >600K tokens.",
+        "source": "https://arxiv.org/html/2504.19413v1",
+        "caveats": "Vendor-measured; Zep disputes its own latency figure, saying Mem0 ran Zep searches sequentially instead of in parallel."
+      },
+      {
+        "benchmark": "LoCoMo, 'April 2026 algorithm' (managed platform)",
+        "claim": "92.5 overall (single-hop 94.6, multi-hop 95.4, open-domain 82.3, temporal 92.5), ~6.7-7.0K tokens, p50 latency 0.88-1.09s.",
+        "source": "https://mem0.ai/research and https://github.com/mem0ai/mem0 README",
+        "caveats": "Self-reported, platform-only (README says OSS users should expect only 'directionally similar' results); no independent verification found; third-party roundups report materially different scores when independently re-run \u2014 one comparison cites a 45.4-point gap between a vendor figure and an independent measurement of the same benchmark."
+      },
+      {
+        "benchmark": "LongMemEval and BEAM (2026 platform claims)",
+        "claim": "LongMemEval 94.4 (with claimed 98.2% assistant-recall), BEAM at 1M tokens: 64.1.",
+        "source": "https://github.com/mem0ai/mem0 README; https://mem0.ai/research",
+        "caveats": "Vendor-reported only; BEAM is not yet a widely independently replicated benchmark; no third-party reproduction located."
+      },
+      {
+        "benchmark": "LoCoMo \u2014 Zep's counterclaim",
+        "claim": "Zep says a properly configured Zep scores J=75.14 (+/-0.17), ~10% above Mem0's best paper score (68.44), vs the 65.99 Mem0 reported for Zep; and Zep search p95 of 0.632s vs Mem0's reported 0.778s.",
+        "source": "https://blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/",
+        "caveats": "This is also a vendor claim from a direct competitor; Mem0 in turn has published corrections of Zep's earlier 84% LoCoMo claim (arguing Zep included excluded adversarial categories, giving 58.44%). Neither side's numbers have neutral third-party adjudication."
+      }
+    ],
+    "pricing": "Hosted platform tiers (mem0.ai/pricing, Aug 2026): Hobby \u2014 free, 10,000 add requests/mo, 1,000 retrieval requests/mo, 1 project, unlimited end users, community support. Starter \u2014 $19/mo, 50,000 adds/mo, 5,000 retrievals/mo, 1 project. Pro \u2014 $249/mo, 500,000 adds/mo, 50,000 retrievals/mo, unlimited projects, advanced analytics, graph memory (entity linking), \"Dream\" memory consolidation, private Slack support. Enterprise \u2014 custom: unlimited requests, SLA support, on-prem deployment, audit logs, SSO, custom integrations. Usage-based pricing is offered for traffic that doesn't fit fixed tiers. The open-source library is free (Apache 2.0) with bring-your-own LLM/vector-store costs. Funding: $24M combined seed + Series A announced October 2025, led by Basis Set Ventures, with Kindred Ventures (seed lead), Peak XV Partners, GitHub Fund, Y Combinator, and angels including Scott Belsky, Dharmesh Shah, Olivier Pomel (Datadog), Paul Copplestone (Supabase), and Thomas Dohmke (ex-GitHub).",
+    "weaknesses": [
+      "In Mem0's own paper, the trivial full-context baseline outscores Mem0 on LoCoMo overall (J=72.90 vs 66.88/68.44), so the specialized memory system loses to just pasting the whole conversation whenever it fits in context; the marketed '26% improvement' is against OpenAI Memory, one of the weakest baselines tested.",
+      "Public benchmark-methodology dispute with Zep: Zep alleges Mem0 misconfigured its evaluation (assigned the user role to both speakers in Zep's user graph, embedded timestamps in message text instead of Zep's created_at field breaking temporal reasoning, and ran searches sequentially, inflating Zep's latency), and claims a corrected Zep score of J=75.14 \u2014 above Mem0's best. Mem0 has counter-attacked Zep's own 84% claim (arguing it becomes 58.44% under the benchmark's spec). Neither side is independently adjudicated.",
+      "The LoCoMo benchmark both companies fight over is itself weak for this purpose (criticism from Zep and Letta): conversations average only ~16K-26K tokens (fits in any modern context window), category-5 data is unusable, speaker attribution errors and ambiguous questions exist, and it doesn't test knowledge updates over time \u2014 so it under-stresses exactly what memory systems claim to do.",
+      "The impressive 2026 numbers (LoCoMo 92.5, LongMemEval 94.4) are self-reported, apply to the closed managed platform rather than the open-source library (README: OSS gets only 'directionally similar' results), and are not reproducible from the published paper, whose architecture (ADD/UPDATE/DELETE/NOOP) the platform has since abandoned for ADD-only extraction with async decay \u2014 meaning the peer-visible paper no longer describes the shipping product.",
+      "Fact-extraction is lossy by construction: practitioners report it stores explicit atomic statements and struggles with nuance, implicit behavioral patterns, and information whose relevance is only apparent later; extraction quality also depends entirely on the underlying LLM used.",
+      "Write amplification: every memory add historically required multiple LLM calls (extraction plus per-fact update decisions), a cost and latency the token-savings marketing excludes; the 2026 'ADD-only, 2x faster extraction' change is an implicit admission. The docs also note the append-only model can create duplicate memories (e.g., with inconsistent infer=False usage).",
+      "Token-savings framing compares only against full-context stuffing, the most expensive possible baseline, not against conventional RAG, which in Mem0's own paper achieves competitive scores at comparable token budgets."
+    ],
+    "sources": [
+      "https://arxiv.org/abs/2504.19413",
+      "https://arxiv.org/html/2504.19413v1",
+      "https://github.com/mem0ai/mem0",
+      "https://mem0.ai/pricing",
+      "https://mem0.ai/research",
+      "https://docs.mem0.ai/core-concepts/memory-operations",
+      "https://blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/",
+      "https://www.prnewswire.com/news-releases/mem0-raises-24m-series-a-to-build-memory-layer-for-ai-agents-302597157.html",
+      "https://github.com/getzep/zep-papers/issues/5",
+      "https://www.developersdigest.tech/blog/best-ai-agent-memory-providers-2026",
+      "https://mnemoverse.com/docs/research/ai-memory-landscape-2026"
+    ]
+  },
+  {
+    "summary": "Zep (YC W24, founded 2023 by Daniel Chalef) is a managed \"agent memory / context engineering\" platform built on Graphiti, its Apache-2.0 open-source temporal knowledge graph engine (~29.7k GitHub stars as of Aug 2026). Its differentiator versus vector-store memory products is a bi-temporal knowledge graph: facts are extracted as entity-relationship-entity edges with explicit validity windows, and contradicted facts are invalidated (dated) rather than deleted, so the graph can answer \"what was true when.\" Positioning is enterprise-focused (\"agent memory infrastructure for the enterprise\", SOC 2, HIPAA BAA tier), with homepage claims of 1.4M+ active context graphs and sub-200ms p95 retrieval, and named customers including Samsung, Zscaler, Twin Health, and HoneyBook (vendor claims, not independently verified). It is in an open, unresolved benchmark war with Mem0 over LoCoMo methodology, and its own headline numbers (DMR 94.8%, LongMemEval +18.5%) are self-reported in a non-peer-reviewed arXiv preprint.",
+    "architecture": "WRITE PATH (Graphiti engine): Data arrives as \"episodes\" (chat messages, unstructured text, or JSON business data). An LLM extracts entities and relations, producing a three-tier graph described in the arXiv paper (2501.13956): (1) episode subgraph G_e holding raw inputs for provenance \u2014 every derived fact traces back to its source episode; (2) semantic entity subgraph G_s where entities are nodes and facts are edges stored as triplets (Entity -> Relationship -> Entity) with an embedded \"fact string\"; (3) community subgraph G_c built by community detection over strongly connected entities, with generated summaries. Bi-temporal model: two timelines \u2014 T (event time) and T' (transaction time). Each edge carries four timestamps: t_created and t_expired (when the fact entered/was invalidated in the system, timeline T') plus t_valid and t_invalid (the range the fact held true in the world, timeline T); exposed in the product as created_at/expired_at and valid_at/invalid_at. Edge invalidation: on ingest, an LLM compares new edges against semantically related existing edges; temporally overlapping contradictions cause the old edge to be invalidated (new information is prioritized), but invalidated edges are retained, not deleted \u2014 enabling point-in-time queries. Storage backends for OSS Graphiti: Neo4j, FalkorDB, Amazon Neptune (Kuzu deprecated); LLM providers: OpenAI (default, structured output required), Anthropic, Gemini, Groq, Azure OpenAI. READ PATH: hybrid retrieval combining three methods \u2014 cosine similarity over embeddings, Okapi BM25 full-text (Lucene), and breadth-first graph traversal within n hops \u2014 followed by rerankers: Reciprocal Rank Fusion, Maximal Marginal Relevance, an episode-mentions reranker, a node-distance reranker, and cross-encoder LLM scoring. Zep Cloud exposes a low-level graph.search API and a high-level thread.get_user_context that returns a pre-assembled \"Context Block\": a user summary plus the most relevant fact strings, each annotated with the dates the fact became valid/invalid. Because retrieval is search over pre-extracted facts (no LLM in the read loop), Zep claims sub-200ms p95 retrieval (homepage: 148ms at 10K graphs to 168ms at 100M graphs \u2014 vendor-published, unverified).",
+    "token_strategy": "Zep substitutes compact, temporally-annotated fact strings and entity/user summaries for raw conversation transcripts. Extraction cost is paid once at ingest (LLM calls); at read time the agent receives a Context Block of \"token-efficient context (facts, summaries, and Observations)\" rather than message history. Claimed numbers (self-reported, LongMemEval eval in their blog/paper): Zep's retrieved context averaged ~1.6k tokens versus ~115k tokens for the full-context baseline \u2014 \"less than 2% of the baseline tokens\" \u2014 while improving accuracy up to 18.5% and cutting median response latency from 28.9s to 2.58s with gpt-4o (~90% reduction, mostly from the smaller prompt). The homepage separately claims 5,760-token context size in a competitive comparison. Billing reinforces the write-heavy design: customers are charged for episode ingestion/processing, not for storage or reads.",
+    "benchmarks": [
+      {
+        "benchmark": "Deep Memory Retrieval (DMR)",
+        "claim": "Zep 94.8% vs MemGPT's published 93.4% (gpt-4-turbo); Zep's own re-test showed plain gpt-4o with full conversation context scores 98.0%",
+        "source": "arXiv:2501.13956 and blog.getzep.com/state-of-the-art-agent-memory/",
+        "caveats": "Self-reported; arXiv preprint, not peer-reviewed. Zep could not replicate MemGPT's original setup and used full-conversation context instead of MemGPT's recursive summarization, so the head-to-head is not apples-to-apples. DMR is small (500 questions) and effectively saturated \u2014 Zep itself concedes 'recent advances in LLM capabilities have revealed the DMR benchmark's limitations.' No independent replication found."
+      },
+      {
+        "benchmark": "LongMemEval",
+        "claim": "Up to 18.5% aggregate accuracy improvement over full-context baseline with individual question types gaining >100% (e.g., single-session-preference with gpt-4o: 20.0% -> 56.7%); temporal reasoning 45.1% -> 62.4% (gpt-4o); 90% latency reduction (median 2.58s vs 28.9s); ~1.6k vs ~115k prompt tokens",
+        "source": "blog.getzep.com/state-of-the-art-agent-memory/ and arXiv:2501.13956",
+        "caveats": "Self-reported; baseline is full-context stuffing, not competing memory systems, so this measures 'better than dumping the transcript,' not superiority over Mem0/Letta. Latency gain largely reflects the smaller prompt. Not independently verified."
+      },
+      {
+        "benchmark": "LoCoMo (contested)",
+        "claim": "Zep's re-run: 75.14% +/- 0.17 J-score vs Mem0's best (graph) config ~68%, and Zep p95 search latency 0.632s vs Mem0 Graph 0.657s; Zep also notes Mem0's own paper shows a full-context baseline (~73%) beating Mem0 (~68%)",
+        "source": "blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/",
+        "caveats": "Actively disputed in both directions. Mem0's CTO (github.com/getzep/zep-papers/issues/5) alleges Zep's original 84% figure counted excluded adversarial questions in the numerator only and used non-standard prompts, and that a corrected Zep scores 58.44% +/- 0.20; Zep counter-alleges Mem0 misconfigured Zep (wrong user model, timestamps appended to messages instead of the dedicated field, sequential rather than parallel searches inflating latency) and revised its own figure to 75.14%. Zep further argues LoCoMo itself is flawed: conversations of only ~16k-26k tokens fit in modern context windows, no knowledge-update tests, missing/incorrect ground truth. Unresolved; treat all LoCoMo numbers from both vendors as advocacy."
+      },
+      {
+        "benchmark": "Retrieval latency (production claim)",
+        "claim": "Sub-200ms p95 retrieval at scale: 148ms at 10K graphs, 152ms at 100K, 156ms at 1M, 168ms at 100M graphs; 1.4M+ active context graphs",
+        "source": "www.getzep.com homepage",
+        "caveats": "Vendor marketing figures; no methodology published, no independent verification."
+      },
+      {
+        "benchmark": "Graphiti vs GraphRAG",
+        "claim": "Sub-second query latency vs 'seconds to tens of seconds' for GraphRAG-style summarization approaches",
+        "source": "github.com/getzep/graphiti README",
+        "caveats": "Directional vendor claim in the README comparison table; no published test harness."
+      }
+    ],
+    "pricing": "Credit-based, charged on ingestion (not storage or reads). Unit: an Episode (any single object sent \u2014 chat message, JSON payload, text block); 1 credit per 350 bytes (or part thereof); webhook invocations 1/8 credit. Tiers (help.getzep.com/pricing via getzep.com, Aug 2026): Free \u2014 10,000 credits/mo, 2 projects, no rollover; Flex \u2014 $125/mo ($1,250/yr) with 50,000 credits, 600 RPM, 5 projects, auto top-up $25 per 10K credits, 30-day rollover; Flex Plus \u2014 $375/mo ($3,750/yr) with 200,000 credits, 1,000 RPM, 10 projects, observations/custom extraction/webhooks/analytics, 60-day rollover; Zep for Emerging Companies \u2014 $13,000/yr (startups with $1M-$10M raised) adding SOC 2 Type II report access, HIPAA BAA, guaranteed rate limits; Enterprise \u2014 custom credits/SLA/deployment. Open-source Graphiti is free (Apache 2.0) but you operate your own graph DB and pay your own LLM extraction costs. Funding (per Tracxn/Crunchbase profiles): YC Winter 2024 batch; ~$500K seed reported (Mar/Apr 2024), backers include Y Combinator, Engineering Capital, Step Function; no publicly announced Series A found as of Aug 2026 \u2014 funding databases may lag, but this is notably thinner than competitors' publicized raises.",
+    "weaknesses": [
+      "Every headline benchmark number (DMR 94.8%, LongMemEval +18.5%, LoCoMo 75.14%) is self-reported in vendor blog posts or a non-peer-reviewed arXiv preprint; I found no independent third-party replication of any of them.",
+      "The LoCoMo dispute cuts both ways: Mem0's public re-evaluation (getzep/zep-papers issue #5) claims Zep's corrected score is 58.44% +/- 0.20, not 84%, alleging an adversarial-question counting error and non-standard prompts; Zep revised to 75.14% and alleges Mem0 misconfigured Zep. Neither side's numbers can be taken at face value.",
+      "The DMR win over MemGPT (94.8% vs 93.4%) used a different evaluation protocol than the original MemGPT paper (full-conversation context instead of recursive summarization), and Zep's own data shows vanilla gpt-4o at 98.0% \u2014 i.e., the benchmark is saturated and the margin is not meaningful.",
+      "Zep Community Edition (the self-hostable Zep server) was deprecated in April 2025 (blog.getzep.com/announcing-a-new-direction-for-zeps-open-source-strategy/); the full Zep product is now cloud-only, creating lock-in \u2014 self-hosters get only the lower-level Graphiti library and must run and operate Neo4j/FalkorDB/Neptune themselves.",
+      "Write-path cost and latency: every episode requires LLM extraction and contradiction-checking calls, so ingestion is slow and expensive relative to embedding-only systems, and extraction quality degrades with smaller models (Graphiti docs require structured-output-capable LLMs and warn of failures with small models). Ingestion-based credit billing (1 credit/350 bytes) can be hard to forecast for chat-heavy workloads.",
+      "Correctness of the graph depends on LLM extraction and LLM-driven edge invalidation \u2014 a longstanding HN criticism of LLM-built knowledge graphs is that construction quality is the unsolved problem; errors compound silently in the graph.",
+      "Homepage scale and latency claims (1.4M active graphs, sub-200ms p95 at 100M graphs, named customers like Samsung and Zscaler) are unverifiable from public sources.",
+      "Publicly documented funding (~$500K seed per Tracxn) is far below rivals (Mem0's publicized raises), raising vendor-viability questions for an enterprise-critical dependency; databases may be lagging but no Series A announcement was findable.",
+      "Open-source maintenance friction reported by users, e.g. the official zepai/graphiti Docker image lagging at v0.10 while the library was at v0.22 (getzep/graphiti issue #1030)."
+    ],
+    "sources": [
+      "https://github.com/getzep/graphiti",
+      "https://arxiv.org/abs/2501.13956",
+      "https://arxiv.org/html/2501.13956v1",
+      "https://blog.getzep.com/state-of-the-art-agent-memory/",
+      "https://blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/",
+      "https://github.com/getzep/zep-papers/issues/5",
+      "https://www.getzep.com/pricing",
+      "https://help.getzep.com/concepts",
+      "https://www.getzep.com/",
+      "https://blog.getzep.com/announcing-a-new-direction-for-zeps-open-source-strategy/",
+      "https://tracxn.com/d/companies/zep/__poSadJnSfLWHjz05Xi3U5KwnpCMWSU3aDrihLX_8FLs",
+      "https://www.ycombinator.com/companies/zep-ai",
+      "https://github.com/getzep/graphiti/issues/1030",
+      "https://news.ycombinator.com/item?id=41445445"
+    ]
+  },
+  {
+    "summary": "Agentic/self-editing memory is the segment of the AI memory-layer market where the LLM itself decides what to remember, edit, and forget via tool calls, rather than a pipeline embedding-and-retrieving passively. As of August 2026 there are four distinct positions: Letta (the MemGPT lineage) is the most architecturally opinionated, having evolved from in-context \"memory blocks\" plus background sleep-time agents into MemFS, a git-backed memory filesystem with background \"dreaming\" subagents; LangMem is LangChain's open-source SDK offering semantic/episodic/procedural memory primitives over LangGraph's BaseStore with hot-path tools and background extraction; Anthropic ships a deliberately minimal client-side file-based memory tool (view/create/str_replace/insert/delete/rename under /memories) that pairs with context editing and compaction; OpenAI keeps memory a consumer ChatGPT feature (saved memories plus system-prompt-injected profile aggregates) with no API-level memory primitive, and is sunsetting the Assistants API on August 26, 2026, pushing state management onto developers via the Responses API. The notable convergence is that both Anthropic and Letta have landed on plain files edited by the agent \u2014 not vector stores \u2014 as the core memory substrate, with retrieval-style embedding search demoted to an optional add-on.",
+    "architecture": "LETTA (classic MemGPT model, still the conceptual base): Write path \u2014 the agent self-edits via tool calls. Core memory is a set of \"memory blocks\": labeled persistent strings (label, value, size limit in chars/tokens, optional description, unique block_id) stored in a database; edited via core_memory_append/core_memory_replace (or custom tools like rethink_memory that rewrite a whole block). Archival memory is an external embedding-based store written via archival_memory_insert. Recall memory is the full message history, persisted automatically. Blocks can be shared across agents (same block_id attached to multiple agents) or read-only. Read path \u2014 Letta \"compiles\" the context window from DB state each turn (block values rendered via Jinja templating, always in-context); archival_memory_search does semantic search; conversation_search queries recall storage. Sleep-time compute variant: the primary agent has NO core-memory-edit tools; a separate sleep-time agent owns them and asynchronously rewrites the primary agent's blocks, turning \"raw context\" into \"learned context\" during idle periods. 2026 EVOLUTION (verified on docs.letta.com): the product now centers on MemFS \u2014 a git-backed filesystem of Markdown files with YAML frontmatter. system/ directory files (persona, user preferences, project facts, workflow rules) load into the system prompt every turn; reference files outside system/ are discoverable via the memory tree but loaded only on demand; skills live under $MEMORY_DIR/skills. Every memory edit is a git commit (version history, conflict resolution); background \"dreaming\" subagents run in git worktrees, review recent conversations, consolidate lessons, and update memory without blocking the main agent, triggered after a configured number of user messages or on context compaction. Notably there is NO built-in semantic index \u2014 agents use file-search/read tools; semantic search is an optional mod (QMD integration). LANGMEM: Write path \u2014 two modes. Hot path: create_manage_memory_tool lets the agent store/update memories mid-conversation. Background (\"subconscious\"): create_memory_manager / create_memory_store_manager run an LLM over completed conversations to extract facts, then reconcile against existing memories (update, merge, invalidate contradictions \u2014 consolidation). Procedural memory is written by create_prompt_optimizer, which rewrites the agent's system prompt from feedback using metaprompt/gradient/prompt_memory algorithms. Data structures: semantic memory as either \"profiles\" (a single structured document holding current state, overwritten in place) or \"collections\" (unbounded individual records); episodic memory as collections of successful interactions (explicitly not yet fully supported); all persisted in LangGraph's BaseStore (InMemoryStore for dev, AsyncPostgresStore for prod) under hierarchical namespaces (org \u2192 user \u2192 app) with metadata. Read path \u2014 create_search_memory_tool does semantic search plus metadata filtering and direct key access at runtime; profiles can be injected wholesale into the prompt. ANTHROPIC MEMORY TOOL (memory_20250818, GA on the Messages API, Claude 4+): Write path \u2014 Claude emits tool_use requests with commands create, str_replace, insert, delete, rename against paths under a /memories prefix; the client application executes them against storage it fully controls (filesystem, DB, cloud \u2014 SDK helpers like BetaLocalFilesystemMemoryTool exist). The API auto-injects a system-prompt protocol: \"ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE... ASSUME INTERRUPTION: Your context window might be reset at any moment.\" Read path \u2014 view lists the directory (2 levels deep, sizes) or returns file contents with line numbers, with view_range paging for files over ~16,000 chars. No embeddings, no index, no server-side storage: memory is just files the model reads back on demand (just-in-time retrieval). It composes with context editing (client-side clearing of stale tool results) and server-side compaction (memory preserves what must survive summarization). OPENAI: Consumer ChatGPT memory has two mechanisms. (1) Saved memories: the model calls a bio tool writing timestamped entries into a \"Model Set Context\" section of the system prompt; user-manageable in settings. (2) \"Reference chat history\": per independent reverse-engineering (Embrace The Red, validated across two accounts), this is NOT full-text retrieval over past chats \u2014 the system injects rolling aggregate sections into the system prompt: Assistant Response Preferences (~15 inferred preferences), Notable Past Conversation Topics, Helpful User Insights (12\u201314 profile facts with confidence tags), Recent Conversation Content (~40 recent chats: timestamps, summaries, user messages only), and User Interaction Metadata. The researcher explicitly tested and found no recognition of specific year-old conversations. API side: no memory primitive exists; the Assistants API (threads/messages, the closest thing to hosted state) is deprecated with an August 26, 2026 sunset, and the replacement Responses API makes developers manage conversation state themselves via \"conversations\" objects \u2014 memory extraction/consolidation is left to third parties.",
+    "token_strategy": "The shared thesis of this segment is that agent-curated context beats retrieval-time stuffing. LETTA: fixed-size in-context memory blocks with explicit character/token limits act as a RAM budget; everything else pages to external storage and enters context only via explicit search calls (the OS virtual-memory analogy from the MemGPT paper). MemFS refines this into tiered loading: system/ files always in context, reference material loaded only when relevant, \"keeping the active context lean while preserving deeper reference material.\" Sleep-time compute shifts token spend off the interactive path: the arXiv paper (2504.13171) claims ~5x less test-time compute for equivalent accuracy and 2.5x lower average cost per query when pre-computation is amortized across related queries \u2014 though on math benchmarks, not memory workloads. LANGMEM: background (\"subconscious\") extraction keeps the hot path free of memory-management tokens and latency; the docs explicitly frame hot-path memory tools as adding \"perceptible latency\"; profiles bound the per-turn context contribution to a single document. LangChain publishes no quantitative token-savings numbers. ANTHROPIC: just-in-time retrieval \u2014 record learnings to files, read them back on demand instead of preloading; combined with context editing (auto-clearing stale tool results), Anthropic claims 84% token reduction on a 100-turn web-search evaluation while completing workflows that otherwise fail from context exhaustion (internal, unpublished eval). Memory files also let information survive server-side compaction. OPENAI: bounded, fixed injection \u2014 memory sections (saved memories + profile aggregates + ~40 conversation summaries) occupy a roughly constant system-prompt budget regardless of account age; no retrieval calls at inference time and no developer-visible token accounting. WHAT IS GENUINELY DIFFERENT VS RETRIEVAL-BASED MEMORY: (1) the write path is model-driven and destructive \u2014 the agent rewrites, merges, and deletes (str_replace, rethink_memory, consolidation) rather than append-only ingestion, so memory is a maintained state, not a growing corpus; (2) reads are agentic navigation (list directory, open file, search conversation) rather than top-k similarity, which trades recall guarantees for coherence and editability; (3) Letta's sleep-time/dreaming and LangMem's background managers move memory formation to idle compute, something retrieval pipelines have no equivalent for; (4) both Anthropic and Letta's 2026 designs drop embeddings from the default path entirely \u2014 semantic search is optional, files-plus-grep is the default.",
+    "benchmarks": [
+      {
+        "benchmark": "Anthropic internal agentic-search evaluation (multi-step tasks)",
+        "claim": "Memory tool + context editing improved performance 39% over baseline; context editing alone +29%",
+        "source": "https://claude.com/blog/context-management",
+        "caveats": "Vendor claim on an internal, unpublished evaluation set; no task details, baselines, or error bars released; not independently verified."
+      },
+      {
+        "benchmark": "Anthropic internal 100-turn web-search evaluation",
+        "claim": "Context editing (with memory) reduced token consumption by 84% and enabled workflows that otherwise fail from context exhaustion",
+        "source": "https://claude.com/blog/context-management",
+        "caveats": "Vendor claim, internal eval; the 84% figure is primarily attributed to context editing rather than the memory tool alone."
+      },
+      {
+        "benchmark": "Stateful GSM-Symbolic / Stateful AIME / Multi-Query GSM-Symbolic (sleep-time compute paper)",
+        "claim": "~5x reduction in test-time compute at equivalent accuracy; up to +13% (GSM-Symbolic) and +18% (AIME) accuracy from scaling sleep-time compute; 2.5x lower average cost per query when amortized across related queries",
+        "source": "https://arxiv.org/abs/2504.13171",
+        "caveats": "Authored by Letta-affiliated researchers (vendor-adjacent) but public and reproducible in principle; benchmarks are adapted math-reasoning tasks, not agent-memory workloads; gains correlate with query predictability; real-world evidence limited to one SWE case study."
+      },
+      {
+        "benchmark": "MemGPT original evaluations (document analysis, multi-session chat)",
+        "claim": "MemGPT analyzes documents far exceeding the LLM's native context window and sustains consistent multi-session conversational agents via self-editing memory",
+        "source": "https://arxiv.org/abs/2310.08560",
+        "caveats": "2023 paper; results are largely qualitative at the abstract level; predates both the current Letta platform and MemFS."
+      },
+      {
+        "benchmark": "LangMem \u2014 no published benchmarks",
+        "claim": "LangChain's launch post and docs make no quantitative performance, recall, or token-efficiency claims for LangMem",
+        "source": "https://www.langchain.com/blog/langmem-sdk-launch",
+        "caveats": "Absence verified against the launch blog, docs index, and conceptual guide; the docs discuss extraction precision/recall tradeoffs only qualitatively."
+      },
+      {
+        "benchmark": "ChatGPT chat-history reference (independent reverse-engineering)",
+        "claim": "ChatGPT does not full-text search past conversations; only ~40 recent chats (summaries + user messages) plus rolling profile aggregates are injected into the system prompt, contradicting the implication of 'no storage limit' in OpenAI's help copy",
+        "source": "https://embracethered.com/blog/posts/2025/chatgpt-how-does-chat-history-memory-preferences-work/",
+        "caveats": "Independent (Embrace The Red / Johann Rehberger), validated across two accounts, but derived from prompt-dumping which can hallucinate \u2014 the author flags this himself; OpenAI may have changed internals since; this is the opposite of a vendor claim and is the best independent evidence available."
+      }
+    ],
+    "pricing": "Letta (verified at docs.letta.com/letta-code/pricing, Aug 2026): Free tier with limited agents and limited Letta Auto usage (BYO API keys supported); Pro $20/month (Letta Auto weekly+monthly quota, pay-as-you-go overages, up to 20 stateful agents); API/developer plan $20/month base + $0.10 per active agent/month + $0.00015 per second of tool execution + usage-based LLM costs, unlimited agents; Teams Pro $20/seat/month; Enterprise custom (volume pricing, RBAC, SAML/OIDC SSO). LangMem: MIT-licensed open source, free (pip install langmem); a managed service was offered free at launch; production persistence typically rides on LangGraph Platform, priced separately. Anthropic memory tool: no separate charge \u2014 GA on the Messages API, standard token pricing applies; storage is client-side so infrastructure cost is the developer's; memory reads/writes consume normal input/output tokens. OpenAI: ChatGPT memory is bundled into consumer plans (feature availability varies by plan/region); there is no API-priced memory product; Assistants API sunsets August 26, 2026 with the Responses API replacement leaving state management (and its cost) to developers. (OpenAI help-center pages returned HTTP 403 to direct fetches; plan details here come from search-result summaries of those pages and should be re-verified in a browser.)",
+    "weaknesses": [
+      "Letta: the 2026 pivot from memory blocks to MemFS/Letta Code means significant architecture and docs churn \u2014 the well-known memory-block model is now described under legacy/blog material while current docs center on MemFS, creating migration burden and making third-party writeups (and benchmarks) stale.",
+      "Letta: sleep-time compute's quantitative evidence is from adapted math benchmarks (GSM-Symbolic, AIME), not long-horizon memory tasks; the paper itself notes gains depend on query predictability; and background inference is extra token spend the marketing does not price out.",
+      "Letta: MemFS has no built-in semantic search \u2014 default retrieval is file navigation and grep; semantic search requires an optional mod, so recall on large memory stores is unproven.",
+      "LangMem: episodic memory is explicitly incomplete ('LangMem doesn't yet support opinionated utilities for episodic memory' per LangChain's own launch post); no published benchmarks of any kind; adoption is modest (~1.6k GitHub stars); the stateful layer ties you to LangGraph's BaseStore/Platform.",
+      "LangMem: its own docs concede the core quality tradeoff is unsolved \u2014 over-extraction degrades search precision, under-extraction hurts recall \u2014 and consolidation quality depends entirely on the extraction LLM with no evaluation harness provided.",
+      "Anthropic memory tool: everything is the developer's problem \u2014 storage backend, path-traversal security (the docs warn /memories/../../secrets.env style attacks must be blocked), file-size caps, and memory expiration; there is no search, no index, and no consolidation service, so memory quality depends wholly on the model's file hygiene.",
+      "Anthropic: the headline numbers (39% improvement, 84% token reduction) are from internal, unpublished evaluations with no task detail \u2014 vendor claims, not independently verified.",
+      "OpenAI: memory is consumer-only and opaque \u2014 no API primitive, and the Assistants API sunset (Aug 26, 2026) removes the only hosted-state option; independent analysis shows chat-history 'memory' is rolling profile aggregates over ~40 recent chats, not searchable history, contradicting the marketing framing; documented prompt-injection paths into memory (bio tool invocation, conversation-summary injection) and observed hallucinated memories are real security/reliability concerns.",
+      "Cross-cutting: no common benchmark lets these four be compared head-to-head (LoCoMo-style suites cover retrieval systems better than self-editing ones), so every performance claim in this segment is currently vendor-scoped.",
+      "Verification gaps in this research: OpenAI help-center and openai.com pages blocked direct fetching (HTTP 403), so official ChatGPT memory details rest on search-result summaries plus the independent Embrace The Red analysis; Letta's classic memory-block tool names (core_memory_append/replace) come from blog/search summaries rather than a fetched legacy doc page."
+    ],
+    "sources": [
+      "https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool",
+      "https://claude.com/blog/context-management",
+      "https://docs.letta.com/",
+      "https://docs.letta.com/configuration/memory",
+      "https://docs.letta.com/concepts/memfs",
+      "https://docs.letta.com/letta-code/pricing",
+      "https://www.letta.com/blog/memory-blocks/",
+      "https://www.letta.com/blog/sleep-time-compute/",
+      "https://arxiv.org/abs/2310.08560",
+      "https://arxiv.org/abs/2504.13171",
+      "https://langchain-ai.github.io/langmem/",
+      "https://langchain-ai.github.io/langmem/concepts/conceptual_guide/",
+      "https://www.langchain.com/blog/langmem-sdk-launch",
+      "https://github.com/langchain-ai/langmem",
+      "https://embracethered.com/blog/posts/2025/chatgpt-how-does-chat-history-memory-preferences-work/",
+      "https://help.openai.com/en/articles/8590148-memory-faq (403 on direct fetch; consulted via search summary)",
+      "https://help.openai.com/en/articles/11146739-how-does-reference-saved-memories-work (403 on direct fetch; consulted via search summary)",
+      "https://community.openai.com/t/assistants-api-beta-deprecation-august-26-2026-sunset/1354666 (consulted via search summary)"
+    ]
+  },
+  {
+    "summary": "The AI agent memory-layer market has hardened into a funded, benchmarked infrastructure category as of August 2026. Supermemory (founded by ex-Cloudflare DevRel Dhravya Shah, $2.6M seed led by Susa Ventures/Browder Capital/SF1.vc with angels including Jeff Dean and Cloudflare CTO Dane Knecht) positions itself as a \"memory API\" with sub-300ms retrieval claims, an MIT-licensed 28.8k-star repo, and its own open-source benchmark harness (MemoryBench). Around it sit fact-extraction players (Mem0, $24M Series A, 186M API calls in Q3 2025, exclusive memory provider for AWS Agent SDK), graph-native players (Zep/Graphiti, Cognee $7.5M seed, Berlin), agent-OS approaches (Letta/MemGPT, $10M Felicis seed), file/markdown-native approaches (Dria's mem-agent 4B model, Supermemory's SMFS), a human-memory-inspired open-source entrant (Vectorize's Hindsight, claiming 91.4% on LongMemEval), a visual-memory specialist (Memories.ai, $16M total, NVIDIA/Qualcomm/Samsung partnerships, pivoting toward wearables/robotics), and a parametric-memory outlier (Engram, $98M at $600M valuation, compressing org knowledge into learned model memory rather than retrieval). The market is converging on three retrieval-side architectures \u2014 LLM fact extraction, temporal knowledge graphs, and agent-traversable file systems \u2014 while every vendor publishes benchmarks on which it ranks first, so almost no performance claim in this space is independently verified.",
+    "architecture": "SUPERMEMORY (primary subject). Write path (vendor-described, hosted API closed-source): ingestion via POST /v3/documents plus connectors (Google Drive, Gmail, Notion, OneDrive, GitHub, S3) with \"Extractors\" for PDFs, web pages, images (OCR), audio/video (transcription), and code. A \"Memory Engine\" extracts facts, tracks updates, resolves contradictions, and applies automatic forgetting; content is deduplicated at ingest (billing is per unique \"SM token\"). Storage is a \"custom vector graph engine with ontology-aware edges\" \u2014 i.e., vector index plus graph relationships, not a plain vector DB \u2014 plus per-user dynamic profiles (static facts + evolving context). Read path: POST /v3/search with hybrid retrieval (vector + keyword/full-text) plus graph traversal and profile injection; vendor claims sub-300ms end-to-end retrieval and ~50ms user-profile reads. Distribution: TS/Python SDKs, REST API, MCP server, self-hostable local binary (client stack MIT-licensed; hosted infrastructure not open-sourced). Their newer SMFS is a FUSE-based agent filesystem: semantic search finds an anchor file path, then the agent reads/greps/traverses neighboring files \u2014 a hybrid of RAG and agentic file exploration, with an auto-updating /profile.md. COMPARATIVE ARCHITECTURES verified this session: Mem0 = LLM-powered fact extraction into a memory store shared across apps (\"memory passport\"); Zep = temporal knowledge graph construction (Graphiti); Cognee = graph-native ECL (Extract-Cognify-Load) pipeline turning raw data into queryable knowledge graphs, open source (~12k stars) with cloud and a Rust edge engine in development; Hindsight (Vectorize, MIT) = four memory networks separating facts/experiences/observations/opinions with confidence-scored beliefs and three operations (Retain, Recall, Reflect), entity/time-anchored for temporal reasoning; mem-agent (Dria) = a 4B Qwen3 fine-tune trained with online RL to operate an Obsidian-like markdown memory (retrieval/update/clarification), used as an MCP sidecar to a larger model; LlamaIndex = composable memory blocks (StaticMemoryBlock, FactExtractionMemoryBlock, VectorMemoryBlock) fed by a FIFO short-term queue that flushes to long-term blocks with priority-based token budgeting; Pinecone Assistant = managed doc-grounded RAG/chat with citations, but its docs show no persistent cross-session memory feature \u2014 Pinecone remains the storage substrate under other memory systems rather than a memory product; Engram = the anti-retrieval bet, pre-training (\"study once\") company context into compact reusable model memory instead of querying an index per request.",
+    "token_strategy": "Every player pitches token reduction as the core economic argument, with mostly vendor-supplied numbers. Supermemory claims \"95% Recall@15 with a 99.4% context reduction\" on LongMemEval/LoCoMo/ConvoMem (their GitHub README; measured on their own MemoryBench harness) \u2014 i.e., send a few retrieved memories instead of full history. Their SMFS post claims 53.8% fewer tokens and 55% lower cost ($2,103 \u2192 $946 across an evaluation; $20.95 \u2192 $4.71 on one query class) versus a baseline agentic-search setup, with accuracy rising from 69% to 81% at 10,000 files \u2014 but this is measured on xAFS, a benchmark Supermemory created for the launch. MemoryBench itself makes contextTokens a first-class metric: its MemScore is an accuracy%/latencyMs/contextTokens triple, explicitly refusing to collapse cost into a single score. LlamaIndex reduces tokens structurally via priority-ranked memory blocks under a token limit. mem-agent offloads memory management to a cheap 4B local model so the frontier model never sees raw memory files. Engram is the most aggressive claim: compressing organizational knowledge into learned model memory yields \"up to 100x fewer tokens than frontier models\" (vendor claim, no public benchmark found). None of these token-reduction figures have independent third-party replication that I could locate.",
+    "benchmarks": [
+      {
+        "benchmark": "MemoryBench (Supermemory's own harness: LoCoMo + LongMemEval + ConvoMem)",
+        "claim": "Supermemory ranks #1 across all three datasets; README headline is 95% Recall@15 with 99.4% context reduction and ~50ms user-profile reads. Harness runs a checkpointed INGEST\u2192SEARCH\u2192ANSWER\u2192EVALUATE\u2192REPORT pipeline, reports MemScore (accuracy%/latencyMs/contextTokens), is judge-agnostic (GPT-4o/Claude/Gemini), and ships pluggable providers: Supermemory (chunk-based semantic search), Mem0 (LLM fact extraction), Zep (knowledge graph).",
+        "source": "https://supermemory.ai/docs/memorybench/overview and https://github.com/supermemoryai/memorybench (MIT, ~304 stars) and https://github.com/supermemoryai/supermemory",
+        "caveats": "Vendor-authored benchmark on which the vendor ranks first. Only two competitors integrated (Mem0, Zep); no evidence competitors' configurations were tuned. Open-source and reproducible in principle, but I found no independent third-party reproduction. Underlying datasets (LoCoMo especially) have known annotation-quality criticisms."
+      },
+      {
+        "benchmark": "LongMemEval",
+        "claim": "Hindsight (Vectorize) claims 89.0% with gpt-oss-120B and 91.4% with Gemini-3 \u2014 described in third-party roundups as the first memory system past 90% \u2014 and +44.6 points over full-context baselines, beating Zep and Supermemory with comparable or smaller models.",
+        "source": "https://vectorize.io/blog/introducing-hindsight-agent-memory-that-works-like-human-memory",
+        "caveats": "Vendor blog; self-run evaluation. Open-source (MIT) so replicable, but no independent verification found. Note different vendors claim leadership on the same benchmark (Supermemory also claims #1 on LongMemEval via MemoryBench), which is only possible because each runs its own harness, judge, and answering model."
+      },
+      {
+        "benchmark": "xAFS (Supermemory-created, for SMFS)",
+        "claim": "SMFS: 81% accuracy at 10,000 files vs 69% baseline; 55% cost reduction ($2,103\u2192$946); 53.8% fewer tokens; per-query cost $20.95\u2192$4.71. Benchmark uses up to 10k coherent files of 10k+ tokens with multi-hop and temporal questions; runs published at smfs.ai/research/runs.",
+        "source": "https://supermemory.ai/blog/smfs-making-agentic-retrieval-55-cheaper-and-more-accurate/",
+        "caveats": "Benchmark was purpose-built by the vendor for this product launch; baseline choice controls the headline number. Public run logs improve auditability but no third party has validated the setup."
+      },
+      {
+        "benchmark": "md-memory-bench (Dria's own benchmark)",
+        "claim": "mem-agent (4B, Qwen3-4B-Thinking fine-tune, online RL) scores 0.75 vs 0.39 for the base model; second overall, beating all open and closed models except Qwen3-235B-thinking.",
+        "source": "https://huggingface.co/blog/driaforall/mem-agent and https://huggingface.co/driaforall/mem-agent",
+        "caveats": "Vendor-created benchmark measuring markdown-memory operations, not end-to-end conversational QA; not comparable to LongMemEval/LoCoMo numbers."
+      },
+      {
+        "benchmark": "Latency (Supermemory)",
+        "claim": "Sub-300ms memory retrieval; ~50ms user-profile reads.",
+        "source": "https://supermemory.ai/ and https://github.com/supermemoryai/supermemory",
+        "caveats": "Marketing-page and README claims; no percentile definition (p50 vs p95), no test conditions, no independent measurement found. MemoryBench does record per-provider latency, but those runs are vendor-executed."
+      },
+      {
+        "benchmark": "Traction-as-benchmark (Mem0)",
+        "claim": "41k+ GitHub stars, 13M+ Python downloads, 80k+ cloud developers, API calls growing 35M (Q1 2025) \u2192 186M (Q3 2025, ~30% MoM); exclusive memory provider for AWS Agent SDK.",
+        "source": "https://techcrunch.com/2025/10/28/mem0-raises-24m-from-yc-peak-xv-and-basis-set-to-build-the-memory-layer-for-ai-apps/",
+        "caveats": "Company-supplied figures reported by TechCrunch, not audited; included as the best available independent-press reporting of usage in this market."
+      }
+    ],
+    "pricing": "Supermemory (verified from supermemory.ai/pricing): subscription + usage hybrid. Free $0 (~$5/mo usage included, MCP + Hermes plugin); Pro $19/mo (~$20 usage, 2 teammates, Drive/Notion/OneDrive connectors); Max $100/mo (~$130 usage, Gmail/Granola connectors); Scale $399/mo (~$600 usage, 10 teammates, SOC 2 + HIPAA BAA, self-hosted option); Enterprise custom (air-gapped self-hosting, FDE, SLA). Usage meters: Memory $0.005/1K \"SM tokens\" plain text ($0.010 rich), SuperRAG $0.001/1K ($0.002 rich), Search $0.005/1K queries, Operations $0.10/1K ops; SM tokens are deduplicated so re-ingested content is free. Comparables from this research: Pinecone introduced a $50/mo platform minimum (Sept 2025, per third-party roundups \u2014 not verified on Pinecone's own pricing page); Mem0, Zep, Letta, Cognee cloud pricing not examined this session. Engram pricing not public.",
+    "weaknesses": [
+      "Benchmark circularity is endemic: Supermemory ranks #1 on its own MemoryBench, Hindsight claims SOTA on its own LongMemEval runs, Dria leads its own md-memory-bench, and SMFS's 55%-cheaper claim rests on xAFS, a benchmark Supermemory invented for the launch. No independent lab or academic replication of any leading vendor's numbers was found.",
+      "Supermemory funding data is noisy: TechCrunch (primary, Oct 6 2025) reports a $2.6M seed; an aggregator-derived summary claimed '$26M seed / $29M total,' which appears to be a decimal misparse of the same round and could not be verified anywhere \u2014 treat $2.6M as the real figure. That is a very small war chest against Mem0 ($24M), Cognee ($7.5M), and Engram ($98M).",
+      "Supermemory's hosted engine \u2014 the thing the latency and accuracy claims are about \u2014 is closed-source; the 28.8k-star repo is the app/SDK/local stack, so the star count overstates verifiable openness of the core product.",
+      "Latency claims across the market (sub-300ms, ~50ms profiles) lack percentile definitions, load conditions, and third-party measurement.",
+      "MemoryBench compares only three providers (Supermemory, Mem0, Zep); Letta, Cognee, Hindsight, and LangMem are absent, and there is no evidence competitor configurations were tuned by their own teams.",
+      "Pinecone's Assistant product shows no persistent cross-session memory in its docs \u2014 incumbent RAG platforms are further behind on memory than marketing suggests, with LlamaIndex's memory blocks (in-framework, developer-managed) the more substantive incumbent response.",
+      "Unsolved problems across all players: temporal reasoning and knowledge updates (every benchmark's weakest category), principled forgetting/consolidation vs. unbounded growth, write-time LLM-extraction cost vs read-time latency tradeoffs, cross-app memory portability ('memory passport' remains aspirational), multi-user/org-level memory permissions, and privacy of accumulating personal profiles.",
+      "Platform risk: TechCrunch notes OpenAI and other labs are building first-party memory as a moat; if frontier models ship good native memory (or ultra-long context plus caching gets cheap), the standalone retrieval-memory layer gets squeezed \u2014 Engram's parametric approach is a bet that this squeeze happens.",
+      "Market-sizing signals are round-based, not revenue-based: no vendor in this space discloses revenue; hiring and API-call growth are the only public demand proxies."
+    ],
+    "sources": [
+      "https://supermemory.ai/",
+      "https://supermemory.ai/pricing",
+      "https://supermemory.ai/docs/memorybench/overview",
+      "https://github.com/supermemoryai/memorybench",
+      "https://github.com/supermemoryai/supermemory",
+      "https://supermemory.ai/blog/switching-memory-infrastructure/",
+      "https://supermemory.ai/blog/smfs-making-agentic-retrieval-55-cheaper-and-more-accurate/",
+      "https://techcrunch.com/2025/10/06/a-19-year-old-nabs-backing-from-google-execs-for-his-ai-memory-startup-supermemory/",
+      "https://techcrunch.com/2025/10/28/mem0-raises-24m-from-yc-peak-xv-and-basis-set-to-build-the-memory-layer-for-ai-apps/",
+      "https://vectorize.io/blog/introducing-hindsight-agent-memory-that-works-like-human-memory",
+      "https://www.trendingtopics.eu/cognee-berlin-startup-raises-7-5-million-builds-long-term-memory-for-ai-agents/",
+      "https://www.cognee.ai/blog/cognee-news/cognee-raises-seven-million-five-hundred-thousand-dollars-seed",
+      "https://huggingface.co/blog/driaforall/mem-agent",
+      "https://huggingface.co/driaforall/mem-agent",
+      "https://www.llamaindex.ai/blog/improved-long-and-short-term-memory-for-llamaindex-agents",
+      "https://developers.llamaindex.ai/python/framework/module_guides/deploying/agents/memory/",
+      "https://docs.pinecone.io/guides/assistant/overview",
+      "https://www.vktr.com/ai-news/engram-launches-with-98m-to-give-enterprise-ai-memory/",
+      "https://interloom.com/en/blog/seed-announcement/",
+      "https://www.hpcwire.com/bigdatawire/this-just-in/letta-emerges-from-stealth-with-10m-to-build-ai-agents-with-advanced-memory/",
+      "https://aijourn.com/memories-ai-emerges-with-8m-and-the-worlds-first-large-visual-memory-model/",
+      "https://www.kucoin.com/news/flash/memories-ai-completes-16m-funding-partners-with-nvidia-to-build-ai-visual-memory-layer",
+      "https://techcrunch.com/2026/03/16/memories-ai-is-building-the-visual-memory-layer-for-wearables-and-robotics/"
+    ]
+  },
+  {
+    "summary": "The storage/search infra market for an agent-memory API built on Postgres + pgvector is in a strong position as of August 2026: pgvector 0.8.x added iterative index scans (strict_order/relaxed_order) that largely fix the filtered-search over/under-fetch problem, plus halfvec (fp16, 4,000-dim HNSW cap vs 2,000 for float32) and binary quantization with rescoring. Timescale's pgvectorscale extension (StreamingDiskANN + statistical binary quantization, label-based filtered search per Microsoft's Filtered DiskANN) extends single-node Postgres to ~50M vectors with vendor-claimed 28x lower p95 latency and 16x higher QPS than Pinecone s1 at 99% recall on 50M 768-dim Cohere embeddings \u2014 though it is not installable on RDS/Aurora, only self-hosted or Timescale/Tiger Cloud. Dedicated vector DBs now compete mostly on cost architecture rather than raw ANN quality: Pinecone serverless ($0.33/GB-mo storage, ~$16-24/M read units, $50/mo minimum on Standard), turbopuffer (object-storage-first, $16/mo Launch minimum, query pricing cut to $1/PB base in Feb 2026, warm p50 ~14ms vs cold ~874ms on 1M docs), Qdrant/Weaviate/Zilliz (provisioned-resource pricing), and LanceDB (embedded, Lance columnar format, usage-based cloud in beta). For hybrid search, native tsvector still lacks BM25 (no IDF, no length normalization), and ParadeDB's pg_search (Tantivy-based, AGPLv3) plus Timescale's new pg_textsearch are the credible in-Postgres BM25 options. The realistic single-node pgvector ceiling with 1,536-dim embeddings is roughly 5-10M vectors on ordinary instances and ~50-100M with pgvectorscale/halfvec/large RAM; past that, index build times (hours), HNSW's no-space-reclamation on deletes, and >600GB raw storage at 100M vectors force partitioning, disk-native indexes (DiskANN/ScaNN), or a dedicated engine.",
+    "architecture": "WRITE PATH options observed in the market: (1) pgvector single node \u2014 embeddings stored in a vector/halfvec column (4 bytes/dim + 8, or 2 bytes/dim + 8); HNSW index built in maintenance_work_mem (Neon docs: set to working-set size but <=50-60% of RAM; parallel build via max_parallel_maintenance_workers; a 7CU/28GB Neon compute uses maintenance_work_mem='10GB' + 7 workers), defaults m=16, ef_construction=64; HNSW does NOT reclaim space on delete, so high-churn memory workloads accumulate index bloat and need REINDEX CONCURRENTLY. IVFFlat builds ~6x faster (dbi-services: 5s vs 29s at 25K x 3,072-dim) but needs representative data upfront. (2) pgvectorscale \u2014 Rust extension adding a StreamingDiskANN graph laid out for SSD residency with statistical binary quantization; dbi-services measured a 21MB DiskANN index vs 193MB HNSW on the same 25K x 3,072-dim data (~9x smaller); labels for filtered search must be smallint arrays queried with &&; no parallel build with labels, no UNLOGGED tables. (3) turbopuffer \u2014 WAL written directly to object storage (S3) with group commits, 1 WAL entry/sec/namespace, ~10K vectors/sec throughput but p50 write latency ~165ms; indexes built async from the WAL. (4) Pinecone serverless \u2014 writes billed as write units, storage decoupled at $0.33/GB-mo. READ PATH: pgvector HNSW query walks the graph with hnsw.ef_search (default 40); since 0.8.0, iterative index scans keep pulling candidates until the WHERE clause is satisfied (strict_order = exact distance order; relaxed_order = better recall; max_scan_tuples default 20,000 bounds tail latency) \u2014 this is the critical feature for tenant-scoped memory queries; binary_quantize + Hamming coarse pass then cosine rescore is the two-phase pattern for big tables. turbopuffer routes queries to a node that caches the namespace on NVMe/memory (cold 1M-doc query p50 874ms with 3-4 object-storage roundtrips; warm p50 14ms). AlloyDB replaces HNSW with ScaNN (tree-quantization, Google Research), claiming 4x smaller memory footprint and graceful behavior when the index exceeds RAM (431ms vs >4s for HNSW). Hybrid search: ParadeDB pg_search maintains a Tantivy inverted index (BM25 scoring, positions, highlighting) inside Postgres blocks, combined with pgvector via SQL-level fusion (e.g., RRF); native tsvector/ts_rank scores only term frequency + length weighting with no corpus-level IDF.",
+    "token_strategy": "Not directly applicable \u2014 this is storage infra, not an answer-generation layer, and no vendor in this space publishes token-reduction claims. The relevant mechanism for a memory API: retrieval precision is what bounds tokens sent to the model, so infra choices matter indirectly. (a) Filtered ANN quality (pgvector iterative scans, pgvectorscale label filters, ScaNN filtering) determines whether tenant/agent-scoped top-k actually returns the k most relevant memories instead of post-filter dropouts that force larger k. (b) In-Postgres BM25 (pg_search/pg_textsearch) enables hybrid dense+lexical retrieval with RRF in one SQL query, which raises precision@k so fewer, better memories go into context. (c) Postgres co-location lets metadata predicates (recency, memory type, importance) run in the same plan, avoiding over-fetch-then-rerank pipelines. Any concrete 'X% fewer tokens' number would come from the memory layer above this infra, not the infra itself.",
+    "pricing": "Pinecone serverless (pinecone.io/pricing, fetched Aug 2026): Starter free; Builder $20/mo flat; Standard $50/mo minimum; Enterprise $500/mo minimum. Storage $0.33/GB/mo; read units $16-18/M (Standard) or $24-27/M (Enterprise), write units $4-4.50/M (Standard); backups $0.10/GB/mo; HIPAA add-on $190/mo. turbopuffer: Launch $16/mo minimum (cut from $64 in June 2026), Scale $256/mo, Enterprise >=$4,096/mo with 35% usage premium; query base rate cut from $5/PB to $1/PB scanned (Feb 2026) with up to 96% marginal discounts; per-GB storage/write rates live in a JS calculator I could not extract \u2014 third-party sources cite ~$0.07/GB-mo storage and ~$0.02/GB effective for cold object storage, UNVERIFIED against the vendor page. Weaviate Cloud: Free tier (100K objects); Flex from $45/mo at $0.00465 per million stored dimensions; Premium from $400/mo at $0.002718-0.003875 per million dimensions; storage $0.12-0.15/GiB. Zilliz Cloud (managed Milvus, via search results): serverless $4 per million vCUs; dedicated ~$0.096/CU-hour compute + $0.02/GB/mo storage. Qdrant Cloud: provisioned resource pricing (RAM/CPU/disk), no per-vector metering; third-party estimates ~$114/mo for 1M x 1536-dim with quantization, ~$0.078/GB-hour \u2014 estimates, not vendor-verified. LanceDB: OSS Apache 2.0 free; Cloud is usage-based serverless in public beta ($100 free credits), enterprise via annual commit \u2014 no public rate card found. Managed Postgres: Neon/Supabase charge normal compute+storage with pgvector free (Supabase free tier works for small vector sets); RDS/Aurora/Cloud SQL/AlloyDB charge standard instance pricing \u2014 Aurora Optimized Reads (NVMe-cache instances) claims 75-80% lower cost-per-query for HNSW workloads exceeding RAM. Reference self-hosted anchor (Timescale, June 2024): 50M x 768-dim on EC2 ~$835/mo vs Pinecone s1 $3,241/mo / p2 $3,889/mo.",
+    "benchmarks": [
+      {
+        "benchmark": "pgvectorscale vs Pinecone, 50M Cohere 768-dim embeddings",
+        "claim": "Postgres + pgvector + pgvectorscale: 28x lower p95 latency and 16x higher QPS than Pinecone s1 at 99% recall; 1.4x lower p95 / 1.5x higher QPS than p2 at 90% recall; ~75% cheaper self-hosted ($835/mo EC2 vs $3,241-3,889/mo)",
+        "source": "https://www.tigerdata.com/blog/pgvector-is-now-as-fast-as-pinecone-at-75-less-cost",
+        "caveats": "Vendor (Timescale/Tiger Data) benchmark from June 2024 against Pinecone's pre-2024 pod-based s1/p2 indexes, not current serverless; Pinecone doesn't expose recall tuning, so the 99%-recall comparison is inherently asymmetric; not independently reproduced"
+      },
+      {
+        "benchmark": "Qdrant single-node benchmarks (dbpedia-openai-1M-1536d, deep-image-10M-96d, gist-960-1M, glove-100)",
+        "claim": "Qdrant achieves highest RPS and lowest latency in almost all scenarios vs Weaviate, Milvus, Elasticsearch, Redis; Elasticsearch ~10x slower indexing at 10M+ vectors",
+        "source": "https://qdrant.tech/benchmarks/",
+        "caveats": "Self-run vendor benchmark, last updated Jan/Jun 2024 (filtered-search section Feb 2023 \u2014 stale); pgvector not included; all engines Docker-constrained to 25GB RAM; open-sourced harness but results not third-party verified"
+      },
+      {
+        "benchmark": "AlloyDB ScaNN vs pgvector HNSW",
+        "claim": "Up to 4x lower latency even on small datasets; 10x better when index exceeds memory (431ms vs >4s); 4x smaller memory footprint; billion-vector index builds at claimed 60x lower cost",
+        "source": "https://cloud.google.com/blog/products/databases/how-scann-for-alloydb-vector-search-compares-to-pgvector-hnsw",
+        "caveats": "Google vendor claims (blog + whitepaper); predates pgvector 0.8.x iterative scans; ScaNN index is AlloyDB-proprietary, so adopting it is GCP lock-in"
+      },
+      {
+        "benchmark": "Aurora Optimized Reads with pgvector HNSW",
+        "claim": "Up to 9x average query throughput and 75-80% lower cost per query vs standard Aurora instances when the vector working set exceeds RAM (NVMe tiered caching)",
+        "source": "https://aws.amazon.com/blogs/database/accelerate-generative-ai-workloads-on-amazon-aurora-with-optimized-reads-and-pgvector",
+        "caveats": "AWS vendor claim; benefit only materializes once indexes spill past memory; Aurora supports pgvector 0.8.0 but NOT pgvectorscale (confirmed unavailable on RDS/Aurora per AWS re:Post)"
+      },
+      {
+        "benchmark": "dbi-services pgvector index comparison, 25K Wikipedia articles x 3,072-dim (text-embedding-3-large)",
+        "claim": "HNSW build 29s/193MB index; IVFFlat 5s/193MB; pgvectorscale DiskANN 49s/21MB (~9x smaller); binary quantization gives ~97% storage reduction with Hamming-then-rescore two-phase search",
+        "source": "https://www.dbi-services.com/blog/pgvector-a-guide-for-dba-part-2-indexes-update-march-2026/",
+        "caveats": "Independent consultancy (not a vector-DB vendor) and recent (March 2026), but tiny dataset (25K rows) chosen for pedagogy; absolute numbers don't extrapolate to 10M+ scale"
+      },
+      {
+        "benchmark": "ParadeDB pg_search vs native Postgres FTS (tsvector), 1M rows",
+        "claim": "pg_search indexes ~50s faster than tsvector at 1M rows and ranks results ~20x faster; tsvector's ts_rank lacks IDF and document-length normalization entirely, so it is not BM25-quality ranking regardless of speed",
+        "source": "https://www.paradedb.com/blog/benchmarker-iteration",
+        "caveats": "Vendor benchmark; ParadeDB also claims parity with a dedicated Elasticsearch instance on indexing/search time but publishes fewer specifics; pg_search is AGPLv3 (enterprise license for commercial embedding); not available on RDS \u2014 Neon does offer it"
+      },
+      {
+        "benchmark": "turbopuffer query latency, 1M-document namespace",
+        "claim": "Cold query (from object storage, 3-4 S3 roundtrips) p50 ~874ms; NVMe/memory-warm p50 ~14ms; writes ~10K vectors/sec but p50 write latency 165ms (1 WAL commit/sec/namespace)",
+        "source": "https://turbopuffer.com/architecture",
+        "caveats": "Vendor-published numbers from their own architecture page; the cold/warm gap means latency SLOs depend entirely on cache residency \u2014 fine for per-agent memory namespaces queried in sessions, risky for uniformly random access across many cold tenants"
+      },
+      {
+        "benchmark": "Third-party pgvector/pgvectorscale scale synthesis (2026 roundups)",
+        "claim": "Production pgvector comfortable to ~10M vectors/node; pgvectorscale extends to ~50M with p95 <50ms (471 QPS at 99% recall on 50M reported)",
+        "source": "https://effoma.com/blog/vector-database-performance-benchmark-comparison-2026/",
+        "caveats": "Secondary-source roundup repeating vendor numbers; useful as consensus rule-of-thumb, not as independent measurement"
+      }
+    ],
+    "weaknesses": [
+      "Filtered search remains pgvector's weakest area even after 0.8.x: iterative scans fix correctness (no more silently empty results) but pay for it in CPU, memory, and tail latency on highly selective filters \u2014 exactly the tenant_id + agent_id + memory_type predicates a multi-tenant memory API runs on every query; partitioning or pgvectorscale label filters (smallint-array labels only, && operator, no parallel build) are the workarounds.",
+      "HNSW indexes do not reclaim space on row deletion \u2014 a high-churn memory layer (consolidation, decay, versioned rewrites) will bloat the index and needs periodic REINDEX CONCURRENTLY, which is expensive at tens of GB.",
+      "pgvectorscale, the strongest pgvector scaling story, cannot be installed on RDS, Aurora, Cloud SQL, or Supabase \u2014 it effectively ties you to self-hosted Postgres or Timescale/Tiger Cloud, which undercuts the 'just use managed Postgres' pitch.",
+      "Nearly every headline performance number in this market is a vendor self-benchmark (Timescale vs Pinecone, Qdrant vs everyone, Google ScaNN vs HNSW, ParadeDB vs tsvector/Elasticsearch); the only genuinely independent recent measurement found (dbi-services, March 2026) uses a 25K-row dataset too small to test scale claims. No neutral 2025-2026 benchmark of pgvector 0.8.x iterative scans vs dedicated engines on filtered workloads was found.",
+      "Timescale's Pinecone comparison is dated June 2024 and targeted Pinecone's old pod-based s1/p2 tiers; Pinecone serverless has since restructured pricing entirely, so the 28x/16x/75% numbers should not be quoted against 2026 Pinecone serverless.",
+      "turbopuffer's granular pricing (per-GB storage and write rates) is only exposed via a JavaScript calculator that could not be scraped; the ~$0.07/GB-mo and ~$2/GB-write figures circulating are third-party and unverified. Its 1-write-commit/sec/namespace and ~874ms cold-query latency are real constraints for low-latency memory reads over many cold namespaces.",
+      "Hard vector-count ceilings quoted everywhere (~10M/node pgvector, ~50M with pgvectorscale) are rules of thumb dominated by memory economics, not cliffs: 100M x 1536-dim float32 is >600GB raw before HNSW overhead, index builds take hours, and ef_search >200 can flip the planner to sequential scans \u2014 but halfvec, binary quantization, partitioning, and NVMe-cached instances (Aurora Optimized Reads) all move the line, so the true threshold is workload-specific.",
+      "In-Postgres BM25 is young: ParadeDB pg_search is AGPLv3 (license risk for a commercial API), unavailable on the major hyperscaler managed Postgres offerings (available on Neon), and its own 'native vector + hybrid search' is still marked coming soon; Timescale's pg_textsearch 1.0 lacks phrase queries (no term positions stored). Native tsvector ranking has no IDF and no length normalization, so it is not a serious BM25 substitute for memory retrieval quality.",
+      "LanceDB Cloud pricing is effectively unpublished (usage-based beta, no rate card), making cost comparison impossible from primary sources.",
+      "Qdrant's filtered-search benchmark section dates to Feb 2023 \u2014 pre-dating pgvector HNSW entirely \u2014 and its cloud pricing requires a calculator; per-million-vector figures in circulation are third-party estimates."
+    ],
+    "sources": [
+      "https://github.com/pgvector/pgvector",
+      "https://github.com/timescale/pgvectorscale",
+      "https://www.tigerdata.com/blog/pgvector-is-now-as-fast-as-pinecone-at-75-less-cost",
+      "https://www.pinecone.io/pricing/",
+      "https://turbopuffer.com/pricing",
+      "https://turbopuffer.com/docs/pricing-log",
+      "https://turbopuffer.com/architecture",
+      "https://qdrant.tech/benchmarks/",
+      "https://weaviate.io/pricing",
+      "https://zilliz.com/pricing",
+      "https://neon.com/docs/extensions/pgvector",
+      "https://supabase.com/docs/guides/ai",
+      "https://www.paradedb.com/learn/postgresql/pgvector-limitations",
+      "https://github.com/paradedb/paradedb",
+      "https://www.paradedb.com/blog/benchmarker-iteration",
+      "https://www.dbi-services.com/blog/pgvector-a-guide-for-dba-part-2-indexes-update-march-2026/",
+      "https://cloud.google.com/blog/products/databases/how-scann-for-alloydb-vector-search-compares-to-pgvector-hnsw",
+      "https://aws.amazon.com/blogs/database/accelerate-generative-ai-workloads-on-amazon-aurora-with-optimized-reads-and-pgvector",
+      "https://aws.amazon.com/blogs/database/running-pgvector-in-production-on-amazon-aurora-postgresql",
+      "https://www.tigerdata.com/blog/introducing-pg_textsearch-true-bm25-ranking-hybrid-retrieval-postgres",
+      "https://effoma.com/blog/vector-database-performance-benchmark-comparison-2026/"
+    ]
+  },
+  {
+    "summary": "Token reduction for agent memory/RAG context, as of August 2026, is pursued at three layers: write-time distillation (LLM fact/triple extraction, salience filtering, hierarchical/recursive summarization, deduplication \u2014 the core of commercial memory layers like Mem0, Zep, Letta), read-time compression (extractive/abstractive compressors like RECOMP, token-pruning compressors like LLMLingua-1/2, learned soft-token compression like gisting/ICAE, and progressive/agentic retrieval where the model pages in more context on demand), and serving-side caching (provider cached-token discounts of 75-90% and KV-cache reuse via prefix/radix caching). Published papers support 2-6x task-agnostic compression with near-parity quality, 10-20x in favorable settings (redundant CoT prompts, extractive RAG summarization), and ~90%+ read-time token savings for fact-extraction memory versus full-context replay \u2014 but an independent 2026 cost-performance study found long-context models with prompt caching still beat fact-based memory on factual recall (LongMemEval, LoCoMo), so the savings are not free. Vendor benchmark numbers in this market are actively disputed (the Zep-vs-Mem0 LoCoMo fight saw one score revised from 84% to 58.44% and re-rebutted to 75.14%), so single-number vendor claims should be treated as marketing until independently reproduced.",
+    "architecture": "Canonical memory-layer write path (per Mem0 arXiv:2504.19413 and Zep arXiv:2501.13956): incoming messages go through an LLM extraction pass that emits discrete natural-language facts or subject-predicate-object triples; an update/consolidation phase compares each candidate against existing memories (vector similarity + LLM judgment) and applies ADD/UPDATE/DELETE/NOOP operations \u2014 this is where deduplication and contradiction resolution happen. Storage is a vector index over fact strings (Mem0 base), optionally a knowledge graph: Zep's Graphiti engine stores a temporally-aware graph with entity nodes, relation edges carrying validity intervals (bi-temporal: event time vs ingestion time), plus entity summaries; Mem0's graph variant (Mem0g) adds entity-relation triples on top of facts. Mem0's 2026 revision moved to single-pass ADD-only extraction (halving extraction latency, preserving historical state changes) with separate entity embedding stores for entity linking. Hierarchical summarization variants (MemGPT arXiv:2310.08560; recursive summarization arXiv:2308.15022; Anthropic's compaction guidance) maintain session summaries that are recursively folded into a running memory, with raw history demoted to searchable recall storage. Read path: query-time retrieval (vector similarity, plus BM25/keyword and entity-match fusion in Mem0's 2026 pipeline; graph traversal + semantic search in Zep) returns a small set of facts/subgraphs/summaries assembled into the prompt \u2014 typically 1-2K tokens (Mem0 paper: ~1.8K) to ~7K tokens (Mem0 2026 algorithm) instead of replaying 25-26K+ tokens of raw history. Read-time compressors sit between retriever and LLM: RECOMP (arXiv:2310.04408) trains an extractive compressor (contrastive sentence selection) and an abstractive compressor (distilled from GPT-3.5/4) that shrink retrieved documents to as little as 5-6% of original tokens; LLMLingua-2 (arXiv:2403.12968) is a task-agnostic XLM-RoBERTa-large token classifier (keep/drop per token) trained by data distillation from GPT-4. Progressive/agentic retrieval (MemGPT's OS-style paging between main context and archival storage via self-issued function calls; Anthropic's \"just-in-time\" pattern of holding lightweight identifiers \u2014 file paths, stored queries \u2014 and loading content via tools only when needed) replaces bulk pre-retrieval with on-demand reads. Serving side: providers hash stable prompt prefixes and reuse KV caches (Anthropic explicit cache_control breakpoints with prefix-hash lookback over up to 20 block positions; OpenAI automatic caching of prefixes \u22651024 tokens in 128-token increments; Gemini implicit caching by default on 2.5+ models plus explicit cache objects). Self-hosted equivalents: SGLang's RadixAttention keeps KV caches in a radix tree keyed by token-sequence prefix with LRU eviction (arXiv:2312.07104); vLLM's automatic prefix caching hashes fixed-size blocks. Design consequence: memory content injected as a stable, append-only prefix caches well; per-query dynamically compressed or re-ranked context breaks prefix identity and forfeits cache discounts.",
+    "token_strategy": "Write-time: fact extraction compresses conversation history into discrete facts \u2014 Mem0's paper claims >90% token savings (~1.8K tokens per conversation vs 26K full-context) with 91% lower p95 latency; its 2026 algorithm targets <7K tokens per retrieval call vs 25K+ full-context (~3-4x). Caveat these are read-time savings; write-time itself spends LLM calls per message (extraction + update judgment), a cost the headline numbers exclude. Recursive/hierarchical summarization (arXiv:2308.15022, MemGPT, Anthropic compaction) bounds context growth to a constant-size summary; measured gains are consistency/recall improvements rather than published compression ratios. Deduplication is implemented as ADD/UPDATE/DELETE/NOOP consolidation (Mem0) or graph entity resolution (Zep); no isolated compression numbers are published for dedup alone. Read-time: LLMLingua-1 reports up to 20x compression on GSM8K CoT prompts with accuracy 78.85%\u219277.94%; LongLLMLingua reports 4x compression with up to +17.1-21.4% accuracy on NaturalQuestions (compression can help by removing distractors/position bias), 1.4-2.6x latency reduction, and 94% cost reduction on LooGLE; LLMLingua-2 is more honest about the task-agnostic regime \u2014 2-5x compression, 1.6-2.9x end-to-end latency, near-parity on MeetingBank/LongBench/GSM8K/BBH with a small encoder that is 3-6x faster than LLMLingua-1. RECOMP compresses retrieved docs to ~6% of tokens (\u224816x) with minimal loss on language modeling and open-domain QA; at 5% tokens it loses only ~3.7 EM vs full documents. Soft/learned compression (context distillation family): gist tokens (arXiv:2304.08467) achieve up to 26x prompt compression and ~40% FLOPs reduction with minimal quality loss, ICAE ~15x \u2014 but these require finetuning the serving model, so they are unusable with closed API models where the memory-layer market lives. Structured fact tables vs prose: direct controlled comparisons are scarce; the strongest independent evidence (arXiv:2603.04814) shows flat-typed fact extraction works for stable attributes but loses to long-context prose replay on LongMemEval/LoCoMo recall. Progressive/agentic retrieval avoids paying for unused context by letting the model request more (MemGPT function-call paging: 92.5% deep-memory-retrieval accuracy vs 32.1% for baseline GPT-4; Anthropic recommends hybrid: small always-on memory plus just-in-time tool loads, at the cost of added latency and turn count). Serving-side: cached input tokens cost 0.1x base at Anthropic (write premium 1.25x for 5-min TTL, 2x for 1-hr; 512-4096 token minimum by model), 0.1x at OpenAI (90% discount, automatic \u22651024-token prefixes, cache lifetime ~5-10 min up to 1 hr) and ~0.1x at Gemini (plus explicit-cache storage of $1.00-4.50 per M tokens per hour). This means a stable 100K-token memory prefix re-read each turn costs roughly one-tenth of naive input pricing \u2014 arXiv:2603.04814 factors this in and finds long-context + caching becomes cost-competitive with fact-based memory until ~10 interaction turns at 100K context, after which fixed-size memory reads win on cost.",
+    "benchmarks": [
+      {
+        "benchmark": "GSM8K (CoT prompt compression)",
+        "claim": "LLMLingua-1 achieves up to 20x compression with accuracy 78.85% -> 77.94% (near-lossless); LLMLingua-2 holds parity up to ~14x on 9-step CoT prompts",
+        "source": "https://www.llmlingua.com/ (project page for arXiv:2310.05736 and 2403.12968)",
+        "caveats": "Best-case ratios on highly redundant few-shot CoT prompts; task-agnostic compression of arbitrary retrieved context is 2-5x, not 20x. Microsoft's own project page, but numbers match the peer-reviewed papers."
+      },
+      {
+        "benchmark": "NaturalQuestions / LooGLE (long-context RAG)",
+        "claim": "LongLLMLingua: 4x compression with up to +17.1-21.4% accuracy (compression removes distractors and mitigates lost-in-the-middle), 1.4-2.6x latency reduction, 94% cost reduction on LooGLE",
+        "source": "https://arxiv.org/abs/2310.06839",
+        "caveats": "Accuracy gain is question-aware and depends on retrieval noise being present; requires a small LLaMA-class model for perplexity scoring at inference time."
+      },
+      {
+        "benchmark": "MeetingBank, LongBench, ZeroScrolls, GSM8K, BBH (task-agnostic compression)",
+        "claim": "LLMLingua-2: 2-5x compression at near-parity quality, 3-6x faster compressor than LLMLingua-1, 1.6-2.9x end-to-end latency reduction, using XLM-RoBERTa-large token classifier",
+        "source": "https://arxiv.org/abs/2403.12968",
+        "caveats": "ACL 2024 Findings, peer-reviewed. Out-of-domain performance holds but compressor was trained only on MeetingBank distillations from GPT-4."
+      },
+      {
+        "benchmark": "NQ / TriviaQA / HotpotQA + WikiText LM (RAG compression)",
+        "claim": "RECOMP compresses retrieved documents to as low as 6% of tokens (~16x) with minimal performance loss; at 5% tokens loses only ~3.7 EM vs prepending full documents",
+        "source": "https://openreview.net/forum?id=mlJLVigNHp (ICLR 2024; arXiv:2310.04408)",
+        "caveats": "Consulted via search results and abstract, not full-text verified. Compressors are trained per task family; abstractive compressor distilled from proprietary LLMs; selective augmentation can return empty context when retrieval is useless."
+      },
+      {
+        "benchmark": "Instruction-following (Alpaca+/SelfInstruct)",
+        "claim": "Gist tokens: up to 26x prompt compression, ~40% FLOPs reduction, 4.2% wall-time speedup with minimal quality loss; ICAE caps around 15x",
+        "source": "https://arxiv.org/abs/2304.08467 (gisting); https://arxiv.org/abs/2410.12388 (prompt-compression survey)",
+        "caveats": "Consulted via search summaries. Requires finetuning the target model (attention-mask modification); compressed tokens do not transfer to untuned/closed API models \u2014 largely irrelevant to API-based memory products, relevant to self-hosted serving."
+      },
+      {
+        "benchmark": "LOCOMO (conversational memory)",
+        "claim": "Mem0 paper: 26% relative LLM-as-a-Judge improvement over OpenAI memory (66.9% vs 52.9%), >90% token savings (~1.8K vs 26K tokens per conversation), 91% lower p95 latency (1.44s vs 17.12s); graph variant ~2% higher",
+        "source": "https://arxiv.org/abs/2504.19413",
+        "caveats": "Vendor-authored paper (accepted ECAI 2025). LoCoMo itself has documented flaws (speaker misattribution, ambiguous questions). Token savings count read-time only; write-time extraction/update LLM calls are extra."
+      },
+      {
+        "benchmark": "DMR + LongMemEval (agent memory)",
+        "claim": "Zep/Graphiti temporal knowledge graph: 94.8% vs MemGPT 93.4% on DMR; up to +18.5% accuracy on LongMemEval with ~90% latency reduction vs full-context baseline",
+        "source": "https://arxiv.org/abs/2501.13956",
+        "caveats": "Vendor-authored preprint. DMR delta over MemGPT is 1.4 points. Zep's separate 84% LoCoMo claim was challenged by Mem0 (corrected eval: 58.44%, per https://github.com/getzep/zep-papers/issues/5); Zep counter-claims 75.14% and accuses Mem0 of misconfiguration (https://blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/). Treat all LoCoMo vendor numbers as contested."
+      },
+      {
+        "benchmark": "Deep Memory Retrieval (MemGPT)",
+        "claim": "MemGPT self-directed paging (progressive retrieval via function calls) achieves 92.5% accuracy vs 32.1% for fixed-context GPT-4 baseline",
+        "source": "https://arxiv.org/abs/2310.08560 (via search; alphaxiv/beancount summaries)",
+        "caveats": "Academic paper (authors later founded Letta, so now vendor-adjacent). Paging adds multi-turn latency and extra LLM calls per retrieval decision; DMR is a small synthetic benchmark."
+      },
+      {
+        "benchmark": "LongMemEval, LoCoMo, PersonaMemv2 (independent cost-performance study)",
+        "claim": "Fact-based memory becomes cheaper than long-context replay only after ~10 interaction turns at 100K context (with prompt caching modeled); long-context GPT-5-mini achieves HIGHER factual recall than the fact-based memory system on LongMemEval and LoCoMo; memory competitive only on PersonaMemv2 (stable flat-typed attributes)",
+        "source": "https://arxiv.org/abs/2603.04814",
+        "caveats": "Single memory implementation tested; results depend on cache-hit assumptions. This is the clearest independent evidence that write-time hard compression trades away recall quality."
+      },
+      {
+        "benchmark": "LoCoMo / LongMemEval / BEAM (Mem0 2026 algorithm)",
+        "claim": "Vendor blog claims LoCoMo 92.5 (from 71.4), LongMemEval 94.4 (from 67.8), BEAM-1M 64.1 at 6,719 mean tokens, under 7K tokens per retrieval vs 25K+ full context, via single-pass ADD-only extraction, dedup + entity linking, and 3-signal retrieval fusion",
+        "source": "https://mem0.ai/blog/mem0-the-token-efficient-memory-algorithm",
+        "caveats": "Pure vendor marketing, not peer-reviewed, no independent reproduction found; directly conflicts with the independent finding in arXiv:2603.04814 that memory systems trail long-context on these same benchmarks. Unverified."
+      },
+      {
+        "benchmark": "Multi-call LLM programs (serving-side KV reuse)",
+        "claim": "SGLang RadixAttention (radix-tree KV cache reuse across calls with LRU eviction) delivers up to 5x throughput vs contemporary vLLM/Guidance on shared-prefix workloads including multi-turn chat",
+        "source": "https://arxiv.org/pdf/2312.07104 (via search; https://www.lmsys.org/blog/2024-01-17-sglang/)",
+        "caveats": "2024 baseline comparison \u2014 vLLM has since shipped automatic prefix caching, narrowing the gap; gains depend heavily on prefix-sharing ratio of the workload."
+      },
+      {
+        "benchmark": "Provider cached-token pricing (verified from official docs, Aug 2026)",
+        "claim": "Anthropic: cache reads 0.1x base input, writes 1.25x (5-min TTL) or 2x (1-hr TTL), min cacheable 512-4096 tokens by model, explicit cache_control breakpoints with 20-position prefix-hash lookback. OpenAI: cached input at 10% of base (90% discount) across GPT-5.x, automatic for prefixes >=1024 tokens, cache lifetime ~5-10 min (up to 1 hr); newer 5.6 models list explicit cache writes at 1.25x. Gemini: cached input ~10% of base (e.g. 2.5 Pro $0.125 vs $1.25/M), implicit caching default on 2.5+, explicit caches add storage of $1.00-$4.50 per M tokens per hour, min 2,048-4,096 tokens",
+        "source": "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching ; https://developers.openai.com/api/docs/pricing ; https://ai.google.dev/gemini-api/docs/caching ; https://ai.google.dev/gemini-api/docs/pricing",
+        "caveats": "Prices verified directly from provider docs on 2026-08-08 but change frequently. Economic implication: a stable memory prefix re-read every turn costs ~10% of face-value input pricing, which materially weakens the naive '90% token savings' pitch of memory layers when the counterfactual is cached long-context."
+      }
+    ],
+    "weaknesses": [
+      "Hard write-time compression (fact/triple extraction) demonstrably loses information: the only independent cost-performance study found (arXiv:2603.04814) shows long-context GPT-5-mini with caching beats a fact-based memory system on factual recall on LongMemEval and LoCoMo \u2014 the two benchmarks memory vendors advertise wins on.",
+      "Vendor benchmark numbers in the memory-layer market are unreliable: the Zep-vs-Mem0 LoCoMo dispute (84% claimed -> 58.44% in Mem0's corrected eval -> 75.14% in Zep's rebuttal) shows both sides making methodology errors, and LoCoMo itself has documented speaker-misattribution and ambiguity flaws. Mem0's 2026 '92.5 LoCoMo' blog claim has no independent reproduction.",
+      "Headline '90% token savings' claims count only read-time tokens and ignore write-time cost: per-message LLM extraction and update-judgment calls are themselves token spend, and none of the vendor papers report total-cost-of-ownership including ingestion.",
+      "High compression ratios (20x LLMLingua, 26x gisting) are best-case: 20x holds only on redundant few-shot CoT prompts; task-agnostic compression of arbitrary context is 2-5x (LLMLingua-2's own framing). Soft-token methods (gisting, ICAE, AutoCompressor) require finetuning the serving model and cannot be used with closed API models where nearly all commercial memory layers operate.",
+      "Read-time compression and serving-side caching partially conflict: per-query dynamic compression/reranking produces a different prefix every call, breaking prefix-hash cache hits and forfeiting the 90% cached-token discount \u2014 almost no paper or vendor quantifies this interaction (arXiv:2603.04814 is the exception in even modeling caching).",
+      "Salience filtering and deduplication lack isolated measurements: no paper found reports precision/recall or compression contribution of dedup/salience stages alone; they are evaluated only as part of end-to-end systems.",
+      "Structured fact tables vs prose has thin direct literature: evidence is indirect (fact-based systems' benchmark results), and the one independent comparison suggests flat-typed facts only suit stable attributes, not contextual reasoning.",
+      "Compression accuracy gains (LongLLMLingua's +17-21% on NaturalQuestions) are partly an artifact of noisy retrieval \u2014 compression helps by deleting distractors; with clean retrieval the gain shrinks toward parity, so such numbers should not be read as free quality improvements."
+    ],
+    "pricing": "Serving-side caching economics (verified from official docs 2026-08-08): Anthropic \u2014 cache reads 0.1x base input ($0.50/M on a $5/M model), 5-min-TTL writes 1.25x ($6.25/M), 1-hr-TTL writes 2x ($10/M), minimum cacheable prompt 512 tokens (Opus 5/Fable 5/Mythos 5) up to 4,096 on older models; explicit breakpoints, free refresh on reuse within TTL. OpenAI \u2014 cached input at 10% of base across GPT-5.x (GPT-5.4: $0.25 vs $2.50/M; GPT-5.6-sol: $0.50 vs $5.00/M), automatic for prefixes >=1024 tokens in 128-token increments, cache evicted after ~5-10 min idle (max ~1 hr); GPT-5.6 models additionally list explicit cache-write pricing at 1.25x. Google Gemini \u2014 cached input ~10% of base (2.5 Pro: $0.125 vs $1.25/M under 200K; 2.5 Flash: $0.03 vs $0.30/M), implicit caching on by default for 2.5+ models, explicit caches charge storage of $1.00/M tokens/hour (Flash-class) to $4.50/M tokens/hour (2.5 Pro), minimums 2,048-4,096 tokens by model. Memory-layer vendor pricing (Mem0/Zep/Letta SaaS tiers) was not verified in this pass and is excluded rather than repeated from secondary sources.",
+    "sources": [
+      "https://arxiv.org/abs/2403.12968",
+      "https://arxiv.org/abs/2310.06839",
+      "https://www.llmlingua.com/",
+      "https://openreview.net/forum?id=mlJLVigNHp",
+      "https://arxiv.org/abs/2310.04408",
+      "https://arxiv.org/abs/2304.08467",
+      "https://arxiv.org/abs/2410.12388",
+      "https://arxiv.org/abs/2504.19413",
+      "https://arxiv.org/abs/2501.13956",
+      "https://arxiv.org/abs/2310.08560",
+      "https://arxiv.org/abs/2308.15022",
+      "https://arxiv.org/abs/2603.04814",
+      "https://mem0.ai/blog/mem0-the-token-efficient-memory-algorithm",
+      "https://blog.getzep.com/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/",
+      "https://github.com/getzep/zep-papers/issues/5",
+      "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching",
+      "https://developers.openai.com/api/docs/pricing",
+      "https://ai.google.dev/gemini-api/docs/caching",
+      "https://ai.google.dev/gemini-api/docs/pricing",
+      "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "https://arxiv.org/pdf/2312.07104",
+      "https://www.lmsys.org/blog/2024-01-17-sglang/",
+      "https://openai.com/index/api-prompt-caching/"
+    ]
+  },
+  {
+    "summary": "The AI agent memory-layer market (Mem0, Zep, Letta, OpenAI's built-in memory) is being pulled toward compliance-grade features by three dated forcing functions: the EU AI Act's high-risk obligations \u2014 including Article 12 automatic lifetime event logging \u2014 which entered full application on 2 August 2026; US financial regulators (FINRA Notice 25-07, FINRA's 2026 Oversight Report) pressing firms to retain GenAI prompts/outputs as books-and-records; and HIPAA's audit-control and accounting-of-disclosures rules applying to vector stores holding PHI embeddings. \"Auditable memory\" is a defensible positioning because externalized, versioned memory converts GDPR right-to-erasure from an intractable machine-unlearning problem into a provable deletion operation, and incidents like the OpenAI/NYT preservation order (May\u2013Sept 2025) and Garante fines (OpenAI \u20ac15M, Replika \u20ac5M) show retention/deletion of AI conversational data is now a litigated issue. However, the positioning is not open whitespace: Zep already ships SOC 2 Type II, HIPAA BAAs, bi-temporal fact invalidation with point-in-time queries, legal hold, audit logging, and BYOC deployment, so a new entrant must differentiate on deeper capabilities \u2014 per-decision reconstruction of exactly what an agent retrieved and knew, erasure with cryptographic proof and propagation to derived facts, and Article 12-shaped exportable logs \u2014 rather than on the word \"auditable\" alone.",
+    "architecture": "This was market research, not a single-product teardown; what follows is the write/read architecture of each product's audit-relevant path, from primary docs. MEM0 (docs.mem0.ai): write path extracts facts from conversations into per-memory records; every mutation is logged as an ADD/UPDATE/DELETE event carrying old_memory and new_memory values, timestamps, user/agent/app identifiers, and the triggering conversation messages, retrievable via GET /v1/memories/{id}/history/ \u2014 a genuine per-memory audit trail, but scoped per memory ID, not a queryable point-in-time snapshot of the whole store; read path is vector retrieval (plus graph memory on Pro tier). ZEP (help.getzep.com/facts, getzep.com/security): write path ingests \"episodes\" (messages/business data) and extracts facts onto knowledge-graph edges stamped with four timestamps (created_at, valid_at, invalid_at, expired_at); superseded facts are invalidated, never deleted, preserving lineage; read path supports point-in-time queries (\"what was true on date X\") and every fact links back to its source episodes (retrieval provenance); governance layer adds ABAC, policy-driven retention with legal hold, and \"detailed logs of every request and policy decision, ready for audit\"; deployable as Cloud, Cloud+BYOK, or BYOC in customer VPC; open-source core is Graphiti. LETTA (docs.letta.com): agent-scoped core memory blocks plus archival memory in Postgres+pgvector; memory edits happen only through explicit tool calls (e.g., memory_replace), which makes changes traceable in principle, but no audit-log product, SSO/RBAC, or compliance certification is documented anywhere on letta.com or docs; self-hosted Docker surface is now deprecated in favor of Letta App Server. OPENAI (help.openai.com via search; openai.com/enterprise-privacy returned 403): ChatGPT Enterprise memory is a black box to the customer at retrieval time, but the Compliance Logs Platform exports conversations, files, GPT configs, and memories as immutable time-windowed JSONL with 30-day platform retention (customers must continuously export for longer holds); workspace admins can toggle memory and set retention; Enterprise Key Management (Dec 2025) allows customer-held keys; no provenance of which memories influenced a given response and no point-in-time reconstruction is offered.",
+    "token_strategy": "Not the focus of this research and not independently verified here. Generically, all four products reduce tokens by injecting distilled memories/facts instead of replaying full conversation history; Zep markets sub-200ms p95 retrieval of a compact context block assembled from its graph (vendor claim on getzep.com). No token-reduction numbers were verified from primary benchmarks in this session; treat all such figures (e.g., Mem0's ~90%-token-saving marketing) as vendor claims unless separately validated.",
+    "benchmarks": [
+      {
+        "benchmark": "Gartner AI governance platform spending forecast",
+        "claim": "AI governance platform spend reaches $492M in 2026 and surpasses $1B by 2030; Gartner launched its first Magic Quadrant for AI Governance Platforms (Feb 2026)",
+        "source": "https://www.gartner.com/en/newsroom/press-releases/2026-02-17-gartner-global-ai-regulations-fuel-billion-dollar-market-for-ai-governance-platforms",
+        "caveats": "Analyst forecast, not observed spend; small in absolute terms next to Gartner's $64B 2026 AI platforms/models forecast \u2014 governance is a budget line, not yet a large market. Secondary sources claiming governance is 8-12% of enterprise AI budgets could not be traced to a primary source."
+      },
+      {
+        "benchmark": "EU AI Act Article 12 logging mandate",
+        "claim": "High-risk AI systems must technically allow automatic recording of events (logs) over the system lifetime; full application from 2 Aug 2026; providers/deployers must keep logs at least six months (Arts. 19, 26); penalties up to EUR 15M or 3% of worldwide turnover for this class of violation",
+        "source": "https://artificialintelligenceact.eu/article/12/",
+        "caveats": "Article 12 text verified by direct fetch; the six-month retention floor and penalty tiers come from cross-referenced articles reported in secondary sources, not fetched verbatim. Applies only to systems classified high-risk under Annex III \u2014 most agent-memory deployments are not automatically high-risk."
+      },
+      {
+        "benchmark": "Zep retrieval latency",
+        "claim": "Sub-200ms p95 retrieval at enterprise scale on the Context Graph Engine",
+        "source": "https://www.getzep.com/",
+        "caveats": "Vendor claim; no independent benchmark found."
+      },
+      {
+        "benchmark": "Mem0 compliance certification status",
+        "claim": "SOC 2 Type I certified, HIPAA-ready, SOC 2 Type II audit in progress",
+        "source": "https://trust.mem0.ai/",
+        "caveats": "Trust center page is JS-rendered and returned no verifiable content to a direct fetch; status is drawn from search-indexed copies of mem0.ai/security. HIPAA 'ready' is self-attested, not a certification; weaker than Zep's audited SOC 2 Type II + BAA."
+      }
+    ],
+    "pricing": "Mem0 (mem0.ai/pricing, fetched): Hobby free (10K add / 1K retrieval requests/mo); Starter $19/mo; Pro $249/mo (500K add / 50K retrieval, graph memory, consolidation); Enterprise custom \u2014 and notably audit logs, on-prem deployment, SSO, and SLAs are gated to the Enterprise tier. Zep (getzep.com/pricing, fetched): Free (10K credits/mo); Flex $125/mo (50K credits, 1-day API log retention); Flex Plus $375/mo (200K credits, 7-day log retention); \"Emerging Companies\" $13K/yr; Enterprise custom \u2014 SOC 2 Type II/HIPAA BAA coverage, 1-year audit and API log retention, BYOK/BYOC, and EU DPAs are Enterprise-gated. Letta: open source (Apache 2.0) self-hosted free; no cloud pricing published on letta.com. OpenAI: ChatGPT Enterprise pricing unpublished (sales-gated); Compliance Logs Platform and data residency are Enterprise features, residency sales-gated on new workspaces/projects. Pattern: in every commercial product, the audit/residency features an \"auditable memory\" pitch targets are enterprise-tier upsells, not defaults.",
+    "weaknesses": [
+      "The positioning's flagship claim is already partially occupied: Zep ships SOC 2 Type II, HIPAA BAAs, bi-temporal fact invalidation, point-in-time queries, episode-level provenance, legal hold, ABAC, request-level audit logs, and BYOC today \u2014 an 'auditable memory' entrant competes with an incumbent's shipped feature list, not a gap.",
+      "The addressable governance budget is small: Gartner's $492M 2026 forecast for all AI governance platforms is under 1% of its $64B AI platforms forecast; audit features today monetize as enterprise-tier upsells on memory products, not as standalone purchases.",
+      "Regulatory hooks are real but not yet prescriptive for memory layers specifically: SEC/FINRA have issued no definitive rule that AI prompts/outputs are 17a-4 records (firms make risk-based judgments per FINRA Notice 25-07 and the ABA analysis), and EU AI Act Article 12 binds only high-risk Annex III systems \u2014 many agent-memory deployments fall outside it.",
+      "Verification gaps found during research: Mem0's trust center (trust.mem0.ai) rendered no machine-readable content, its HIPAA posture is self-attested, and SOC 2 Type II was still in progress per secondary sources; Letta has no discoverable compliance page, audit-log product, SSO/RBAC, or certification at all \u2014 claims about its 'auditable' tool-call memory edits are architectural potential, not product; OpenAI's enterprise-privacy and compliance-platform pages 403'd direct fetches, so its capabilities are sourced from help-center content surfaced via search, not verified verbatim.",
+      "Point-in-time reconstruction remains partially unsolved even at Zep: fact-level history exists, but no vendor demonstrates reconstruction of the full retrieval context behind a specific past agent decision ('what did the agent know and retrieve when it did X'), and none offers erasure with proof that propagates to derived/consolidated facts \u2014 that narrower claim is the actual whitespace, and it is harder to build than an audit log.",
+      "Demand-side evidence is strongest for logging/retention (OpenAI-NYT preservation order, FINRA 2026 report, COSO Feb 2026 GenAI internal-control guidance, RFP questionnaire blocks) but that demand is being met by export/e-discovery tooling (OpenAI Compliance Logs Platform, Smarsh-style archiving) as much as by memory-layer-native auditability \u2014 buyers may satisfy auditors at the log-export layer without switching memory vendors."
+    ],
+    "sources": [
+      "https://artificialintelligenceact.eu/article/12/",
+      "https://www.getzep.com/security",
+      "https://www.getzep.com/pricing",
+      "https://help.getzep.com/facts",
+      "https://mem0.ai/pricing",
+      "https://docs.mem0.ai/api-reference/memory/history-memory",
+      "https://trust.mem0.ai/",
+      "https://docs.letta.com/guides/selfhosting",
+      "https://www.letta.com/",
+      "https://www.gartner.com/en/newsroom/press-releases/2026-02-17-gartner-global-ai-regulations-fuel-billion-dollar-market-for-ai-governance-platforms",
+      "https://www.gartner.com/en/newsroom/press-releases/2026-07-20-gartner-forecasts-worldwide-ai-platforms-and-models-market-to-grow-63-percent-in-2026",
+      "https://openai.com/index/response-to-nyt-data-demands/",
+      "https://openai.com/index/introducing-data-residency-in-europe/",
+      "https://openai.com/index/expanding-data-residency-access-to-business-customers-worldwide/",
+      "https://help.openai.com/en/articles/9261474-openai-compliance-platform-for-enterprise-and-edu-customers",
+      "https://help.openai.com/en/articles/9687866-admin-and-audit-logs-api-for-the-api-platform",
+      "https://www.finra.org/sites/default/files/2025-12/2026-annual-regulatory-oversight-report.pdf",
+      "https://www.americanbar.org/groups/business_law/resources/business-law-today/2026-june/ai-prompts-responses-records-or-not-here-we-come/",
+      "https://www.edpb.europa.eu/news/national-news/2025/ai-italian-supervisory-authority-fines-company-behind-chatbot-replika_en",
+      "https://www.euronews.com/next/2024/12/20/italys-privacy-watchdog-fines-openai-15-million-after-probe-into-chatgpt-data-collection",
+      "https://arxiv.org/pdf/2412.06966",
+      "https://www.hipaajournal.com/hipaa-retention-requirements/",
+      "https://scholarship.richmond.edu/jolt/vol29/iss2/1/"
+    ]
+  }
+]

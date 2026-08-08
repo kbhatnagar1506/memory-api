@@ -687,3 +687,97 @@ async def test_status_change_is_captured_in_history(tenant) -> None:
         MemoryStatus.ACTIVE,
         MemoryStatus.SUPERSEDED,
     ]
+
+
+# -- erasure: the compliance path ----------------------------------------------
+
+
+async def test_erase_purges_the_reconstructed_past(tenant) -> None:
+    """The property that separates erase from delete.
+
+    After delete_memory, as_of still reconstructs history (audit default).
+    After erase_memory, it must not: an erasure that survives point-in-time
+    reads is not an erasure.
+    """
+    store, org, space = tenant
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    memory = Memory(org_id=org.id, space_id=space.id, content="right to be forgotten")
+    await store.upsert_memory(memory, now=t0)
+
+    report = await store.erase_memory(org.id, space.id, memory.id)
+    assert report.existed is True
+    assert report.versions_purged == 1
+    assert await store.get_memory(org.id, space.id, memory.id) is None
+    assert (
+        await store.get_memory_as_of(org.id, space.id, memory.id, t0 + timedelta(hours=1))
+        is None
+    )
+    assert await store.list_memory_versions(org.id, space.id, memory.id) == []
+
+
+async def test_erase_purges_history_left_by_delete(tenant) -> None:
+    """delete then erase: the residual audit trail must also be destroyable."""
+    store, org, space = tenant
+    memory = await _add(store, org, space, "soft-deleted but remembered")
+    assert await store.delete_memory(org.id, space.id, memory.id) is True
+    assert len(await store.list_memory_versions(org.id, space.id, memory.id)) == 1
+
+    report = await store.erase_memory(org.id, space.id, memory.id)
+    assert report.existed is True
+    assert report.versions_purged == 1
+    assert await store.list_memory_versions(org.id, space.id, memory.id) == []
+
+
+async def test_erase_removes_edges_and_counts_everything(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer fact")
+    b = await _add(store, org, space, "the fact being erased")
+    c = await _add(store, org, space, "derived note")
+    await _edge(store, org, space, a, b)
+    await _edge(store, org, space, c, b, RelationType.DERIVED_FROM)
+
+    report = await store.erase_memory(org.id, space.id, b.id)
+    assert report.existed is True
+    assert report.edges_removed == 2
+    assert report.chunks_removed == 1
+    assert await store.list_relations(org.id, space.id, a.id, direction="out") == []
+    assert await store.list_relations(org.id, space.id, c.id, direction="out") == []
+
+
+async def test_erase_is_idempotent(tenant) -> None:
+    """A retried compliance request must not fail on the second attempt."""
+    store, org, space = tenant
+    memory = await _add(store, org, space, "erase twice")
+    first = await store.erase_memory(org.id, space.id, memory.id)
+    second = await store.erase_memory(org.id, space.id, memory.id)
+    assert first.existed is True
+    assert second.existed is False
+    assert second.versions_purged == 0
+
+
+async def test_erase_is_tenant_scoped(tenant) -> None:
+    store, org, space = tenant
+    memory = await _add(store, org, space, "not yours to erase")
+    other = await store.create_organization(Organization(name="Intruder"))
+    report = await store.erase_memory(other.id, space.id, memory.id)
+    assert report.existed is False
+    assert await store.get_memory(org.id, space.id, memory.id) is not None
+    assert len(await store.list_memory_versions(org.id, space.id, memory.id)) == 1
+
+
+async def test_erase_leaves_search_clean(tenant) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    keep = await _add(store, org, space, "kafka handles the event bus", embedder=embedder)
+    gone = await _add(store, org, space, "kafka secrets to erase", embedder=embedder)
+    await store.erase_memory(org.id, space.id, gone.id)
+
+    query = await embedder.embed_one("kafka")
+    vector_hits = await store.vector_search(
+        org.id, space.id, query, limit=10, filters=MemoryFilter()
+    )
+    lexical_hits = await store.lexical_search(
+        org.id, space.id, "kafka", limit=10, filters=MemoryFilter()
+    )
+    found = {h.memory_id for h in vector_hits} | {h.memory_id for h in lexical_hits}
+    assert found == {keep.id}

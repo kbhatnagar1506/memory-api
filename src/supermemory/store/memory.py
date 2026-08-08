@@ -35,7 +35,7 @@ from ..domain.models import (
     utcnow,
 )
 from ..domain.text import analyze, analyze_query
-from .base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
+from .base import EraseReport, LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
 
 # BM25 parameters. k1 controls term-frequency saturation, b the strength of
 # length normalization. These are the standard defaults.
@@ -240,24 +240,74 @@ class InMemoryStore(MemoryStore):
             # trail. It is left in self._versions.
             return True
 
-    def _remove_edges_touching(self, space_id: str, memory_id: str) -> None:
+    def _remove_edges_touching(self, space_id: str, memory_id: str) -> int:
         """Cascade-delete edges when their source or target memory is gone.
 
         An edge whose endpoint no longer exists is worse than no edge: a
         lineage walk would dereference a memory id that resolves to nothing.
+        Returns how many edges were removed, so erasure can attest to it.
         """
+        removed = 0
         for edge_id in list(self._edges_by_source.pop((space_id, memory_id), [])):
             edge = self._edges.pop(edge_id, None)
             if edge is not None:
+                removed += 1
                 other = self._edges_by_target.get((space_id, edge.target_id))
                 if other and edge_id in other:
                     other.remove(edge_id)
         for edge_id in list(self._edges_by_target.pop((space_id, memory_id), [])):
             edge = self._edges.pop(edge_id, None)
             if edge is not None:
+                removed += 1
                 other = self._edges_by_source.get((space_id, edge.source_id))
                 if other and edge_id in other:
                     other.remove(edge_id)
+        return removed
+
+    async def erase_memory(self, org_id: str, space_id: str, memory_id: str) -> EraseReport:
+        async with self._lock:
+            memory = self._memories.get(memory_id)
+            live = (
+                memory is not None and memory.org_id == org_id and memory.space_id == space_id
+            )
+            # History may exist even when the live row is gone (delete_memory
+            # preserves it). Erasure must purge that residue too, or a
+            # point-in-time read resurrects content the caller was told is gone.
+            residual = [
+                v
+                for v in self._versions.get(memory_id, [])
+                if v.org_id == org_id and v.space_id == space_id
+            ]
+            if not live and not residual:
+                return EraseReport(existed=False)
+
+            chunks = len(memory.chunks) if live and memory is not None else 0
+            edges = 0
+            if live:
+                del self._memories[memory_id]
+                bucket = self._by_space.get((org_id, space_id))
+                if bucket and memory_id in bucket:
+                    bucket.remove(memory_id)
+                edges = self._remove_edges_touching(space_id, memory_id)
+
+            versions = len(residual)
+            if memory_id in self._versions:
+                remaining = [
+                    v
+                    for v in self._versions[memory_id]
+                    if not (v.org_id == org_id and v.space_id == space_id)
+                ]
+                if remaining:
+                    self._versions[memory_id] = remaining
+                else:
+                    del self._versions[memory_id]
+
+            return EraseReport(
+                existed=True,
+                chunks_removed=chunks,
+                edges_removed=edges,
+                versions_purged=versions,
+            )
 
     def _space_memories(self, org_id: str, space_id: str) -> list[Memory]:
         return [

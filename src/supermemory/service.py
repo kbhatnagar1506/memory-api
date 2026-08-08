@@ -403,6 +403,67 @@ class MemoryService:
             raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
         return versions
 
+    async def erase_memory(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> dict[str, object]:
+        """Right-to-erasure purge with an attestation of what was destroyed.
+
+        Unlike delete (which preserves the audit trail), erase removes the
+        content everywhere it can be reached: live row, chunks and embeddings,
+        every edge touching it, and the full version history — so point-in-time
+        reads cannot resurrect it. The attestation records the content hash
+        (proof of WHICH content was destroyed, without retaining the content),
+        counts of everything purged, and the ids of memories that had claimed
+        derivation from the erased one, so a compliance process can review the
+        blast radius.
+
+        Works on live AND already-deleted memories: delete leaves history
+        behind by design, and an erasure request must be able to purge that
+        residue too.
+        """
+        memory = await self.store.get_memory(org_id, space_id, memory_id)
+        versions = await self.store.list_memory_versions(org_id, space_id, memory_id)
+        if memory is None and not versions:
+            raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
+
+        # The hash must be captured BEFORE the purge; afterwards there is
+        # nothing left to hash. Prefer the live row, fall back to the last
+        # historical snapshot for the deleted-but-remembered case.
+        if memory is not None:
+            digest = memory.content_sha256
+        else:
+            from .domain.models import content_hash
+
+            digest = content_hash(versions[-1].content)
+
+        derivatives: list[str] = []
+        if memory is not None:
+            incoming = await self.store.list_relations(
+                org_id, space_id, memory_id, direction="in"
+            )
+            derivatives = sorted(
+                {e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM}
+            )
+
+        report = await self.store.erase_memory(org_id, space_id, memory_id)
+        INGESTED.labels(outcome="erased").inc()
+        log.info(
+            "memory_erased",
+            memory_id=memory_id,
+            versions_purged=report.versions_purged,
+            edges_removed=report.edges_removed,
+        )
+        return {
+            "memory_id": memory_id,
+            "space_id": space_id,
+            "content_sha256": digest,
+            "chunks_removed": report.chunks_removed,
+            "edges_removed": report.edges_removed,
+            "versions_purged": report.versions_purged,
+            "derived_memories_affected": derivatives,
+            "erased_at": utcnow().isoformat(),
+        }
+
     # -- search ------------------------------------------------------------
 
     async def search(self, request: SearchRequest) -> SearchResponse:

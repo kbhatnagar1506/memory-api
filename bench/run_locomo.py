@@ -37,6 +37,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bench import locomo
+from bench.context import merge_intervals, render_context
 from supermemory.config import (
     EmbeddingBackend,
     RerankBackend,
@@ -46,6 +47,7 @@ from supermemory.config import (
 from supermemory.core.logging import configure_logging
 from supermemory.domain.embeddings import build_embedder
 from supermemory.domain.models import Chunk, Memory, Organization, Space
+from supermemory.domain.retrieval.expansion import HydeExpander
 from supermemory.domain.retrieval.pipeline import (
     RetrievalPipeline,
     SearchRequest,
@@ -55,6 +57,7 @@ from supermemory.domain.retrieval.rerank import (
     LLMReranker,
     NoopReranker,
 )
+from supermemory.domain.text import analyze
 from supermemory.store.memory import InMemoryStore
 
 REPO = Path(__file__).resolve().parent.parent
@@ -74,6 +77,7 @@ class Config:
     use_decay: bool = False
     reranker: str = "none"
     mmr_lambda: float = 0.7
+    use_expansion: bool = False
 
     def describe(self) -> str:
         parts = []
@@ -89,6 +93,8 @@ class Config:
             parts.append(f"mmr:{self.mmr_lambda}")
         if self.use_decay:
             parts.append("decay")
+        if self.use_expansion:
+            parts.append("hyde")
         return " + ".join(parts)
 
 
@@ -108,6 +114,17 @@ ABLATION = [
     ),
 ]
 LLM_CONFIG = Config("hybrid_rerank_llm", use_rerank=True, reranker="llm")
+#: Query expansion costs an LLM call per query, so it is opt-in behind a flag
+#: rather than part of the default sweep.
+EXPANSION_CONFIGS = [
+    Config("hybrid_hyde", use_expansion=True),
+    Config(
+        "hybrid_hyde_rerank",
+        use_expansion=True,
+        use_rerank=True,
+        reranker="heuristic",
+    ),
+]
 
 
 # -- ingestion -----------------------------------------------------------------
@@ -121,8 +138,32 @@ class Corpus:
     spaces: dict[str, str] = field(default_factory=dict)
     #: memory_id -> dia_id, so retrieved memories map back to evidence labels
     dia_by_memory: dict[str, str] = field(default_factory=dict)
+    #: sample_id -> ordered turn texts, and dia_id -> its index. Used to widen
+    #: a retrieved turn with the ones around it at answer time.
+    ordered_turns: dict[str, list[str]] = field(default_factory=dict)
+    #: sample_id -> ordered (date, content) pairs — the structured form the v2
+    #: context assembler needs so date headers can be deduplicated.
+    turn_records: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    turn_index: dict[str, int] = field(default_factory=dict)
     turns: int = 0
     embed_seconds: float = 0.0
+
+    def window(self, sample_id: str, dia_id: str, radius: int) -> str:
+        """A retrieved turn plus its neighbours, in conversation order.
+
+        Retrieval is precise (one turn per memory, so evidence labels map
+        exactly) but a single line of dialogue is rarely self-contained: "Yeah,
+        psychology" means nothing without the question before it. Widening at
+        READ time keeps the retrieval metric honest while giving the answering
+        model something it can actually reason over.
+        """
+        turns = self.ordered_turns.get(sample_id, [])
+        centre = self.turn_index.get(f"{sample_id}:{dia_id}")
+        if centre is None or not turns:
+            return ""
+        lo = max(0, centre - radius)
+        hi = min(len(turns), centre + radius + 1)
+        return "\n".join(turns[lo:hi])
 
 
 async def ingest(
@@ -154,6 +195,14 @@ async def ingest(
             )
         )
         corpus.spaces[convo.sample_id] = space.id
+        corpus.ordered_turns[convo.sample_id] = [
+            f"[{t.session_date[:10]}] {t.content}" for t in convo.turns
+        ]
+        corpus.turn_records[convo.sample_id] = [
+            (t.session_date[:10], t.content) for t in convo.turns
+        ]
+        for position, turn in enumerate(convo.turns):
+            corpus.turn_index[f"{convo.sample_id}:{turn.dia_id}"] = position
 
         texts = [t.content for t in convo.turns]
         started = time.perf_counter()
@@ -210,7 +259,12 @@ async def evaluate_retrieval(
     }.get(config.reranker)
     if config.reranker == "llm":
         reranker = LLMReranker(model="gemini-2.5-flash", timeout_s=25.0, project=_project())
-    pipeline = RetrievalPipeline(corpus.store, embedder, reranker or NoopReranker())
+    expander = (
+        HydeExpander(model="gemini-2.5-flash", timeout_s=20.0, project=_project())
+        if config.use_expansion
+        else None
+    )
+    pipeline = RetrievalPipeline(corpus.store, embedder, reranker or NoopReranker(), expander)
 
     per_question: list[dict[str, Any]] = []
     latencies: list[float] = []
@@ -234,6 +288,7 @@ async def evaluate_retrieval(
                     mmr_lambda=config.mmr_lambda,
                     vector_weight=config.vector_weight,
                     lexical_weight=config.lexical_weight,
+                    use_expansion=config.use_expansion,
                     candidate_multiplier=6,
                     rerank_candidates=32,
                 )
@@ -323,18 +378,27 @@ def _project() -> str | None:
 
 
 ANSWER_PROMPT = """\
-You are answering a question using retrieved excerpts from a long conversation \
-between two people.
+You are answering a question about a long-running conversation between two \
+people, using excerpts retrieved from it. Each excerpt is a short stretch of \
+dialogue, prefixed with the date it happened.
 
-Excerpts (each line is one dialogue turn):
+Excerpts:
 {context}
 
 Question: {question}
 
-Answer in as few words as possible -- a name, a date, a short phrase. \
-If the excerpts do not contain the answer, reply exactly: NO_ANSWER
+Work through it briefly, then give a final answer.
 
-Answer:"""
+- Combine information across excerpts when the answer needs more than one.
+- Dates in brackets are when the line was said; use them for questions about \
+when something happened or what came first.
+- If the excerpts genuinely do not contain the answer, the final answer is \
+NO_ANSWER. Do not guess at facts that are absent. But if the excerpts DO \
+support an answer, give it, even if you must infer a little.
+
+Reply in exactly this form:
+REASONING: <one or two sentences>
+ANSWER: <the answer in as few words as possible, or NO_ANSWER>"""
 
 JUDGE_PROMPT = """\
 You are grading a question-answering system against a reference answer.
@@ -382,6 +446,26 @@ class Gemini:
         return await asyncio.to_thread(call)
 
 
+def parse_answer(raw: str) -> str:
+    """Pull the final answer out of a REASONING/ANSWER response.
+
+    Falls back to the last non-empty line: a model that ignores the format has
+    still usually put its answer last, and discarding that would score a
+    formatting slip as a wrong answer.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if stripped.upper().startswith("ANSWER:"):
+            return stripped[len("ANSWER:") :].strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if lines and lines[-1].upper().startswith("REASONING:"):
+        return ""
+    return lines[-1] if lines else ""
+
+
 async def evaluate_end_to_end(
     corpus: Corpus,
     questions: list[locomo.Question],
@@ -392,9 +476,16 @@ async def evaluate_end_to_end(
     answer_model: str,
     judge_model: str,
     concurrency: int,
+    context_radius: int = 0,
+    compress: bool = False,
 ) -> dict[str, Any]:
     reranker = HeuristicReranker() if config.use_rerank else NoopReranker()
-    pipeline = RetrievalPipeline(corpus.store, embedder, reranker)
+    expander = (
+        HydeExpander(model="gemini-2.5-flash", timeout_s=20.0, project=_project())
+        if config.use_expansion
+        else None
+    )
+    pipeline = RetrievalPipeline(corpus.store, embedder, reranker, expander)
     answerer = Gemini(answer_model, _project())
     judge = Gemini(judge_model, _project())
     semaphore = asyncio.Semaphore(concurrency)
@@ -417,6 +508,7 @@ async def evaluate_end_to_end(
                         use_decay=config.use_decay,
                         vector_weight=config.vector_weight,
                         lexical_weight=config.lexical_weight,
+                        use_expansion=config.use_expansion,
                     )
                 )
             except Exception as exc:
@@ -428,18 +520,62 @@ async def evaluate_end_to_end(
             # this was a harness bug: it drove the entire `temporal` category
             # to 0/40 correct even when retrieval found the right turn
             # (hit@k=1.0), because the model had a fact but no date to report.
-            context = "\n".join(
-                f"- [{hit.memory.occurred_at.date().isoformat()}] {hit.memory.content}"
-                for hit in response.results
-            )
+            if context_radius > 0:
+                # v2 assembly: widen each hit with neighbours, then MERGE the
+                # overlapping windows so every turn is emitted exactly once,
+                # with date headers only on change. v1 concatenated per-hit
+                # windows and paid for every overlap twice. Retrieval itself is
+                # untouched — evidence labels still map turn-for-turn.
+                turns = corpus.turn_records.get(question.sample_id, [])
+                centers: set[int] = set()
+                fallbacks: list[str] = []
+                for hit in response.results:
+                    dia_id = corpus.dia_by_memory.get(hit.memory.id, "")
+                    center = corpus.turn_index.get(f"{question.sample_id}:{dia_id}")
+                    if center is None or not turns:
+                        fallbacks.append(
+                            f"[{hit.memory.occurred_at.date().isoformat()}] "
+                            f"{hit.memory.content}"
+                        )
+                    else:
+                        centers.add(center)
+                merged = merge_intervals(
+                    [
+                        (max(0, c - context_radius), min(len(turns) - 1, c + context_radius))
+                        for c in sorted(centers)
+                    ]
+                )
+                keep_terms: set[str] | None = None
+                if compress and centers:
+                    # Prune neighbour turns sharing no analyzed term with the
+                    # question or any hit turn; +-1 of a hit always survives.
+                    keep_terms = set(analyze(question.question))
+                    for c in centers:
+                        keep_terms.update(analyze(turns[c][1]))
+                rendered = render_context(
+                    turns,
+                    merged,
+                    centers,
+                    keep_terms=keep_terms,
+                    analyze=analyze if keep_terms is not None else None,
+                )
+                context = "\n---\n".join(part for part in [rendered, *fallbacks] if part)
+            else:
+                context = "\n".join(
+                    f"- [{hit.memory.occurred_at.date().isoformat()}] {hit.memory.content}"
+                    for hit in response.results
+                )
             try:
                 raw, context_tokens = await answerer.complete(
                     ANSWER_PROMPT.format(context=context, question=question.question),
-                    max_tokens=64,
+                    # The prompt asks for a reasoning line before the answer, so
+                    # 64 tokens truncates the response before it ever reaches
+                    # "ANSWER:" and the parse falls back to reasoning prose.
+                    max_tokens=200,
                 )
             except Exception as exc:
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
-            prediction = raw.strip()
+            prediction = parse_answer(raw)
 
             declined = prediction.upper().startswith("NO_ANSWER")
             if question.is_adversarial:
@@ -511,6 +647,9 @@ async def evaluate_end_to_end(
     return {
         "config": config.name,
         "description": config.describe(),
+        "context_radius": context_radius,
+        "context_compress": compress,
+        "context_strategy": "merged_v2" if context_radius > 0 else "flat",
         "answer_model": answer_model,
         "judge_model": judge_model,
         "k": k,
@@ -581,6 +720,30 @@ async def main() -> int:
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--skip-end-to-end", action="store_true")
     parser.add_argument("--include-llm-rerank", action="store_true")
+    parser.add_argument(
+        "--include-expansion",
+        action="store_true",
+        help="add HyDE query-expansion arms (one LLM call per query)",
+    )
+    parser.add_argument(
+        "--compress",
+        action="store_true",
+        help="extractively prune neighbour turns with no term overlap (measured separately)",
+    )
+    parser.add_argument(
+        "--context-radius",
+        type=int,
+        default=0,
+        help="turns of surrounding dialogue to include around each retrieved turn",
+    )
+    parser.add_argument(
+        "--e2e-config",
+        default=None,
+        help=(
+            "config name to run end-to-end. Defaults to best MRR; pin it to "
+            "attribute an answer-side change at fixed retrieval."
+        ),
+    )
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 
@@ -636,12 +799,15 @@ async def main() -> int:
         },
         "answer_model": args.answer_model,
         "judge_model": args.judge_model,
+        "context_radius": args.context_radius,
         "started_at": datetime.now().isoformat(),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
     # -- retrieval ablation (no LLM, exactly reproducible) --------------------
     configs = list(ABLATION)
+    if args.include_expansion:
+        configs.extend(EXPANSION_CONFIGS)
     if args.include_llm_rerank:
         configs.append(LLM_CONFIG)
 
@@ -690,9 +856,20 @@ async def main() -> int:
     # -- end-to-end -----------------------------------------------------------
     end_to_end: dict[str, Any] | None = None
     if not args.skip_end_to_end:
-        best = max(ablation, key=lambda r: r["mrr"])
-        winner = next(c for c in configs if c.name == best["config"])
-        print(f"\n  end-to-end with {winner.name} (best MRR) ...", flush=True)
+        if args.e2e_config:
+            winner = next((c for c in configs if c.name == args.e2e_config), None)
+            if winner is None:
+                print(
+                    f"    unknown --e2e-config {args.e2e_config!r}; known: "
+                    f"{[c.name for c in configs]}"
+                )
+                return 2
+            reason = "pinned"
+        else:
+            best = max(ablation, key=lambda r: r["mrr"])
+            winner = next(c for c in configs if c.name == best["config"])
+            reason = "best MRR"
+        print(f"\n  end-to-end with {winner.name} ({reason}) ...", flush=True)
         started = time.perf_counter()
         end_to_end = await evaluate_end_to_end(
             corpus,
@@ -703,6 +880,8 @@ async def main() -> int:
             answer_model=args.answer_model,
             judge_model=args.judge_model,
             concurrency=args.concurrency,
+            context_radius=args.context_radius,
+            compress=args.compress,
         )
         print(
             f"    accuracy={end_to_end['accuracy_answerable']:.3f} "

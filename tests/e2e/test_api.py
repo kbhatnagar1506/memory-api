@@ -747,3 +747,88 @@ async def test_lineage_is_tenant_scoped(app_context, client, space_id) -> None:
         assert (
             await other.get(f"/v1/spaces/{space_id}/memories/{oldest}/lineage")
         ).status_code == 404
+
+
+# -- erasure -------------------------------------------------------------------
+
+
+async def test_erase_returns_an_attestation_and_scrubs_history(client, space_id) -> None:
+    created = await client.post(
+        f"/v1/spaces/{space_id}/memories", json={"content": "delete my data please"}
+    )
+    memory_id = created.json()["memory"]["id"]
+    versions = (
+        await client.get(f"/v1/spaces/{space_id}/memories/{memory_id}/versions")
+    ).json()["items"]
+    first_valid_from = versions[0]["valid_from"]
+
+    response = await client.post(f"/v1/spaces/{space_id}/memories/{memory_id}/erase")
+    assert response.status_code == 200
+    attestation = response.json()
+    assert attestation["memory_id"] == memory_id
+    assert len(attestation["content_sha256"]) == 64
+    assert attestation["versions_purged"] >= 1
+    assert attestation["chunks_removed"] >= 1
+
+    # Gone from the present...
+    assert (await client.get(f"/v1/spaces/{space_id}/memories/{memory_id}")).status_code == 404
+    # ...and from the reconstructed past. This is the line delete does not cross.
+    as_of = await client.get(
+        f"/v1/spaces/{space_id}/memories/{memory_id}",
+        params={"as_of": first_valid_from},
+    )
+    assert as_of.status_code == 404
+    assert (
+        await client.get(f"/v1/spaces/{space_id}/memories/{memory_id}/versions")
+    ).status_code == 404
+
+
+async def test_erase_reports_derived_memories(client, space_id) -> None:
+    source = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories", json={"content": "original document"}
+        )
+    ).json()["memory"]
+    derived = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories", json={"content": "summary of the original"}
+        )
+    ).json()["memory"]
+    await client.post(
+        f"/v1/spaces/{space_id}/memories/{derived['id']}/relations",
+        json={"target_id": source["id"], "relation": "derived_from"},
+    )
+
+    attestation = (
+        await client.post(f"/v1/spaces/{space_id}/memories/{source['id']}/erase")
+    ).json()
+    assert attestation["derived_memories_affected"] == [derived["id"]]
+    assert attestation["edges_removed"] == 1
+
+
+async def test_erase_missing_memory_is_404(client, space_id) -> None:
+    response = await client.post(
+        f"/v1/spaces/{space_id}/memories/mem_00000000000000000000000000/erase"
+    )
+    assert response.status_code == 404
+
+
+async def test_erase_requires_write_scope(app_context, space_id) -> None:
+    store = app_context["store"]
+    record, plaintext = build_api_key(
+        org_id=app_context["org"].id,
+        name="ro",
+        pepper="test-pepper",
+        scopes=frozenset({Scope.SEARCH, Scope.MEMORIES_READ}),
+    )
+    await store.create_api_key(record)
+    transport = httpx.ASGITransport(app=app_context["app"])
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"Authorization": f"Bearer {plaintext}"},
+    ) as limited:
+        response = await limited.post(
+            f"/v1/spaces/{space_id}/memories/mem_00000000000000000000000000/erase"
+        )
+        assert response.status_code == 403

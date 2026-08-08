@@ -59,6 +59,16 @@ class Page:
 
 
 @dataclass(frozen=True, slots=True)
+class EraseReport:
+    """What `erase_memory` actually destroyed. The raw material of an attestation."""
+
+    existed: bool
+    chunks_removed: int = 0
+    edges_removed: int = 0
+    versions_purged: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryFilter:
     """Filters applied by every listing and search operation."""
 
@@ -353,6 +363,24 @@ class MemoryStore(abc.ABC):
     ) -> list[MemoryVersion]:
         """Every version of a memory, oldest first."""
 
+    @abc.abstractmethod
+    async def erase_memory(self, org_id: str, space_id: str, memory_id: str) -> EraseReport:
+        """Compliance-grade purge, as distinct from `delete_memory`.
+
+        `delete_memory` removes the live row and its edges but PRESERVES the
+        version history — the audit-trail default, where history must outlive
+        the row it describes. `erase_memory` is the right-to-erasure path: it
+        removes the live row, its chunks and embeddings, every edge touching
+        it, and every version snapshot, so the content is unrecoverable even
+        through `get_memory_as_of` — the reconstructed past is scrubbed too.
+        An erasure that survives point-in-time reads is not an erasure.
+
+        Returns an EraseReport of exactly what was destroyed, so the caller
+        can build an attestation. `existed=False` when the memory (and any
+        residual history) was absent — erase is idempotent by design, since a
+        retried compliance request must not fail on the second attempt.
+        """
+
     # -- retrieval ---------------------------------------------------------
 
     @abc.abstractmethod
@@ -390,6 +418,7 @@ class MemoryStore(abc.ABC):
 
 
 __all__ = [
+    "EraseReport",
     "LexicalHit",
     "MemoryFilter",
     "MemoryStore",

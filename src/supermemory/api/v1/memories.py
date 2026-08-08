@@ -18,6 +18,7 @@ from ..schemas import (
     BulkCreateMemoryResponse,
     CreateMemoryRequest,
     CreateMemoryResponse,
+    EraseAttestation,
     LineageResponse,
     LinkRequest,
     MemoryListResponse,
@@ -298,6 +299,27 @@ async def get_versions(
         memory_id=memory_id,
         items=[MemoryVersionResponse.from_domain(v) for v in versions],
     )
+
+
+@router.post(
+    "/{memory_id}/erase",
+    response_model=EraseAttestation,
+    summary="Right-to-erasure purge with attestation",
+)
+async def erase_memory(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
+) -> EraseAttestation:
+    """Destroys the memory everywhere it can be reached: live row, chunks,
+    edges, and the full version history — point-in-time reads included. This
+    is the compliance path; plain DELETE preserves the audit trail instead.
+    Returns proof of what was destroyed."""
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    attestation = await service.erase_memory(principal.org_id, space_id, memory_id)
+    return EraseAttestation(**attestation)  # type: ignore[arg-type]
 
 
 __all__ = ["router"]

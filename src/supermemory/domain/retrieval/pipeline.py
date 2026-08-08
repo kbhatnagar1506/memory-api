@@ -32,6 +32,7 @@ here, and why here rather than three places up".
 from __future__ import annotations
 
 import asyncio
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -40,11 +41,36 @@ from ...store.base import MemoryFilter, MemoryStore
 from ..embeddings.base import EmbeddingProvider, Vector
 from ..models import Memory, MemoryStatus, ScoredMemory
 from .decay import apply_decay
+from .expansion import NoopExpander, QueryExpander
 from .fusion import RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
 from .rerank import RerankCandidate, Reranker
 
 log = get_logger(__name__)
+
+
+def _mean_unit_vector(vectors: list[Vector]) -> Vector:
+    """Centroid of unit vectors, renormalized.
+
+    Vectors arriving here are already L2-normalized by the embedding provider,
+    so a plain mean is a fair blend; renormalizing keeps the result on the unit
+    sphere where cosine similarity reduces to a dot product.
+    """
+    usable = [v for v in vectors if v]
+    if not usable:
+        raise ValueError("no vectors to average")
+    if len(usable) == 1:
+        return usable[0]
+    width = len(usable[0])
+    if any(len(v) != width for v in usable):
+        raise ValueError("cannot average vectors of differing dimensions")
+    summed = [sum(v[i] for v in usable) / len(usable) for i in range(width)]
+    norm = math.sqrt(sum(x * x for x in summed))
+    if norm == 0.0:
+        # Diametrically opposed vectors cancel. Keep the query, which is the
+        # component we trust.
+        return usable[0]
+    return [x / norm for x in summed]
 
 
 @dataclass(slots=True)
@@ -73,6 +99,10 @@ class SearchRequest:
     #: matching nothing still returns the k least-unrelated memories, and an
     #: agent has no way to tell that from a real answer.
     min_score: float = 0.0
+    #: Embed a hypothetical answer alongside the query (HyDE). Helps when the
+    #: question's vocabulary does not overlap the corpus's — the case where
+    #: pure dense retrieval is weakest. Costs one LLM call per query.
+    use_expansion: bool = False
 
 
 @dataclass(slots=True)
@@ -92,25 +122,48 @@ class RetrievalPipeline:
         store: MemoryStore,
         embedder: EmbeddingProvider,
         reranker: Reranker,
+        expander: QueryExpander | None = None,
     ) -> None:
         self.store = store
         self.embedder = embedder
         self.reranker = reranker
+        self.expander = expander or NoopExpander()
 
-    async def _embed_query(self, query: str) -> Vector | None:
+    async def _embed_query(self, query: str, *, expand: bool = False) -> Vector | None:
         """Query-side embedding. A provider failure degrades to lexical-only.
 
         Losing vector search is a quality regression; failing the request is an
         outage. The response records which strategies actually ran.
+
+        With `expand`, a hypothetical answer is embedded and averaged in — see
+        expansion.py for why that helps and why it is averaged rather than
+        substituted.
         """
         try:
             embed_query = getattr(self.embedder, "embed_query", None)
             if embed_query is not None:
-                return await embed_query(query)  # type: ignore[no-any-return]
-            return await self.embedder.embed_one(query)
+                base = await embed_query(query)
+            else:
+                base = await self.embedder.embed_one(query)
         except Exception as exc:
             log.warning("query_embedding_failed", error=str(exc)[:200])
             return None
+
+        if not expand:
+            return base  # type: ignore[no-any-return]
+
+        try:
+            passages = await self.expander.expand(query)
+            if not passages:
+                return base  # type: ignore[no-any-return]
+            # Hypothetical passages are documents, so they use the document-side
+            # embedding, not the query-side one.
+            extra = (await self.embedder.embed(passages)).vectors
+            return _mean_unit_vector([base, *extra])
+        except Exception as exc:
+            # Expansion is an enhancement; never let it fail the search.
+            log.warning("query_expansion_failed", error=str(exc)[:200])
+            return base  # type: ignore[no-any-return]
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         timings: dict[str, float] = {}
@@ -126,7 +179,7 @@ class RetrievalPipeline:
 
         # -- stage 1: candidate generation, concurrent -----------------------
         t0 = loop.time()
-        embedding = await self._embed_query(query)
+        embedding = await self._embed_query(query, expand=request.use_expansion)
         timings["embed_ms"] = (loop.time() - t0) * 1000
 
         t0 = loop.time()

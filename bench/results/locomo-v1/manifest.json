@@ -1,10 +1,10 @@
 {
-  "run_id": "locomo-full",
+  "run_id": "locomo-v1",
   "dataset": "locomo10",
   "conversations": 10,
   "turns": 5882,
   "questions_total": 1986,
-  "questions_sampled": 150,
+  "questions_sampled": 496,
   "k": 10,
   "seed": 20260808,
   "embedder": {
@@ -14,7 +14,8 @@
   },
   "answer_model": "gemini-2.5-flash",
   "judge_model": "gemini-2.5-flash",
-  "started_at": "2026-08-08T09:32:00.917752",
-  "query_embed_seconds": 15.73,
-  "query_embed_ms_per_query": 104.89
+  "context_radius": 2,
+  "started_at": "2026-08-08T10:00:11.392981",
+  "query_embed_seconds": 36.7,
+  "query_embed_ms_per_query": 73.99
 }

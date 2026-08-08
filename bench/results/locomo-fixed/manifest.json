@@ -1,5 +1,5 @@
 {
-  "run_id": "locomo-full",
+  "run_id": "locomo-fixed",
   "dataset": "locomo10",
   "conversations": 10,
   "turns": 5882,
@@ -14,7 +14,8 @@
   },
   "answer_model": "gemini-2.5-flash",
   "judge_model": "gemini-2.5-flash",
-  "started_at": "2026-08-08T09:32:00.917752",
-  "query_embed_seconds": 15.73,
-  "query_embed_ms_per_query": 104.89
+  "context_radius": 2,
+  "started_at": "2026-08-08T09:38:40.512446",
+  "query_embed_seconds": 22.55,
+  "query_embed_ms_per_query": 150.36
 }

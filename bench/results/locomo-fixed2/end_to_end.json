@@ -1,40 +1,41 @@
 {
   "config": "hybrid_rerank_heuristic",
   "description": "hybrid + rerank:heuristic",
+  "context_radius": 2,
   "answer_model": "gemini-2.5-flash",
   "judge_model": "gemini-2.5-flash",
   "k": 10,
   "n_attempted": 150,
   "n_scored": 150,
   "n_errors": 0,
-  "accuracy_answerable": 0.375,
+  "accuracy_answerable": 0.5917,
   "n_answerable": 120,
-  "adversarial_decline_rate": 0.9667,
+  "adversarial_decline_rate": 0.9333,
   "n_adversarial": 30,
   "retrieval_hit@k": 0.7,
-  "latency_ms_mean": 52.28,
-  "context_tokens_mean": 597.3,
-  "memscore": "38% / 52ms / 597tok",
+  "latency_ms_mean": 53.75,
+  "context_tokens_mean": 2530.8,
+  "memscore": "59% / 54ms / 2531tok",
   "by_category": {
     "adversarial": {
       "n": 30,
-      "accuracy": 0.9667
+      "accuracy": 0.9333
     },
     "multi_hop": {
       "n": 30,
-      "accuracy": 0.2667
+      "accuracy": 0.3
     },
     "open_domain": {
       "n": 30,
-      "accuracy": 0.2
+      "accuracy": 0.4333
     },
     "single_hop": {
       "n": 30,
-      "accuracy": 0.7333
+      "accuracy": 0.8333
     },
     "temporal": {
       "n": 30,
-      "accuracy": 0.3
+      "accuracy": 0.8
     }
   },
   "errors": [],
@@ -48,8 +49,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 220.12,
-      "context_tokens": 451,
+      "search_ms": 270.51,
+      "context_tokens": 2226,
       "hit@k": 1.0
     },
     {
@@ -61,8 +62,8 @@
       "prediction": "2022-07-10",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 220.97,
-      "context_tokens": 578,
+      "search_ms": 272.39,
+      "context_tokens": 2495,
       "hit@k": 1.0
     },
     {
@@ -74,8 +75,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 221.73,
-      "context_tokens": 589,
+      "search_ms": 273.73,
+      "context_tokens": 2459,
       "hit@k": 1.0
     },
     {
@@ -84,11 +85,11 @@
       "category_name": "temporal",
       "question": "When will Evan and his partner have their honeymoon in Canada?",
       "reference": "February 2024",
-      "prediction": "Next month",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 222.66,
-      "context_tokens": 628,
+      "prediction": "February 2024",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 275.72,
+      "context_tokens": 2589,
       "hit@k": 1.0
     },
     {
@@ -97,11 +98,11 @@
       "category_name": "single_hop",
       "question": "Why did Jolene get the new plant on 30 August, 2023?",
       "reference": "As a reminder to nurture herself and embrace fresh starts",
-      "prediction": "creating a good atmosphere to help us grow and improve",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 223.37,
-      "context_tokens": 516,
+      "prediction": "As a reminder to nurture herself and embrace fresh starts.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 277.12,
+      "context_tokens": 2265,
       "hit@k": 0.0
     },
     {
@@ -113,8 +114,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 224.15,
-      "context_tokens": 736,
+      "search_ms": 290.53,
+      "context_tokens": 2747,
       "hit@k": 1.0
     },
     {
@@ -126,8 +127,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 224.72,
-      "context_tokens": 537,
+      "search_ms": 291.64,
+      "context_tokens": 2287,
       "hit@k": 0.0
     },
     {
@@ -139,8 +140,8 @@
       "prediction": "2022",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 225.35,
-      "context_tokens": 673,
+      "search_ms": 293.52,
+      "context_tokens": 2500,
       "hit@k": 1.0
     },
     {
@@ -149,11 +150,11 @@
       "category_name": "temporal",
       "question": "Which classes did Evan join in mid-August 2023?",
       "reference": "painting classes",
-      "prediction": "painting classes",
+      "prediction": "Painting classes",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 37.3,
-      "context_tokens": 550,
+      "search_ms": 52.99,
+      "context_tokens": 2485,
       "hit@k": 1.0
     },
     {
@@ -162,11 +163,11 @@
       "category_name": "open_domain",
       "question": "Does Calvin love music tours?",
       "reference": "yes",
-      "prediction": "Yes, Calvin is excited for his tour.",
+      "prediction": "Yes",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 107.59,
-      "context_tokens": 780,
+      "search_ms": 52.18,
+      "context_tokens": 2878,
       "hit@k": 0.0
     },
     {
@@ -178,8 +179,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 33.08,
-      "context_tokens": 378,
+      "search_ms": 26.03,
+      "context_tokens": 1952,
       "hit@k": 1.0
     },
     {
@@ -191,8 +192,8 @@
       "prediction": "Sweden",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 27.71,
-      "context_tokens": 484,
+      "search_ms": 25.34,
+      "context_tokens": 2438,
       "hit@k": 1.0
     },
     {
@@ -201,11 +202,11 @@
       "category_name": "multi_hop",
       "question": "What mediums does Nate use to play games?",
       "reference": "Gamecube, PC,Playstation.",
-      "prediction": "Video games, board games",
+      "prediction": "Computer, board games, video games",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 52.94,
-      "context_tokens": 518,
+      "search_ms": 43.32,
+      "context_tokens": 2314,
       "hit@k": 0.0
     },
     {
@@ -214,11 +215,11 @@
       "category_name": "multi_hop",
       "question": "What style of guitars does Calvin own?",
       "reference": "custom-made yellow guitar with an octopus on it, shiny purple guitar",
-      "prediction": "unique",
+      "prediction": "Custom-made with an octopus design, shiny finish, and purple glow.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 46.68,
-      "context_tokens": 535,
+      "search_ms": 41.43,
+      "context_tokens": 2521,
       "hit@k": 1.0
     },
     {
@@ -230,8 +231,8 @@
       "prediction": "Miami",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 34.87,
-      "context_tokens": 677,
+      "search_ms": 30.76,
+      "context_tokens": 2590,
       "hit@k": 1.0
     },
     {
@@ -240,11 +241,11 @@
       "category_name": "adversarial",
       "question": "What movie did Joanna recently watch and enjoy on October 6, 2022?",
       "reference": "Little Women",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": true,
-      "search_ms": 46.62,
-      "context_tokens": 563,
+      "prediction": "Little Women",
+      "verdict": "ANSWERED",
+      "correct": false,
+      "search_ms": 33.14,
+      "context_tokens": 2399,
       "hit@k": 0.0
     },
     {
@@ -256,8 +257,8 @@
       "prediction": "Sushi",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 51.42,
-      "context_tokens": 460,
+      "search_ms": 48.42,
+      "context_tokens": 2641,
       "hit@k": 0.0
     },
     {
@@ -266,11 +267,11 @@
       "category_name": "temporal",
       "question": "When did Dave start his car maintenance shop?",
       "reference": "May 1, 2023",
-      "prediction": "May 16, 2023",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 35.59,
-      "context_tokens": 686,
+      "prediction": "2023-05-01",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 28.55,
+      "context_tokens": 2838,
       "hit@k": 1.0
     },
     {
@@ -279,11 +280,11 @@
       "category_name": "single_hop",
       "question": "What outdoor activities does Andrew plan on trying after the rock climbing class?",
       "reference": "kayaking and bungee jumping",
-      "prediction": "kayaking, bungee jumping",
+      "prediction": "Kayaking and bungee jumping",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 40.72,
-      "context_tokens": 661,
+      "search_ms": 33.05,
+      "context_tokens": 2784,
       "hit@k": 1.0
     },
     {
@@ -292,11 +293,11 @@
       "category_name": "multi_hop",
       "question": "When Dave was a child, what did he and his father do in the garage?",
       "reference": "tinkering with car engines, restoration and refurbishing cars",
-      "prediction": "tinkering with engines",
+      "prediction": "Tinkering with engines.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 40.68,
-      "context_tokens": 805,
+      "search_ms": 29.49,
+      "context_tokens": 3044,
       "hit@k": 1.0
     },
     {
@@ -305,11 +306,11 @@
       "category_name": "adversarial",
       "question": "What realization did the nightclub experience bring to Dave?",
       "reference": "how much music means to him, it's like his passion and purpose",
-      "prediction": "Concerts are awesome, they bring people together and create such a cool vibe.",
+      "prediction": "Music has a way of connecting people and making memories, and concerts bring people together and create a cool vibe.",
       "verdict": "ANSWERED",
       "correct": false,
-      "search_ms": 55.7,
-      "context_tokens": 576,
+      "search_ms": 39.92,
+      "context_tokens": 2603,
       "hit@k": 0.0
     },
     {
@@ -321,8 +322,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 69.21,
-      "context_tokens": 623,
+      "search_ms": 49.35,
+      "context_tokens": 2421,
       "hit@k": 0.0
     },
     {
@@ -331,11 +332,11 @@
       "category_name": "temporal",
       "question": "When did Nate adopt Max?",
       "reference": "May 2022",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "2022-05-20",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 52.42,
-      "context_tokens": 403,
+      "search_ms": 40.99,
+      "context_tokens": 1960,
       "hit@k": 1.0
     },
     {
@@ -344,11 +345,11 @@
       "category_name": "temporal",
       "question": "When did Melanie go to the museum?",
       "reference": "5 July 2023",
-      "prediction": "July 5, 2023",
+      "prediction": "2023-07-05",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 30.91,
-      "context_tokens": 525,
+      "search_ms": 36.54,
+      "context_tokens": 2614,
       "hit@k": 1.0
     },
     {
@@ -357,11 +358,11 @@
       "category_name": "temporal",
       "question": "When did John meet with his teammates after returning from Chicago?",
       "reference": "August 15, 2023",
-      "prediction": "August 15th",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 35.72,
-      "context_tokens": 653,
+      "prediction": "2023-08-15",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 34.42,
+      "context_tokens": 2482,
       "hit@k": 1.0
     },
     {
@@ -370,11 +371,11 @@
       "category_name": "single_hop",
       "question": "Why did Joanna name the stuffed animal dog Tilly?",
       "reference": "after a dog she had in Michigan",
-      "prediction": "To remember her old dog with the same name.",
+      "prediction": "She named it after a dog she used to have in Michigan before she developed allergies.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 29.93,
-      "context_tokens": 514,
+      "search_ms": 72.68,
+      "context_tokens": 2258,
       "hit@k": 1.0
     },
     {
@@ -386,8 +387,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 59.18,
-      "context_tokens": 721,
+      "search_ms": 45.18,
+      "context_tokens": 2543,
       "hit@k": 1.0
     },
     {
@@ -396,11 +397,11 @@
       "category_name": "multi_hop",
       "question": "What new hobbies did Sam consider trying?",
       "reference": "Painting, kayaking, hiking, cooking, running",
-      "prediction": "painting",
+      "prediction": "Painting, something different outdoors (kayaking)",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 42.99,
-      "context_tokens": 550,
+      "search_ms": 39.99,
+      "context_tokens": 2466,
       "hit@k": 1.0
     },
     {
@@ -409,11 +410,11 @@
       "category_name": "single_hop",
       "question": "What hobby is a therapy for John when away from the court?",
       "reference": "Cooking",
-      "prediction": "cooking",
+      "prediction": "Cooking",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 38.08,
-      "context_tokens": 719,
+      "search_ms": 33.04,
+      "context_tokens": 2824,
       "hit@k": 1.0
     },
     {
@@ -422,11 +423,11 @@
       "category_name": "multi_hop",
       "question": "What hobby did Evan start practicing a few years ago that he enjoys?",
       "reference": "Watercolor painting",
-      "prediction": "painting",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 70.29,
-      "context_tokens": 605,
+      "prediction": "Watercolor painting",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 31.05,
+      "context_tokens": 2511,
       "hit@k": 1.0
     },
     {
@@ -435,11 +436,11 @@
       "category_name": "temporal",
       "question": "When did Maria get in a car accident?",
       "reference": "July 2, 2023",
-      "prediction": "2023-07-03",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 44.56,
-      "context_tokens": 582,
+      "prediction": "2023-07-02",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 60.45,
+      "context_tokens": 2537,
       "hit@k": 0.0
     },
     {
@@ -451,8 +452,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 36.53,
-      "context_tokens": 668,
+      "search_ms": 54.24,
+      "context_tokens": 2930,
       "hit@k": 1.0
     },
     {
@@ -461,11 +462,11 @@
       "category_name": "temporal",
       "question": "When did John have his first firefighter call-out?",
       "reference": "The sunday before 3` July 2023",
-      "prediction": "Last Sunday",
+      "prediction": "2023-07-30",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 52.42,
-      "context_tokens": 539,
+      "search_ms": 37.5,
+      "context_tokens": 2568,
       "hit@k": 1.0
     },
     {
@@ -477,8 +478,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 32.75,
-      "context_tokens": 474,
+      "search_ms": 31.45,
+      "context_tokens": 2235,
       "hit@k": 0.0
     },
     {
@@ -487,11 +488,11 @@
       "category_name": "temporal",
       "question": "Which torunament did Nate win in the beginning of November 2022?",
       "reference": "Valorant",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 57.06,
-      "context_tokens": 605,
+      "prediction": "Valorant tournament",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 36.75,
+      "context_tokens": 2553,
       "hit@k": 0.0
     },
     {
@@ -500,11 +501,11 @@
       "category_name": "open_domain",
       "question": "What role does nature and the outdoors play in Evan and Sam's mental well-being?",
       "reference": "Nature and outdoor activities seem to be significant stress relievers and sources of joy for both Evan and Sam. These activities likely contribute positively to their mental well-being.",
-      "prediction": "Peacefulness, calming, rejuvenating",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 40.32,
-      "context_tokens": 663,
+      "prediction": "Nature and the outdoors provide peace, tranquility, rejuvenation, and a mental reset, helping them cope with stress and find joy.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 30.34,
+      "context_tokens": 2677,
       "hit@k": 0.0
     },
     {
@@ -516,8 +517,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 52.95,
-      "context_tokens": 646,
+      "search_ms": 32.34,
+      "context_tokens": 2617,
       "hit@k": 1.0
     },
     {
@@ -529,8 +530,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 61.19,
-      "context_tokens": 505,
+      "search_ms": 45.09,
+      "context_tokens": 2363,
       "hit@k": 1.0
     },
     {
@@ -539,11 +540,11 @@
       "category_name": "single_hop",
       "question": "Have Deborah and Jolene been to Rio de Janeiro?",
       "reference": "yes",
-      "prediction": "Yes, both.",
+      "prediction": "Yes, both have.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 31.32,
-      "context_tokens": 446,
+      "search_ms": 33.05,
+      "context_tokens": 2083,
       "hit@k": 1.0
     },
     {
@@ -552,11 +553,11 @@
       "category_name": "open_domain",
       "question": "Based on the conversation, did Calvin and Dave have a meeting in Boston between August and November 2023? Answer in yes or no.",
       "reference": "No",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 46.3,
-      "context_tokens": 657,
+      "prediction": "No",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 44.21,
+      "context_tokens": 2653,
       "hit@k": 0.0
     },
     {
@@ -565,11 +566,11 @@
       "category_name": "single_hop",
       "question": "What did Gina want her customers to feel in her store?",
       "reference": "cozy and comfortable",
-      "prediction": "cozy, comfortable and inviting",
+      "prediction": "Cozy, comfortable, invited, and like they're in a cool oasis.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 20.63,
-      "context_tokens": 779,
+      "search_ms": 30.66,
+      "context_tokens": 2897,
       "hit@k": 1.0
     },
     {
@@ -578,11 +579,11 @@
       "category_name": "temporal",
       "question": "When did Sam start working out at the gym?",
       "reference": "July 28, 2023",
-      "prediction": "July 28, 2023",
+      "prediction": "2023-07-28",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 31.59,
-      "context_tokens": 627,
+      "search_ms": 26.21,
+      "context_tokens": 2531,
       "hit@k": 1.0
     },
     {
@@ -594,8 +595,8 @@
       "prediction": "2023-03-16",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 22.83,
-      "context_tokens": 744,
+      "search_ms": 19.54,
+      "context_tokens": 2724,
       "hit@k": 1.0
     },
     {
@@ -607,8 +608,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 41.26,
-      "context_tokens": 612,
+      "search_ms": 45.09,
+      "context_tokens": 2399,
       "hit@k": 1.0
     },
     {
@@ -617,11 +618,11 @@
       "category_name": "temporal",
       "question": "When did Calvin visit some of the sights in Boston with a former high school friend?",
       "reference": "October 24, 2023",
-      "prediction": "2023-10-25",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 34.67,
-      "context_tokens": 663,
+      "prediction": "2023-10-24",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 32.01,
+      "context_tokens": 2918,
       "hit@k": 1.0
     },
     {
@@ -633,8 +634,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 40.93,
-      "context_tokens": 663,
+      "search_ms": 46.51,
+      "context_tokens": 2666,
       "hit@k": 0.0
     },
     {
@@ -643,11 +644,11 @@
       "category_name": "single_hop",
       "question": "How did John describe his kids' reaction at the military memorial?",
       "reference": "awestruck and humbled",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 35.98,
-      "context_tokens": 619,
+      "prediction": "They were awestruck and humbled.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 44.04,
+      "context_tokens": 2538,
       "hit@k": 0.0
     },
     {
@@ -656,11 +657,11 @@
       "category_name": "temporal",
       "question": "How long did it take for Joanna to finish writing her book?",
       "reference": "four months",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Approximately 5.5 months",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 54.36,
-      "context_tokens": 686,
+      "search_ms": 41.91,
+      "context_tokens": 2675,
       "hit@k": 1.0
     },
     {
@@ -669,11 +670,11 @@
       "category_name": "temporal",
       "question": "Where was Calvin located in the last week of October 2023?",
       "reference": "Tokyo",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Japanese house",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 39.52,
-      "context_tokens": 702,
+      "search_ms": 42.84,
+      "context_tokens": 2495,
       "hit@k": 1.0
     },
     {
@@ -682,11 +683,11 @@
       "category_name": "single_hop",
       "question": "In what activity did Maria and her church friends participate in July 2023?",
       "reference": "hiking",
-      "prediction": "picnic, hiking",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 44.37,
-      "context_tokens": 616,
+      "prediction": "A picnic",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 33.19,
+      "context_tokens": 2533,
       "hit@k": 1.0
     },
     {
@@ -695,11 +696,11 @@
       "category_name": "temporal",
       "question": "When did John resume playing drums in his adulthood?",
       "reference": "February 2022",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 69.47,
-      "context_tokens": 501,
+      "prediction": "February 2022",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 95.52,
+      "context_tokens": 2262,
       "hit@k": 0.0
     },
     {
@@ -708,11 +709,11 @@
       "category_name": "multi_hop",
       "question": "What subject have Caroline and Melanie both painted?",
       "reference": "Sunsets",
-      "prediction": "Sunset",
+      "prediction": "Sunsets",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 70.1,
-      "context_tokens": 530,
+      "search_ms": 96.63,
+      "context_tokens": 2451,
       "hit@k": 0.0
     },
     {
@@ -721,11 +722,11 @@
       "category_name": "open_domain",
       "question": "Considering their conversations and personal growth, what advice might Evan and Sam give to someone facing a major life transition or challenge?",
       "reference": "Evan and Sam would likely advise embracing small, consistent changes\u200b\u200b, finding stress-relieving activities like hiking\u200b\u200b, painting, and road trips\u200b\u200b, and the importance of friendship and support in navigating challenges\u200b\u200b.",
-      "prediction": "Embrace the journey; stay positive; find what works for you; be adaptable; seek support.",
+      "prediction": "Find enjoyable activities, set goals, seek support, learn from mistakes, and embrace the journey.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 32.7,
-      "context_tokens": 704,
+      "search_ms": 33.89,
+      "context_tokens": 2997,
       "hit@k": 0.0
     },
     {
@@ -737,8 +738,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 23.56,
-      "context_tokens": 566,
+      "search_ms": 21.49,
+      "context_tokens": 2489,
       "hit@k": 1.0
     },
     {
@@ -747,11 +748,11 @@
       "category_name": "temporal",
       "question": "When was Calvin's album released?",
       "reference": "September 11, 2023",
-      "prediction": "September 11th",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 31.57,
-      "context_tokens": 657,
+      "prediction": "2023-09-11",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 40.1,
+      "context_tokens": 2756,
       "hit@k": 1.0
     },
     {
@@ -760,11 +761,11 @@
       "category_name": "open_domain",
       "question": "What job might Maria pursue in the future?",
       "reference": "Shelter coordinator, Counselor",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Policymaking",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 42.46,
-      "context_tokens": 544,
+      "search_ms": 47.9,
+      "context_tokens": 2532,
       "hit@k": 0.0
     },
     {
@@ -776,8 +777,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 45.25,
-      "context_tokens": 662,
+      "search_ms": 52.29,
+      "context_tokens": 2622,
       "hit@k": 1.0
     },
     {
@@ -786,11 +787,11 @@
       "category_name": "single_hop",
       "question": "What did Jolene's mom stress the value of, which she wants to keep in mind for her engineering projects?",
       "reference": "Helping others",
-      "prediction": "helping others",
+      "prediction": "Helping others",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 44.39,
-      "context_tokens": 732,
+      "search_ms": 86.18,
+      "context_tokens": 2941,
       "hit@k": 1.0
     },
     {
@@ -799,11 +800,11 @@
       "category_name": "multi_hop",
       "question": "What are Joanna's hobbies?",
       "reference": "Writing, watchingmovies, exploringnature, hanging withfriends.",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Writing, reading, watching movies, and exploring nature.",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 41.69,
-      "context_tokens": 472,
+      "search_ms": 41.46,
+      "context_tokens": 2073,
       "hit@k": 0.0
     },
     {
@@ -812,11 +813,11 @@
       "category_name": "temporal",
       "question": "How long did Jolene work on the robotics project given to her by her Professor?",
       "reference": "four months",
-      "prediction": "February 1st to May",
+      "prediction": "Four months (February to May 2023)",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 32.81,
-      "context_tokens": 706,
+      "search_ms": 40.98,
+      "context_tokens": 2472,
       "hit@k": 1.0
     },
     {
@@ -828,8 +829,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 43.54,
-      "context_tokens": 624,
+      "search_ms": 57.39,
+      "context_tokens": 2473,
       "hit@k": 0.0
     },
     {
@@ -841,8 +842,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 45.67,
-      "context_tokens": 541,
+      "search_ms": 47.2,
+      "context_tokens": 2271,
       "hit@k": 1.0
     },
     {
@@ -851,11 +852,11 @@
       "category_name": "multi_hop",
       "question": "What schools did John play basketball in and how many years was he with his team during high school?",
       "reference": "Middle school, high school, and college and he was with his high school team for 4 years.",
-      "prediction": "four years",
-      "verdict": "INCORRECT",
+      "prediction": "NO_ANSWER; four years",
+      "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 47.83,
-      "context_tokens": 722,
+      "search_ms": 44.76,
+      "context_tokens": 2867,
       "hit@k": 1.0
     },
     {
@@ -867,8 +868,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 33.52,
-      "context_tokens": 567,
+      "search_ms": 34.34,
+      "context_tokens": 2471,
       "hit@k": 1.0
     },
     {
@@ -877,11 +878,11 @@
       "category_name": "single_hop",
       "question": "What inspires Joanna to create drawings of her characters?",
       "reference": "visuals to help bring the characters alive in her head so she can write better",
-      "prediction": "To help bring them alive in her head so she can write better.",
+      "prediction": "To help bring her characters alive in her head so she can write better.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 42.71,
-      "context_tokens": 593,
+      "search_ms": 28.71,
+      "context_tokens": 2449,
       "hit@k": 1.0
     },
     {
@@ -890,11 +891,11 @@
       "category_name": "multi_hop",
       "question": "What did Caroline research?",
       "reference": "Adoption agencies",
-      "prediction": "adoption agencies",
+      "prediction": "Adoption agencies",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 30.49,
-      "context_tokens": 503,
+      "search_ms": 33.38,
+      "context_tokens": 2642,
       "hit@k": 1.0
     },
     {
@@ -903,11 +904,11 @@
       "category_name": "multi_hop",
       "question": "What health scares did Sam and Evan experience?",
       "reference": "Sam faced a health scare with stomach pains that turned out to be gastritis, prompting him to rethink his health habits. Evan, on the other hand, experienced two separate incidents: a sudden heart palpitation incident and a different event involving a misunderstanding during a medical check-up. These experiences have significantly influenced their perspectives on health and well-being.",
-      "prediction": "Sam: gastritis (2023-10-17), discomfort limiting movement (2023-11-21)\nEvan: heart palpitation (2023-06-06), suspicious finding during check-up (2023-11-21)",
+      "prediction": "Sam: gastritis (October 2023), concerning weight (May 2023). Evan: heart palpitations (June 2023), suspicious finding during check-up (November 2023).",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 51.09,
-      "context_tokens": 718,
+      "search_ms": 30.12,
+      "context_tokens": 2937,
       "hit@k": 1.0
     },
     {
@@ -916,11 +917,11 @@
       "category_name": "multi_hop",
       "question": "What does Andrew view his pets as?",
       "reference": "Family",
-      "prediction": "Friends and confidantes",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 33.68,
-      "context_tokens": 528,
+      "prediction": "Friends, confidantes, family, and sources of happiness, joy, and companionship.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 53.37,
+      "context_tokens": 2326,
       "hit@k": 1.0
     },
     {
@@ -929,11 +930,11 @@
       "category_name": "open_domain",
       "question": "What fields would Caroline be likely to pursue in her educaton?",
       "reference": "Psychology, counseling certification",
-      "prediction": "counseling and mental health",
+      "prediction": "Counseling and mental health, specifically focusing on LGBTQ+ individuals.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 21.49,
-      "context_tokens": 641,
+      "search_ms": 54.13,
+      "context_tokens": 2801,
       "hit@k": 0.0
     },
     {
@@ -942,11 +943,11 @@
       "category_name": "temporal",
       "question": "When did Nate take his turtles to the beach?",
       "reference": "10 November, 2022",
-      "prediction": "2022-11-11",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 74.51,
-      "context_tokens": 502,
+      "prediction": "2022-11-10",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 31.31,
+      "context_tokens": 2330,
       "hit@k": 1.0
     },
     {
@@ -958,8 +959,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 58.27,
-      "context_tokens": 647,
+      "search_ms": 33.88,
+      "context_tokens": 2572,
       "hit@k": 1.0
     },
     {
@@ -968,11 +969,11 @@
       "category_name": "temporal",
       "question": "When did John get his degree?",
       "reference": "The week before 2 April 2023",
-      "prediction": "2023-04-02",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 39.9,
-      "context_tokens": 558,
+      "prediction": "Last week of March 2023",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 40.36,
+      "context_tokens": 2547,
       "hit@k": 0.0
     },
     {
@@ -984,8 +985,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 53.47,
-      "context_tokens": 507,
+      "search_ms": 33.82,
+      "context_tokens": 2389,
       "hit@k": 0.0
     },
     {
@@ -994,11 +995,11 @@
       "category_name": "temporal",
       "question": "When did Maria go hiking with her church friends?",
       "reference": "The weekend before 22 July 2023",
-      "prediction": "last weekend (before 2023-07-22)",
+      "prediction": "Last weekend (July 15-16, 2023)",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 37.06,
-      "context_tokens": 644,
+      "search_ms": 31.72,
+      "context_tokens": 2614,
       "hit@k": 1.0
     },
     {
@@ -1010,8 +1011,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 40.59,
-      "context_tokens": 728,
+      "search_ms": 27.7,
+      "context_tokens": 2741,
       "hit@k": 0.0
     },
     {
@@ -1020,11 +1021,11 @@
       "category_name": "single_hop",
       "question": "What was Deborah's mom passionate about?",
       "reference": "Cooking",
-      "prediction": "cooking, flowers",
+      "prediction": "Cooking and flowers.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 47.56,
-      "context_tokens": 590,
+      "search_ms": 38.12,
+      "context_tokens": 2358,
       "hit@k": 1.0
     },
     {
@@ -1033,11 +1034,11 @@
       "category_name": "single_hop",
       "question": "Where did James and Samantha decide to live together on 31 October, 2022?",
       "reference": "In an apartment not far from McGee's bar",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Not far from McGee's bar",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 41.33,
-      "context_tokens": 573,
+      "search_ms": 38.33,
+      "context_tokens": 2629,
       "hit@k": 0.0
     },
     {
@@ -1046,11 +1047,11 @@
       "category_name": "multi_hop",
       "question": "What test has John taken multiple times?",
       "reference": "The military aptitude test",
-      "prediction": "military aptitude test",
+      "prediction": "Military aptitude test",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 32.87,
-      "context_tokens": 541,
+      "search_ms": 31.9,
+      "context_tokens": 2402,
       "hit@k": 1.0
     },
     {
@@ -1059,11 +1060,11 @@
       "category_name": "temporal",
       "question": "When did Joanna finish up the writing for her book?",
       "reference": "The week before 6October, 2022",
-      "prediction": "last week",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 41.8,
-      "context_tokens": 572,
+      "prediction": "The week prior to October 6, 2022.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 31.63,
+      "context_tokens": 2359,
       "hit@k": 1.0
     },
     {
@@ -1072,11 +1073,11 @@
       "category_name": "open_domain",
       "question": "What can Andrew potentially do to improve his stress and accomodate his living situation with his dogs?",
       "reference": "Change to a hybrid or remote job so he can move away from the city to the suburbs to have a larger living space and be closer to nature.",
-      "prediction": "Find a dog-friendly spot near a park or woods",
+      "prediction": "Make time for self-care and nature, use websites to find dog-friendly housing near parks, and use indoor toys and games for dog activity.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 57.25,
-      "context_tokens": 608,
+      "search_ms": 52.01,
+      "context_tokens": 2503,
       "hit@k": 0.0
     },
     {
@@ -1085,11 +1086,11 @@
       "category_name": "single_hop",
       "question": "What is Jon's attitude towards being part of the dance festival?",
       "reference": "Glad",
-      "prediction": "Can't wait!",
+      "prediction": "Excited and glad to be part of it.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 18.03,
-      "context_tokens": 670,
+      "search_ms": 19.81,
+      "context_tokens": 2598,
       "hit@k": 1.0
     },
     {
@@ -1098,11 +1099,11 @@
       "category_name": "multi_hop",
       "question": "What kind of beer does McGee's bar serve?",
       "reference": "Stout, lager",
-      "prediction": "lager, stout",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 35.81,
-      "context_tokens": 465,
+      "prediction": "Stout and light beers",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 32.25,
+      "context_tokens": 2111,
       "hit@k": 1.0
     },
     {
@@ -1111,11 +1112,11 @@
       "category_name": "multi_hop",
       "question": "What accidents has Evan's son faced lately?",
       "reference": "injured at a soccer game, fell off his bike",
-      "prediction": "Soccer accident, fell off his bike",
+      "prediction": "A soccer accident where he hurt his ankle, and falling off his bike.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 34.36,
-      "context_tokens": 716,
+      "search_ms": 31.56,
+      "context_tokens": 2777,
       "hit@k": 1.0
     },
     {
@@ -1124,11 +1125,11 @@
       "category_name": "open_domain",
       "question": "What Console does Nate own?",
       "reference": "A Nintendo Switch; since the game \"Xenoblade 2\" is made for this console.",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "PC",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 37.58,
-      "context_tokens": 331,
+      "search_ms": 28.67,
+      "context_tokens": 1885,
       "hit@k": 0.0
     },
     {
@@ -1140,8 +1141,8 @@
       "prediction": "Independence Day",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 57.89,
-      "context_tokens": 592,
+      "search_ms": 39.84,
+      "context_tokens": 2564,
       "hit@k": 0.0
     },
     {
@@ -1153,8 +1154,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 50.83,
-      "context_tokens": 708,
+      "search_ms": 43.2,
+      "context_tokens": 2679,
       "hit@k": 1.0
     },
     {
@@ -1166,8 +1167,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 43.16,
-      "context_tokens": 676,
+      "search_ms": 33.61,
+      "context_tokens": 2825,
       "hit@k": 1.0
     },
     {
@@ -1179,8 +1180,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 32.51,
-      "context_tokens": 516,
+      "search_ms": 49.89,
+      "context_tokens": 2400,
       "hit@k": 0.0
     },
     {
@@ -1189,11 +1190,11 @@
       "category_name": "temporal",
       "question": "When did Caroline join a mentorship program?",
       "reference": "The weekend before 17 July 2023",
-      "prediction": "2023-07-17",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 24.19,
-      "context_tokens": 522,
+      "prediction": "July 15-16, 2023",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 31.53,
+      "context_tokens": 2569,
       "hit@k": 1.0
     },
     {
@@ -1202,11 +1203,11 @@
       "category_name": "open_domain",
       "question": "Does Evan live close to a beach or mountains?",
       "reference": "beach",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 47.24,
-      "context_tokens": 621,
+      "prediction": "Beach",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 26.47,
+      "context_tokens": 2546,
       "hit@k": 1.0
     },
     {
@@ -1215,11 +1216,11 @@
       "category_name": "multi_hop",
       "question": "What video games does Nate play?",
       "reference": "Valorant, Counter Strike:Global Offensive,Xenoblade Chronicles, StreetFighter, Cyberpunk 2077",
-      "prediction": "CS:GO, Street Fighter, Cyberpunk 2077, Catan, Nintendo games",
+      "prediction": "Cyberpunk 2077, CS:GO, Street Fighter, Xeonoblade Chronicles",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 104.54,
-      "context_tokens": 555,
+      "search_ms": 39.14,
+      "context_tokens": 2380,
       "hit@k": 1.0
     },
     {
@@ -1228,11 +1229,11 @@
       "category_name": "open_domain",
       "question": "What state did Joanna visit in summer 2021?",
       "reference": "Indiana",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 29.38,
-      "context_tokens": 455,
+      "prediction": "Indiana",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 30.2,
+      "context_tokens": 2109,
       "hit@k": 1.0
     },
     {
@@ -1241,11 +1242,11 @@
       "category_name": "open_domain",
       "question": "Would Caroline likely have Dr. Seuss books on her bookshelf?",
       "reference": "Yes, since she collects classic children's books",
-      "prediction": "Yes, she has lots of kids' books.",
+      "prediction": "Yes",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 67.42,
-      "context_tokens": 590,
+      "search_ms": 20.75,
+      "context_tokens": 2781,
       "hit@k": 1.0
     },
     {
@@ -1254,11 +1255,11 @@
       "category_name": "temporal",
       "question": "Which country was Tim visiting in the second week of November?",
       "reference": "UK",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 46.13,
-      "context_tokens": 693,
+      "prediction": "The UK",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 54.05,
+      "context_tokens": 2627,
       "hit@k": 0.0
     },
     {
@@ -1267,11 +1268,11 @@
       "category_name": "single_hop",
       "question": "What organization is John teaming up with for his charity work?",
       "reference": "A local organization helping disadvantaged kids with sports and school",
-      "prediction": "a local organization that helps disadvantaged kids with sports and school",
+      "prediction": "A local organization that helps disadvantaged kids with sports and school.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 31.11,
-      "context_tokens": 600,
+      "search_ms": 33.6,
+      "context_tokens": 2673,
       "hit@k": 1.0
     },
     {
@@ -1280,11 +1281,11 @@
       "category_name": "single_hop",
       "question": "What book recommendation did Tim give to John for the trip?",
       "reference": "A fantasy novel by Patrick Rothfuss",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 37.92,
-      "context_tokens": 609,
+      "prediction": "A fantasy novel by Patrick Rothfuss.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 36.89,
+      "context_tokens": 2707,
       "hit@k": 0.0
     },
     {
@@ -1293,11 +1294,11 @@
       "category_name": "temporal",
       "question": "When did John and James meet at McGee's bar?",
       "reference": "August 27, 2022",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 43.88,
-      "context_tokens": 414,
+      "prediction": "August 27, 2022",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 41.83,
+      "context_tokens": 2178,
       "hit@k": 1.0
     },
     {
@@ -1306,11 +1307,11 @@
       "category_name": "open_domain",
       "question": "What alternative career might Nate consider after gaming?",
       "reference": "an animalkeeper at a localzoo and workingwith turtles; as heknows a great dealabout turtles andhow to care for them,and he enjoys it.",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Ice cream maker",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 40.29,
-      "context_tokens": 474,
+      "search_ms": 38.34,
+      "context_tokens": 2157,
       "hit@k": 0.0
     },
     {
@@ -1319,11 +1320,11 @@
       "category_name": "multi_hop",
       "question": "What movies have both Joanna and Nate seen?",
       "reference": "\"Little Women\", \"Lord of the Rings\"",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Little Women",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 31.64,
-      "context_tokens": 409,
+      "search_ms": 32.07,
+      "context_tokens": 2135,
       "hit@k": 0.0
     },
     {
@@ -1332,11 +1333,11 @@
       "category_name": "single_hop",
       "question": "Which Disney movie did Dave mention as one of his favorites?",
       "reference": "Ratatouille",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 31.76,
-      "context_tokens": 646,
+      "prediction": "Ratatouille",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 37.08,
+      "context_tokens": 2683,
       "hit@k": 1.0
     },
     {
@@ -1345,11 +1346,11 @@
       "category_name": "multi_hop",
       "question": "What books has John read?",
       "reference": "inpsiring book on dreaming big, The Alchemist, fantasy series, non-fiction books on personal development, Dune",
-      "prediction": "Dune, an inspiring book",
+      "prediction": "The Alchemist, Dune, an inspiring book (unnamed)",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 33.09,
-      "context_tokens": 575,
+      "search_ms": 43.14,
+      "context_tokens": 2533,
       "hit@k": 1.0
     },
     {
@@ -1358,11 +1359,11 @@
       "category_name": "multi_hop",
       "question": "What recurring adventure does Evan have with strangers?",
       "reference": "Helping lost tourists and experiencing unexpected adventures in the city.",
-      "prediction": "Helping lost tourists",
+      "prediction": "Helping lost tourists.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 29.45,
-      "context_tokens": 639,
+      "search_ms": 32.82,
+      "context_tokens": 2702,
       "hit@k": 1.0
     },
     {
@@ -1374,8 +1375,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 29.79,
-      "context_tokens": 636,
+      "search_ms": 21.72,
+      "context_tokens": 2533,
       "hit@k": 1.0
     },
     {
@@ -1384,11 +1385,11 @@
       "category_name": "multi_hop",
       "question": "What people has Maria met and helped while volunteering?",
       "reference": "David, Jean, Cindy, Laura",
-      "prediction": "Jean, people at a homeless shelter, people at a veteran's hospital",
+      "prediction": "Jean, a little girl, someone special at the shelter, and a homeless individual.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 78.27,
-      "context_tokens": 618,
+      "search_ms": 55.0,
+      "context_tokens": 2640,
       "hit@k": 1.0
     },
     {
@@ -1400,8 +1401,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 32.41,
-      "context_tokens": 644,
+      "search_ms": 61.96,
+      "context_tokens": 2518,
       "hit@k": 1.0
     },
     {
@@ -1410,11 +1411,11 @@
       "category_name": "temporal",
       "question": "When did James, Samantha and John go to the baseball game together?",
       "reference": "September 11, 2022",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 34.82,
-      "context_tokens": 552,
+      "prediction": "2022-09-11",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 73.36,
+      "context_tokens": 2572,
       "hit@k": 1.0
     },
     {
@@ -1426,8 +1427,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 28.06,
-      "context_tokens": 637,
+      "search_ms": 47.07,
+      "context_tokens": 2629,
       "hit@k": 0.0
     },
     {
@@ -1439,8 +1440,8 @@
       "prediction": "Camping trip in the outdoors",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 24.14,
-      "context_tokens": 677,
+      "search_ms": 35.72,
+      "context_tokens": 2518,
       "hit@k": 1.0
     },
     {
@@ -1449,11 +1450,11 @@
       "category_name": "multi_hop",
       "question": "What books has Tim read?",
       "reference": "Harry Potter, Game of Thrones, the Name of the Wind, The Alchemist, The Hobbit, A Dance with Dragons, and the Wheel of Time.",
-      "prediction": "a book about how small changes can make big differences, a fantasy book by Patrick Rothfuss, a book about castles in the UK",
+      "prediction": "A book about how small changes can make big differences, \"The Alchemist\", \"The Name of the Wind\" by Patrick Rothfuss, a book about castles in the UK.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 49.26,
-      "context_tokens": 662,
+      "search_ms": 42.01,
+      "context_tokens": 2859,
       "hit@k": 0.0
     },
     {
@@ -1462,11 +1463,11 @@
       "category_name": "single_hop",
       "question": "What are some of the personalities of Audrey's four fur babies?",
       "reference": "oldest is relaxed, second is playful, third can be naughty but loves cuddles, youngest is full of life",
-      "prediction": "oldest: relaxed, wise; second: ready for a game; third: naughty, loves cuddles; youngest: full of life, up for adventure",
+      "prediction": "The oldest is relaxed like a wise old sage, the second is always ready for a game, the third is naughty but loves cuddles, and the youngest is full of life and always up for adventure.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 58.93,
-      "context_tokens": 632,
+      "search_ms": 41.24,
+      "context_tokens": 2586,
       "hit@k": 1.0
     },
     {
@@ -1475,11 +1476,11 @@
       "category_name": "open_domain",
       "question": "What kind of job is Joanna beginning to preform the duties of because of her movie scripts?",
       "reference": "filmmaker.",
-      "prediction": "Filming her own movie",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 34.23,
-      "context_tokens": 672,
+      "prediction": "Director/Filmmaker",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 42.79,
+      "context_tokens": 2550,
       "hit@k": 1.0
     },
     {
@@ -1488,11 +1489,11 @@
       "category_name": "open_domain",
       "question": "How often does Sam get health checkups?",
       "reference": "every three months",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Not regularly, but he has had check-ups and plans to make an appointment soon.",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 30.92,
-      "context_tokens": 728,
+      "search_ms": 24.64,
+      "context_tokens": 2889,
       "hit@k": 1.0
     },
     {
@@ -1504,8 +1505,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 47.12,
-      "context_tokens": 625,
+      "search_ms": 46.68,
+      "context_tokens": 2471,
       "hit@k": 1.0
     },
     {
@@ -1514,11 +1515,11 @@
       "category_name": "temporal",
       "question": "When did James and his family visit Mark and Josh?",
       "reference": "November 7, 2022",
-      "prediction": "November 7, 2022",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 36.53,
-      "context_tokens": 519,
+      "prediction": "Before November 7, 2022",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 49.57,
+      "context_tokens": 2198,
       "hit@k": 1.0
     },
     {
@@ -1527,11 +1528,11 @@
       "category_name": "multi_hop",
       "question": "Which cities has John been to?",
       "reference": "Seattle, Chicago, New York, and Paris.",
-      "prediction": "New York City, Seattle, Barcelona",
+      "prediction": "New York City, Seattle",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 39.54,
-      "context_tokens": 592,
+      "search_ms": 41.88,
+      "context_tokens": 2247,
       "hit@k": 1.0
     },
     {
@@ -1540,11 +1541,11 @@
       "category_name": "open_domain",
       "question": "In what country was Jolene during summer 2022?",
       "reference": "Colombia",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
-      "correct": false,
-      "search_ms": 49.02,
-      "context_tokens": 418,
+      "prediction": "Colombia (Bogota)",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 53.75,
+      "context_tokens": 2215,
       "hit@k": 1.0
     },
     {
@@ -1553,11 +1554,11 @@
       "category_name": "open_domain",
       "question": "Who is Jill?",
       "reference": "Most likely John's partner.",
-      "prediction": "John's friend",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 38.55,
-      "context_tokens": 488,
+      "prediction": "John's companion/partner",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 71.48,
+      "context_tokens": 2242,
       "hit@k": 1.0
     },
     {
@@ -1569,8 +1570,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 60.25,
-      "context_tokens": 571,
+      "search_ms": 36.61,
+      "context_tokens": 2408,
       "hit@k": 0.0
     },
     {
@@ -1582,8 +1583,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 35.71,
-      "context_tokens": 772,
+      "search_ms": 34.05,
+      "context_tokens": 3060,
       "hit@k": 0.0
     },
     {
@@ -1592,11 +1593,11 @@
       "category_name": "single_hop",
       "question": "What was John's way of dealing with doubts and stress when he was younger?",
       "reference": "practicing basketball outside for hours",
-      "prediction": "practicing basketball outside for hours",
+      "prediction": "Practicing basketball outside for hours.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 54.93,
-      "context_tokens": 783,
+      "search_ms": 37.1,
+      "context_tokens": 2834,
       "hit@k": 1.0
     },
     {
@@ -1605,11 +1606,11 @@
       "category_name": "multi_hop",
       "question": "What recipes has Joanna made?",
       "reference": "dairy free vanilla cake with strawberry filling and coconut cream frosting, parfait, strawberry chocolate cake, chocolate coconut cupcakes, chocolate raspberry tart, chocolate cake with raspberries, blueberry cheesecake bars",
-      "prediction": "Cake, dessert with blueberries/coconut milk/gluten-free crust, revised old recipe, dairy-free chocolate coconut cupcakes with raspberry frosting, dessert with almond milk",
+      "prediction": "Dairy-free vanilla cake with strawberry filling and coconut cream frosting; chocolate raspberry tart with almond flour crust, chocolate ganache, and fresh raspberries; dairy-free chocolate coconut cupcakes with raspberry frosting; a dessert with blueberries, coconut milk, and a gluten-free crust; an",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 45.16,
-      "context_tokens": 597,
+      "search_ms": 36.67,
+      "context_tokens": 2578,
       "hit@k": 1.0
     },
     {
@@ -1621,8 +1622,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 32.29,
-      "context_tokens": 683,
+      "search_ms": 65.13,
+      "context_tokens": 2646,
       "hit@k": 1.0
     },
     {
@@ -1631,11 +1632,11 @@
       "category_name": "open_domain",
       "question": "What attributes describe John?",
       "reference": "Selfless, family-oriented, passionate, rational",
-      "prediction": "Passionate, appreciative, community-focused, friendly",
+      "prediction": "Respectful of military, community-minded, family-oriented, supportive, appreciative, motivated by activism, interested in local politics, passionate about education and infrastructure.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 36.48,
-      "context_tokens": 378,
+      "search_ms": 45.56,
+      "context_tokens": 2323,
       "hit@k": 0.0
     },
     {
@@ -1647,8 +1648,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": false,
-      "search_ms": 31.42,
-      "context_tokens": 611,
+      "search_ms": 27.97,
+      "context_tokens": 2340,
       "hit@k": 1.0
     },
     {
@@ -1660,8 +1661,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 37.12,
-      "context_tokens": 576,
+      "search_ms": 35.01,
+      "context_tokens": 2513,
       "hit@k": 0.0
     },
     {
@@ -1673,8 +1674,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 54.34,
-      "context_tokens": 521,
+      "search_ms": 39.79,
+      "context_tokens": 2196,
       "hit@k": 1.0
     },
     {
@@ -1683,11 +1684,11 @@
       "category_name": "single_hop",
       "question": "What helps Joanna stay focused and brings her joy?",
       "reference": "stuffed animal dog named Tilly",
-      "prediction": "Tilly",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 41.07,
-      "context_tokens": 603,
+      "prediction": "Tilly (a stuffed animal), creating stories, and writing.",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 41.14,
+      "context_tokens": 2423,
       "hit@k": 1.0
     },
     {
@@ -1699,8 +1700,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 41.11,
-      "context_tokens": 612,
+      "search_ms": 42.51,
+      "context_tokens": 2511,
       "hit@k": 1.0
     },
     {
@@ -1709,11 +1710,11 @@
       "category_name": "multi_hop",
       "question": "What damages have happened to John's car?",
       "reference": "Broken windshield, Car broke down",
-      "prediction": "broke down",
+      "prediction": "It broke down.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 50.86,
-      "context_tokens": 621,
+      "search_ms": 36.23,
+      "context_tokens": 2646,
       "hit@k": 1.0
     },
     {
@@ -1722,11 +1723,11 @@
       "category_name": "multi_hop",
       "question": "What is a shared frustration regarding dog ownership for Audrey and Andrew?",
       "reference": "Not being able to find pet friendly spots.",
-      "prediction": "not finding pet-friendly spots",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 38.25,
-      "context_tokens": 639,
+      "prediction": "Finding pet-friendly spots.",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 54.84,
+      "context_tokens": 2662,
       "hit@k": 1.0
     },
     {
@@ -1735,11 +1736,11 @@
       "category_name": "open_domain",
       "question": "What personality traits might Melanie say Caroline has?",
       "reference": "Thoughtful, authentic, driven",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Dedicated, courageous, real, mature, caring.",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 37.41,
-      "context_tokens": 451,
+      "search_ms": 31.42,
+      "context_tokens": 2435,
       "hit@k": 0.0
     },
     {
@@ -1748,11 +1749,11 @@
       "category_name": "multi_hop",
       "question": "Which activity did Sam resume in December 2023 after a long time?",
       "reference": "hiking",
-      "prediction": "NO_ANSWER",
-      "verdict": "DECLINED",
+      "prediction": "Painting",
+      "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 35.63,
-      "context_tokens": 533,
+      "search_ms": 32.37,
+      "context_tokens": 2422,
       "hit@k": 0.0
     },
     {
@@ -1764,8 +1765,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 37.43,
-      "context_tokens": 677,
+      "search_ms": 38.07,
+      "context_tokens": 2686,
       "hit@k": 0.0
     },
     {
@@ -1777,8 +1778,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 20.09,
-      "context_tokens": 661,
+      "search_ms": 24.61,
+      "context_tokens": 2740,
       "hit@k": 1.0
     },
     {
@@ -1790,8 +1791,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 44.29,
-      "context_tokens": 590,
+      "search_ms": 34.7,
+      "context_tokens": 2441,
       "hit@k": 1.0
     },
     {
@@ -1800,11 +1801,11 @@
       "category_name": "single_hop",
       "question": "What type of classes did Audrey start with her pups recently on 4 August, 2023?",
       "reference": "Agility classes",
-      "prediction": "agility classes",
+      "prediction": "Agility classes",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 38.58,
-      "context_tokens": 741,
+      "search_ms": 82.85,
+      "context_tokens": 2980,
       "hit@k": 1.0
     },
     {
@@ -1813,11 +1814,11 @@
       "category_name": "single_hop",
       "question": "What did Audrey make to thank her neighbors?",
       "reference": "Goodies",
-      "prediction": "goodies",
+      "prediction": "Some goodies",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 48.09,
-      "context_tokens": 609,
+      "search_ms": 33.65,
+      "context_tokens": 2825,
       "hit@k": 1.0
     },
     {
@@ -1826,11 +1827,11 @@
       "category_name": "open_domain",
       "question": "What is an indoor activity that Andrew would enjoy doing while make his dog happy?",
       "reference": "cook dog treats",
-      "prediction": "doggy daycare",
+      "prediction": "Taking his dog to an indoor doggy daycare or playing with toys and games indoors.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 40.87,
-      "context_tokens": 507,
+      "search_ms": 32.34,
+      "context_tokens": 2396,
       "hit@k": 0.0
     },
     {
@@ -1842,8 +1843,8 @@
       "prediction": "NO_ANSWER",
       "verdict": "DECLINED",
       "correct": true,
-      "search_ms": 30.86,
-      "context_tokens": 751,
+      "search_ms": 58.64,
+      "context_tokens": 2759,
       "hit@k": 1.0
     },
     {
@@ -1852,11 +1853,11 @@
       "category_name": "single_hop",
       "question": "What did Andrew learn from reading books about ecological systems?",
       "reference": "about animals, plants, and ecosystems and how they work together",
-      "prediction": "animals, plants, and ecosystems",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 42.35,
-      "context_tokens": 659,
+      "prediction": "He learned a lot about animals, plants, and ecosystems, and how they all work together.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 33.48,
+      "context_tokens": 2528,
       "hit@k": 1.0
     },
     {
@@ -1865,11 +1866,11 @@
       "category_name": "single_hop",
       "question": "What game genre did John start exploring instead of shooters?",
       "reference": "strategy and RPG games",
-      "prediction": "strategy and RPG games",
+      "prediction": "Strategy and RPG games",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 49.09,
-      "context_tokens": 631,
+      "search_ms": 39.27,
+      "context_tokens": 2483,
       "hit@k": 1.0
     },
     {
@@ -1878,11 +1879,11 @@
       "category_name": "single_hop",
       "question": "What did John take away from visiting the veteran's hospital?",
       "reference": "appreciation for giving back",
-      "prediction": "appreciate what we have and the need to give back",
+      "prediction": "It was eye-opening, made him appreciate what they have and the need to give back, and filled him with hope, reminding him why he wanted to join the military.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 49.86,
-      "context_tokens": 543,
+      "search_ms": 46.46,
+      "context_tokens": 2558,
       "hit@k": 1.0
     },
     {
@@ -1891,11 +1892,11 @@
       "category_name": "multi_hop",
       "question": "What types of pottery have Melanie and her kids made?",
       "reference": "bowls, cup",
-      "prediction": "pots, cup, bowl",
-      "verdict": "CORRECT",
-      "correct": true,
-      "search_ms": 36.34,
-      "context_tokens": 529,
+      "prediction": "Pots and a cup.",
+      "verdict": "INCORRECT",
+      "correct": false,
+      "search_ms": 32.57,
+      "context_tokens": 2462,
       "hit@k": 1.0
     },
     {
@@ -1904,11 +1905,11 @@
       "category_name": "multi_hop",
       "question": "What activities does Melanie partake in?",
       "reference": "pottery, camping, painting, swimming",
-      "prediction": "pottery, running, family time",
+      "prediction": "Pottery, camping, running, painting with her kids.",
       "verdict": "INCORRECT",
       "correct": false,
-      "search_ms": 27.42,
-      "context_tokens": 441,
+      "search_ms": 27.26,
+      "context_tokens": 2329,
       "hit@k": 1.0
     },
     {
@@ -1917,11 +1918,11 @@
       "category_name": "multi_hop",
       "question": "How did Evan get into painting?",
       "reference": "His friend got him into it by gifting him a painting and giving him some advice. The painting inspired Evan.",
-      "prediction": "A friend gave him a painting.",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 36.07,
-      "context_tokens": 629,
+      "prediction": "A friend got him into it and inspired him with a painting.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 36.13,
+      "context_tokens": 2637,
       "hit@k": 1.0
     },
     {
@@ -1930,11 +1931,11 @@
       "category_name": "multi_hop",
       "question": "In what ways is Caroline participating in the LGBTQ community?",
       "reference": "Joining activist group, going to pride parades, participating in an art show, mentoring program",
-      "prediction": "Joining an activist group, attending a pride parade, considering counseling, joining a mentorship program, creating art, having an art show.",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 26.19,
-      "context_tokens": 689,
+      "prediction": "Joining an activist group, giving talks about her transgender journey, attending pride parades, mentoring LGBTQ youth, using her art to represent inclusivity and speak up for the community, and organizing an LGBTQ art show.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 25.0,
+      "context_tokens": 2918,
       "hit@k": 1.0
     },
     {
@@ -1943,11 +1944,11 @@
       "category_name": "single_hop",
       "question": "Does Deborah like cats?",
       "reference": "Yes",
-      "prediction": "Yes, she loves cats.",
+      "prediction": "Yes",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 45.31,
-      "context_tokens": 512,
+      "search_ms": 88.98,
+      "context_tokens": 1992,
       "hit@k": 1.0
     },
     {
@@ -1956,11 +1957,11 @@
       "category_name": "multi_hop",
       "question": "What does Tim do to escape reality?",
       "reference": "Read fantasy books.",
-      "prediction": "Books, movies, fantasy books, getting lost in good books",
+      "prediction": "Reading fantasy novels/books, getting lost in different worlds, and engaging with Harry Potter-related items and places.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 53.69,
-      "context_tokens": 516,
+      "search_ms": 52.96,
+      "context_tokens": 2332,
       "hit@k": 1.0
     },
     {
@@ -1969,11 +1970,11 @@
       "category_name": "temporal",
       "question": "When did Nate win his first video game tournament?",
       "reference": "the week before 21Janury, 2022",
-      "prediction": "2022-01-21",
-      "verdict": "INCORRECT",
-      "correct": false,
-      "search_ms": 53.47,
-      "context_tokens": 583,
+      "prediction": "The week before 2022-01-21.",
+      "verdict": "CORRECT",
+      "correct": true,
+      "search_ms": 38.42,
+      "context_tokens": 2508,
       "hit@k": 1.0
     },
     {
@@ -1982,11 +1983,11 @@
       "category_name": "single_hop",
       "question": "What does John want to do after his basketball career?",
       "reference": "positively influence and inspire others, potentially start a foundation and engage in charity work",
-      "prediction": "building his brand, more endorsements, make a positive difference, inspire others, start a foundation, do charity work, leave a meaningful legacy",
+      "prediction": "John wants to use his platform to make a positive difference, inspire others, and potentially start a foundation and do charity work.",
       "verdict": "CORRECT",
       "correct": true,
-      "search_ms": 57.71,
-      "context_tokens": 628,
+      "search_ms": 44.49,
+      "context_tokens": 2759,
       "hit@k": 1.0
     }
   ]

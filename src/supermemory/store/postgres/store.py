@@ -40,7 +40,7 @@ from ...domain.models import (
     Space,
     utcnow,
 )
-from ..base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
+from ..base import EraseReport, LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
 from .models import (
     ApiKeyRow,
     Base,
@@ -88,8 +88,12 @@ class PostgresStore(MemoryStore):
         max_overflow: int = 10,
         statement_timeout_ms: int = 15_000,
         echo: bool = False,
+        max_scan_tuples: int = 20_000,
     ) -> None:
         self.dimensions = dimensions
+        #: None = not probed yet; probed on first vector search.
+        self._iterative_scan_supported: bool | None = None
+        self._max_scan_tuples = max_scan_tuples
         self._engine = create_async_engine(
             database_url,
             pool_size=pool_size,
@@ -151,6 +155,41 @@ class PostgresStore(MemoryStore):
                 for c in row.chunks
             ],
         )
+
+    async def _enable_iterative_scan(self, session: Any) -> None:
+        """Turn on pgvector 0.8's iterative index scans for this transaction.
+
+        This is a correctness setting wearing a performance costume. Our vector
+        queries always carry filters (tenant, space, status): pre-0.8, HNSW
+        collects candidates FIRST and filters afterwards, so a selective filter
+        can silently return fewer rows than asked for — matching rows exist but
+        sit just outside the scan. Iterative scans keep pulling from the index
+        until the limit is satisfied. `relaxed_order` may yield slightly
+        out-of-distance-order rows; we re-rank the over-fetched pool in Python,
+        so ordering is restored before anyone sees it.
+
+        Capability-probed once per store instance: on pgvector < 0.8 the SET
+        fails, we log once and never retry. SET LOCAL scopes the setting to the
+        enclosing transaction — no leakage through the connection pool.
+        """
+        if self._iterative_scan_supported is False:
+            return
+        try:
+            await session.execute(text("SET LOCAL hnsw.iterative_scan = 'relaxed_order'"))
+            await session.execute(
+                text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
+            )
+            self._iterative_scan_supported = True
+        except Exception as exc:
+            self._iterative_scan_supported = False
+            # A failed SET aborts the enclosing transaction; without a rollback
+            # the actual search that follows would die on InFailedSQLTransaction.
+            await session.rollback()
+            log.warning(
+                "pgvector_iterative_scan_unavailable",
+                error=str(exc)[:160],
+                hint="pgvector >= 0.8 required; filtered ANN may under-return",
+            )
 
     def _apply_filters(self, stmt: Any, filters: MemoryFilter, model: Any = MemoryRow) -> Any:
         stmt = stmt.where(model.status.in_([s.value for s in filters.statuses]))
@@ -442,6 +481,60 @@ class PostgresStore(MemoryStore):
             )
             return bool(cast(CursorResult[Any], result).rowcount)
 
+    async def erase_memory(self, org_id: str, space_id: str, memory_id: str) -> EraseReport:
+        # One transaction for the whole purge: an erasure that half-applies
+        # leaves the system claiming content is gone while as_of still serves
+        # it, which is worse than failing outright.
+        async with self._session() as session, session.begin():
+            chunk_count = (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ChunkRow)
+                    .where(
+                        ChunkRow.memory_id == memory_id,
+                        ChunkRow.org_id == org_id,
+                        ChunkRow.space_id == space_id,
+                    )
+                )
+                or 0
+            )
+            edge_result = await session.execute(
+                delete(RelationEdgeRow).where(
+                    RelationEdgeRow.org_id == org_id,
+                    RelationEdgeRow.space_id == space_id,
+                    (RelationEdgeRow.source_id == memory_id)
+                    | (RelationEdgeRow.target_id == memory_id),
+                )
+            )
+            edges_removed = int(cast(CursorResult[Any], edge_result).rowcount or 0)
+
+            version_result = await session.execute(
+                delete(MemoryVersionRow).where(
+                    MemoryVersionRow.memory_id == memory_id,
+                    MemoryVersionRow.org_id == org_id,
+                    MemoryVersionRow.space_id == space_id,
+                )
+            )
+            versions_purged = int(cast(CursorResult[Any], version_result).rowcount or 0)
+
+            row_result = await session.execute(
+                delete(MemoryRow).where(
+                    MemoryRow.id == memory_id,
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                )
+            )
+            row_existed = bool(cast(CursorResult[Any], row_result).rowcount)
+
+            if not row_existed and versions_purged == 0:
+                return EraseReport(existed=False)
+            return EraseReport(
+                existed=True,
+                chunks_removed=chunk_count if row_existed else 0,
+                edges_removed=edges_removed,
+                versions_purged=versions_purged,
+            )
+
     async def list_memories(
         self,
         org_id: str,
@@ -680,6 +773,7 @@ class PostgresStore(MemoryStore):
                 f"index expects {self.dimensions}"
             )
         async with self._session() as session:
+            await self._enable_iterative_scan(session)
             # `<=>` is cosine DISTANCE; the retrieval layer works in similarity.
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
             stmt = (

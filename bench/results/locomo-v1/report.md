@@ -1,11 +1,11 @@
-# LoCoMo benchmark — locomo-full
+# LoCoMo benchmark — locomo-v1
 
 Corpus: **5882 dialogue turns** across 10 conversations, one memory per turn, one space per conversation.  
-Questions: **150 sampled** (stratified by category) from 1986.  
+Questions: **496 sampled** (stratified by category) from 1986.  
 Embeddings: `text-embedding-004` (768d, gemini).  
 Retrieval depth k = 10. Seed 20260808.
 
-Latency below is **retrieval only**: the query-embedding cache is warmed before timing, so every config is measured on equal footing. Query embedding costs a further 105 ms per query uncached, and is reported separately because it is identical across configs and would otherwise swamp the comparison.
+Latency below is **retrieval only**: the query-embedding cache is warmed before timing, so every config is measured on equal footing. Query embedding costs a further 74 ms per query uncached, and is reported separately because it is identical across configs and would otherwise swamp the comparison.
 
 Retrieval metrics are scored against LoCoMo's labelled evidence turns — no LLM, so they carry no judge variance and are exactly reproducible. Adversarial (unanswerable) questions are excluded from retrieval metrics, since they have no evidence to retrieve by construction.
 
@@ -13,63 +13,63 @@ Retrieval metrics are scored against LoCoMo's labelled evidence turns — no LLM
 
 | config | recall@10 | hit@1 | hit@10 | MRR | nDCG@10 | latency ms |
 |---|---|---|---|---|---|---|
-| `vector_only` | 0.644 | 0.345 | 0.723 | 0.456 | 0.478 | 28.1 |
-| `lexical_only` | 0.575 | 0.338 | 0.655 | 0.435 | 0.443 | 27.2 |
-| `hybrid_rrf` | 0.637 | 0.338 | 0.730 | 0.464 | 0.483 | 26.4 |
-| `hybrid_rerank_heuristic` | 0.619 | 0.399 | 0.716 | 0.488 | 0.484 | 27.0 |
-| `hybrid_mmr` | 0.622 | 0.338 | 0.716 | 0.463 | 0.478 | 60.8 |
-| `hybrid_decay` | 0.639 | 0.338 | 0.730 | 0.462 | 0.483 | 28.7 |
-| `full_no_llm` | 0.598 | 0.345 | 0.710 | 0.454 | 0.460 | 64.8 |
+| `vector_only` | 0.607 | 0.323 | 0.691 | 0.434 | 0.450 | 28.4 |
+| `lexical_only` | 0.554 | 0.323 | 0.634 | 0.415 | 0.426 | 29.0 |
+| `hybrid_rrf` | 0.589 | 0.325 | 0.679 | 0.444 | 0.455 | 29.5 |
+| `hybrid_rerank_heuristic` | 0.593 | 0.366 | 0.683 | 0.466 | 0.469 | 28.6 |
+| `hybrid_mmr` | 0.593 | 0.325 | 0.683 | 0.445 | 0.456 | 70.1 |
+| `hybrid_decay` | 0.592 | 0.319 | 0.681 | 0.440 | 0.453 | 30.4 |
+| `full_no_llm` | 0.583 | 0.339 | 0.671 | 0.442 | 0.451 | 68.4 |
 
 ### Against the hybrid baseline
 
 | config | Δ MRR | Δ recall | verdict |
 |---|---|---|---|
-| `vector_only` | -0.008 | +0.006 | no effect |
-| `lexical_only` | -0.029 | -0.062 | hurts |
-| `hybrid_rerank_heuristic` | +0.024 | -0.019 | helps |
-| `hybrid_mmr` | -0.002 | -0.016 | no effect |
-| `hybrid_decay` | -0.002 | +0.001 | no effect |
-| `full_no_llm` | -0.010 | -0.039 | hurts |
+| `vector_only` | -0.011 | +0.018 | hurts |
+| `lexical_only` | -0.029 | -0.035 | hurts |
+| `hybrid_rerank_heuristic` | +0.022 | +0.004 | helps |
+| `hybrid_mmr` | +0.000 | +0.004 | no effect |
+| `hybrid_decay` | -0.005 | +0.003 | no effect |
+| `full_no_llm` | -0.002 | -0.006 | no effect |
 
 ### By question category
 
 | config | adversarial | multi_hop | open_domain | single_hop | temporal |
 |---|---|---|---|---|---|
-| `vector_only` | 0.314 | 0.532 | 0.301 | 0.559 | 0.566 |
-| `lexical_only` | 0.426 | 0.405 | 0.239 | 0.529 | 0.561 |
-| `hybrid_rrf` | 0.382 | 0.457 | 0.309 | 0.566 | 0.596 |
-| `hybrid_rerank_heuristic` | 0.413 | 0.561 | 0.257 | 0.569 | 0.624 |
-| `hybrid_mmr` | 0.372 | 0.467 | 0.304 | 0.561 | 0.596 |
-| `hybrid_decay` | 0.397 | 0.452 | 0.309 | 0.568 | 0.575 |
-| `full_no_llm` | 0.379 | 0.440 | 0.244 | 0.551 | 0.640 |
+| `vector_only` | 0.179 | 0.520 | 0.309 | 0.618 | 0.532 |
+| `lexical_only` | 0.475 | 0.309 | 0.230 | 0.548 | 0.496 |
+| `hybrid_rrf` | 0.304 | 0.479 | 0.266 | 0.611 | 0.547 |
+| `hybrid_rerank_heuristic` | 0.479 | 0.457 | 0.262 | 0.574 | 0.540 |
+| `hybrid_mmr` | 0.302 | 0.482 | 0.265 | 0.612 | 0.547 |
+| `hybrid_decay` | 0.307 | 0.461 | 0.271 | 0.610 | 0.535 |
+| `full_no_llm` | 0.462 | 0.382 | 0.265 | 0.551 | 0.535 |
 
-Cells are MRR. Category counts: adversarial=30, multi_hop=30, open_domain=28, single_hop=30, temporal=30
+Cells are MRR. Category counts: adversarial=100, multi_hop=100, open_domain=92, single_hop=100, temporal=100
 
 ## End-to-end
 
 Config `hybrid_rerank_heuristic` (best MRR). Answering model `gemini-2.5-flash`, judge `gemini-2.5-flash`.
 
-**MemScore: 38% / 52ms / 597tok**
+**MemScore: 59% / 49ms / 2530tok**
 
 | metric | value |
 |---|---|
-| accuracy (answerable) | 37.5% (n=120) |
-| adversarial decline rate | 0.9667 (n=30) |
-| retrieval hit@10 | 0.700 |
-| mean search latency | 52.3 ms |
-| mean context tokens | 597 |
+| accuracy (answerable) | 58.6% (n=396) |
+| adversarial decline rate | 0.91 (n=100) |
+| retrieval hit@10 | 0.667 |
+| mean search latency | 49.5 ms |
+| mean context tokens | 2530 |
 | errors | 0 |
 
 Accuracy by category:
 
 | category | n | accuracy |
 |---|---|---|
-| adversarial | 30 | 96.7% |
-| multi_hop | 30 | 26.7% |
-| open_domain | 30 | 20.0% |
-| single_hop | 30 | 73.3% |
-| temporal | 30 | 30.0% |
+| adversarial | 100 | 91.0% |
+| multi_hop | 100 | 35.0% |
+| open_domain | 96 | 45.8% |
+| single_hop | 100 | 88.0% |
+| temporal | 100 | 65.0% |
 
 The adversarial rate is a *decline* rate: the correct behaviour on an unanswerable question is to answer `NO_ANSWER`. It is scored without a judge and kept out of the headline accuracy, because a system that confidently answers the unanswerable should not be rewarded for it.
 

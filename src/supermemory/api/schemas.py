@@ -179,6 +179,27 @@ class MemoryVersionListResponse(Response):
     items: list[MemoryVersionResponse]
 
 
+class EraseAttestation(Response):
+    """Proof of destruction for a right-to-erasure request.
+
+    `content_sha256` identifies WHICH content was destroyed without retaining
+    it. `versions_purged` covers the point-in-time history: after this
+    response, `?as_of=` reads cannot resurrect the content at any timestamp.
+    `derived_memories_affected` lists memories that had recorded a
+    `derived_from` edge to the erased one — the review surface for whether
+    derived content also needs action.
+    """
+
+    memory_id: str
+    space_id: str
+    content_sha256: str
+    chunks_removed: int
+    edges_removed: int
+    versions_purged: int
+    derived_memories_affected: list[str]
+    erased_at: str
+
+
 class MemoryResponse(Response):
     id: str
     space_id: str
@@ -362,6 +383,7 @@ __all__ = [
     "CreateMemoryRequest",
     "CreateMemoryResponse",
     "CreateSpaceRequest",
+    "EraseAttestation",
     "HealthResponse",
     "LineageResponse",
     "LinkRequest",

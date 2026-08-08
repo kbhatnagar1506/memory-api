@@ -37,12 +37,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ...core.logging import get_logger
-from ...store.base import MemoryFilter, MemoryStore
+from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
 from ..models import Memory, MemoryStatus, ScoredMemory
 from .decay import apply_decay
+from .entities import salient_entities
 from .expansion import NoopExpander, QueryExpander
-from .fusion import RankedList, reciprocal_rank_fusion
+from .fusion import FusedItem, RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
 from .rerank import RerankCandidate, Reranker
 
@@ -103,6 +104,20 @@ class SearchRequest:
     #: question's vocabulary does not overlap the corpus's — the case where
     #: pure dense retrieval is weakest. Costs one LLM call per query.
     use_expansion: bool = False
+    #: Bridge to evidence that shares an ENTITY with a seed result but no
+    #: vocabulary with the query. Measured need: 97% of multi-hop evidence is
+    #: in a different session, median 204 turns away, unreachable by widening
+    #: k or the context window. No LLM — one extra lexical lookup per entity.
+    use_entity_expansion: bool = False
+    #: How many entities to expand on. Each costs one indexed lexical lookup.
+    entity_budget: int = 6
+    #: Weight of the entity arm in fusion. Below 1.0 by default: an entity
+    #: match is weaker evidence of relevance than a direct query match, and
+    #: should break ties rather than dominate them.
+    entity_weight: float = 0.6
+    #: Names to never expand on. In a two-person dialogue the speakers appear
+    #: in nearly every turn, so bridging on them returns the whole corpus.
+    known_speakers: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -114,6 +129,9 @@ class SearchResponse:
     #: True when a reranker was asked but degraded to first-stage order.
     rerank_degraded: bool = False
     strategies: list[str] = field(default_factory=list)
+    #: Entities the bridging stage expanded on. Part of the explain surface:
+    #: "why is this result here" must be answerable for bridged hits too.
+    entities_used: list[str] = field(default_factory=list)
 
 
 class RetrievalPipeline:
@@ -164,6 +182,67 @@ class RetrievalPipeline:
             # Expansion is an enhancement; never let it fail the search.
             log.warning("query_expansion_failed", error=str(exc)[:200])
             return base  # type: ignore[no-any-return]
+
+    async def _expand_by_entity(
+        self,
+        request: SearchRequest,
+        fused: list[FusedItem],
+        vector_hits: list[VectorHit],
+        lexical_hits: list[LexicalHit],
+        fetch: int,
+    ) -> tuple[list[str], list[LexicalHit]]:
+        """Find evidence that shares an entity with a seed but not the query.
+
+        Seeds are the top fused results. Entities are mined from their text,
+        filtered against the query (already searched) and against ubiquity
+        (a name in every turn matches everything). Each surviving entity gets
+        one indexed lexical lookup, run concurrently.
+        """
+        text_by_id: dict[str, str] = {h.memory_id: h.text for h in lexical_hits}
+        for vector_hit in vector_hits:
+            text_by_id.setdefault(vector_hit.memory_id, vector_hit.text)
+
+        seed_texts = [text_by_id[item.id] for item in fused[:8] if item.id in text_by_id]
+        entities = salient_entities(
+            seed_texts,
+            query=request.query,
+            max_entities=request.entity_budget,
+            speakers=request.known_speakers,
+        )
+        if not entities:
+            return [], []
+
+        async def lookup(entity: str) -> list[LexicalHit]:
+            try:
+                return await self.store.lexical_search(
+                    request.org_id,
+                    request.space_id,
+                    entity,
+                    limit=max(fetch // 2, request.limit),
+                    filters=request.filters,
+                )
+            except Exception as exc:
+                # Expansion is an enhancement; one bad lookup must not fail
+                # the search.
+                log.warning("entity_lookup_failed", entity=entity, error=str(exc)[:160])
+                return []
+
+        batches = await asyncio.gather(*(lookup(e) for e in entities))
+
+        # Keep the best score per memory across entity lookups, and drop
+        # anything the first stage already found — re-ranking a seed through
+        # the entity arm would double-count it in fusion.
+        already = {item.id for item in fused}
+        best: dict[str, LexicalHit] = {}
+        for batch in batches:
+            for entity_hit in batch:
+                if entity_hit.memory_id in already:
+                    continue
+                current = best.get(entity_hit.memory_id)
+                if current is None or entity_hit.score > current.score:
+                    best[entity_hit.memory_id] = entity_hit
+        ordered = sorted(best.values(), key=lambda h: (-h.score, h.memory_id))
+        return entities, ordered[:fetch]
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         timings: dict[str, float] = {}
@@ -239,6 +318,29 @@ class RetrievalPipeline:
         fused = reciprocal_rank_fusion(ranked, k=request.rrf_k)
         timings["fusion_ms"] = (loop.time() - t0) * 1000
 
+        # -- stage 2b: entity bridging ----------------------------------------
+        # Runs AFTER first-stage fusion because it needs seeds to mine entities
+        # from, and BEFORE hydration so bridged candidates compete on equal
+        # terms with the originals rather than being appended as an afterthought.
+        entities: list[str] = []
+        if request.use_entity_expansion and fused:
+            t0 = loop.time()
+            entities, entity_hits = await self._expand_by_entity(
+                request, fused, vector_hits, lexical_hits, fetch
+            )
+            if entity_hits:
+                ranked.append(
+                    RankedList(
+                        "entity",
+                        [h.memory_id for h in entity_hits],
+                        {h.memory_id: h.score for h in entity_hits},
+                        weight=request.entity_weight,
+                    )
+                )
+                fused = reciprocal_rank_fusion(ranked, k=request.rrf_k)
+                strategies.append("entity")
+            timings["entity_ms"] = (loop.time() - t0) * 1000
+
         # -- stage 3: hydrate --------------------------------------------------
         t0 = loop.time()
         pool = fused[: max(request.rerank_candidates, request.limit)]
@@ -247,6 +349,7 @@ class RetrievalPipeline:
         )
         timings["hydrate_ms"] = (loop.time() - t0) * 1000
 
+        bridged = {item.id for item in fused if "entity" in item.ranks}
         best_chunk = {h.memory_id: (h.chunk_id, h.text) for h in lexical_hits}
         best_chunk.update({h.memory_id: (h.chunk_id, h.text) for h in vector_hits})
         vector_scores = {h.memory_id: h.score for h in vector_hits}
@@ -269,12 +372,20 @@ class RetrievalPipeline:
                     lexical_score=lexical_scores.get(item.id),
                     matched_chunk_id=chunk_id,
                     matched_text=chunk_text,
-                    explain=item.explain(),
+                    explain=(
+                        [*item.explain(), "bridged by entity"]
+                        if item.id in bridged
+                        and "vector" not in item.ranks
+                        and "lexical" not in item.ranks
+                        else item.explain()
+                    ),
                 )
             )
 
         if not scored:
-            return SearchResponse([], request.query, len(fused), timings, False, strategies)
+            return SearchResponse(
+                [], request.query, len(fused), timings, False, strategies, entities
+            )
 
         # -- stage 4: rerank ---------------------------------------------------
         degraded = False
@@ -369,6 +480,7 @@ class RetrievalPipeline:
             timings_ms={k: round(v, 2) for k, v in timings.items()},
             rerank_degraded=degraded,
             strategies=strategies,
+            entities_used=entities,
         )
 
     @staticmethod

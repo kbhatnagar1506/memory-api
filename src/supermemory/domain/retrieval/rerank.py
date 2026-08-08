@@ -326,10 +326,14 @@ class LLMReranker(Reranker):
         cleaned.extend(i for i in range(n) if i not in seen)
         return cleaned
 
-    def _call(self, prompt: str) -> str:
+    async def _call(self, prompt: str) -> str:
+        """Native async. The blocking client under `asyncio.to_thread` +
+        `asyncio.wait_for` leaks a worker thread on every timeout, because a
+        thread blocked on a socket read cannot be cancelled — enough of them
+        exhaust the default executor and deadlock the process."""
         from google.genai import types
 
-        response = self._client.models.generate_content(  # type: ignore[union-attr]
+        response = await self._client.aio.models.generate_content(  # type: ignore[union-attr]
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -357,9 +361,7 @@ class LLMReranker(Reranker):
 
         prompt = self._build_prompt(query, candidates)
         try:
-            raw = await asyncio.wait_for(
-                asyncio.to_thread(self._call, prompt), timeout=self.timeout_s
-            )
+            raw = await asyncio.wait_for(self._call(prompt), timeout=self.timeout_s)
         except TimeoutError:
             log.warning("rerank_timeout", model=self.model, n=len(candidates))
             return self._fallback(candidates, limit)

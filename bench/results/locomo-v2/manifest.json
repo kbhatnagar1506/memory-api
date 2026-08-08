@@ -1,0 +1,21 @@
+{
+  "run_id": "locomo-v2",
+  "dataset": "locomo10",
+  "conversations": 10,
+  "turns": 5882,
+  "questions_total": 1986,
+  "questions_sampled": 496,
+  "k": 10,
+  "seed": 20260808,
+  "embedder": {
+    "name": "gemini",
+    "model": "text-embedding-004",
+    "dimensions": 768
+  },
+  "answer_model": "gemini-2.5-flash",
+  "judge_model": "gemini-2.5-flash",
+  "context_radius": 2,
+  "started_at": "2026-08-08T10:52:05.647323",
+  "query_embed_seconds": 42.51,
+  "query_embed_ms_per_query": 85.7
+}

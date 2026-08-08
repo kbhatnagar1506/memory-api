@@ -12,3 +12,5 @@ build/
 *.egg-info/
 .DS_Store
 bench/data/
+bench/data/*.json
+bench/data/cache/

@@ -10,13 +10,13 @@ Two provider-specific details that matter:
   * Retrieval embeddings are asymmetric. Documents are embedded with
     `RETRIEVAL_DOCUMENT` and queries with `RETRIEVAL_QUERY`; using one task type
     for both measurably degrades recall. `embed_query` exists for that reason.
-  * The SDK is synchronous, so calls run in a worker thread. Doing them inline
-    would block the event loop for the entire batch.
+  * Calls use the SDK's NATIVE ASYNC client, not the blocking client in a
+    worker thread. The thread-based version deadlocked under load: see
+    `_call` for the full post-mortem.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -59,9 +59,17 @@ class GeminiEmbedder(EmbeddingProvider):
                 "google-genai is not installed. Install the 'gemini' extra."
             ) from exc
 
+        from google.genai import types as genai_types
+
+        # A real HTTP-level deadline, in milliseconds. This is what actually
+        # aborts a stuck request. Set slightly above our own timeout so the
+        # transport gives up first and raises, rather than us abandoning an
+        # await while the request lives on.
+        http_options = genai_types.HttpOptions(timeout=int(timeout_s * 1000) + 5_000)
+
         key = api_key or os.getenv("GEMINI_API_KEY")
         if key:
-            self._client = genai.Client(api_key=key)
+            self._client = genai.Client(api_key=key, http_options=http_options)
             self.backend = "developer-api"
         else:
             proj = project or os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -71,7 +79,12 @@ class GeminiEmbedder(EmbeddingProvider):
                     "GOOGLE_CLOUD_PROJECT for Vertex AI with ADC "
                     "(gcloud auth application-default login)."
                 )
-            self._client = genai.Client(vertexai=True, project=proj, location=location)
+            self._client = genai.Client(
+                vertexai=True,
+                project=proj,
+                location=location,
+                http_options=http_options,
+            )
             self.backend = "vertex-adc"
         self._task_type = TASK_DOCUMENT
 
@@ -79,14 +92,28 @@ class GeminiEmbedder(EmbeddingProvider):
     def name(self) -> str:
         return "gemini"
 
-    def _call(self, texts: list[str], task_type: str) -> list[Vector]:
+    async def _call(self, texts: list[str], task_type: str) -> list[Vector]:
+        """Native async SDK call — no worker thread involved.
+
+        This used to run the blocking client through `asyncio.to_thread` under
+        an `asyncio.wait_for` deadline. That combination deadlocks: `wait_for`
+        cancels the *await*, but a thread running a blocking socket read cannot
+        be cancelled, so every timeout permanently consumed one slot of the
+        default executor (12 on an 8-core machine). A 500-corpus run
+        accumulated 17 timeouts, exhausted the pool, and hung at 0% CPU for two
+        hours holding 12 dead sockets — silently, because nothing raised.
+
+        The async client has no thread pool to exhaust, and cancellation
+        propagates to the transport, so a timeout genuinely releases the
+        connection.
+        """
         from google.genai import types
 
         config: dict[str, Any] = {
             "task_type": task_type,
             "output_dimensionality": self.dimensions,
         }
-        response = self._client.models.embed_content(
+        response = await self._client.aio.models.embed_content(
             model=self.model,
             contents=list(texts),  # type: ignore[arg-type]  # SDK stub is narrower than runtime
             config=types.EmbedContentConfig(**config),
@@ -103,8 +130,7 @@ class GeminiEmbedder(EmbeddingProvider):
         return out
 
     async def _embed_batch(self, texts: list[str]) -> list[Vector]:
-        # The SDK is blocking; keep it off the event loop.
-        return await asyncio.to_thread(self._call, texts, self._task_type)
+        return await self._call(texts, self._task_type)
 
     async def embed_query(self, text: str) -> Vector:
         """Embed a search query with the query-side task type.
@@ -117,7 +143,7 @@ class GeminiEmbedder(EmbeddingProvider):
         cached = self._cache_get(f"__query__{text}")
         if cached is not None:
             return cached
-        raw = await asyncio.to_thread(self._call, [text], TASK_QUERY)
+        raw = await self._call([text], TASK_QUERY)
         vec = self._validate(raw, 1)[0]
         self._cache_put(f"__query__{text}", vec)
         return vec

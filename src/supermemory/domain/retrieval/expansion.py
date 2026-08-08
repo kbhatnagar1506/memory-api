@@ -108,10 +108,11 @@ class HydeExpander(QueryExpander):
     def name(self) -> str:
         return "hyde"
 
-    def _call(self, query: str) -> str:
+    async def _call(self, query: str) -> str:
+        """Native async — see GeminiEmbedder._call for why not to_thread."""
         from google.genai import types
 
-        response = self._client.models.generate_content(  # type: ignore[union-attr]
+        response = await self._client.aio.models.generate_content(  # type: ignore[union-attr]
             model=self.model,
             contents=_PROMPT.format(query=query),
             config=types.GenerateContentConfig(
@@ -127,9 +128,7 @@ class HydeExpander(QueryExpander):
         if not query.strip():
             return []
         try:
-            raw = await asyncio.wait_for(
-                asyncio.to_thread(self._call, query), timeout=self.timeout_s
-            )
+            raw = await asyncio.wait_for(self._call(query), timeout=self.timeout_s)
         except TimeoutError:
             log.warning("hyde_timeout", model=self.model)
             return []

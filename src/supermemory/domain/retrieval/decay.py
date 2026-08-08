@@ -17,7 +17,7 @@ erased by arithmetic.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 DEFAULT_HALF_LIFE_DAYS = 180.0
 DEFAULT_FLOOR = 0.25
@@ -30,11 +30,11 @@ def _as_utc(value: datetime) -> datetime:
     subtracting a naive from an aware datetime raises TypeError deep inside a
     scoring loop where the traceback explains nothing.
     """
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 def age_days(occurred_at: datetime, *, now: datetime | None = None) -> float:
-    reference = _as_utc(now or datetime.now(timezone.utc))
+    reference = _as_utc(now or datetime.now(UTC))
     delta = reference - _as_utc(occurred_at)
     return max(0.0, delta.total_seconds() / 86_400.0)
 
@@ -68,9 +68,7 @@ def apply_decay(
     floor: float = DEFAULT_FLOOR,
 ) -> tuple[float, float]:
     """Return (decayed_score, factor). Factor is surfaced for explainability."""
-    factor = recency_factor(
-        occurred_at, now=now, half_life_days=half_life_days, floor=floor
-    )
+    factor = recency_factor(occurred_at, now=now, half_life_days=half_life_days, floor=floor)
     return score * factor, factor
 
 

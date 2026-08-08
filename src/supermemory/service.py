@@ -17,7 +17,7 @@ is the single most common write a memory system sees.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from .config import Settings
@@ -28,7 +28,6 @@ from .domain.chunking import chunk_text, normalize
 from .domain.consolidation import (
     DuplicateKind,
     apply_supersession,
-    detect_exact_duplicate,
     detect_near_duplicate,
     merge_duplicate,
     propose_supersessions,
@@ -58,12 +57,8 @@ class IngestResult:
     duplicate_of: str | None = None
     duplicate_kind: DuplicateKind = DuplicateKind.NONE
     similarity: float = 0.0
-    superseded: list[str] = None  # type: ignore[assignment]
+    superseded: list[str] = field(default_factory=list)
     chunk_count: int = 0
-
-    def __post_init__(self) -> None:
-        if self.superseded is None:
-            self.superseded = []
 
 
 class MemoryService:
@@ -87,12 +82,20 @@ class MemoryService:
         return await self.store.create_organization(org)
 
     async def create_space(
-        self, org_id: str, *, slug: str, name: str, description: str = "",
-        metadata: dict | None = None,
+        self,
+        org_id: str,
+        *,
+        slug: str,
+        name: str,
+        description: str = "",
+        metadata: dict[str, object] | None = None,
     ) -> Space:
         space = Space(
-            org_id=org_id, slug=slug, name=name,
-            description=description, metadata=metadata or {},
+            org_id=org_id,
+            slug=slug,
+            name=name,
+            description=description,
+            metadata=metadata or {},
         )
         return await self.store.create_space(space)
 
@@ -113,7 +116,7 @@ class MemoryService:
         space_id: str,
         content: str,
         summary: str = "",
-        metadata: dict | None = None,
+        metadata: dict[str, object] | None = None,
         tags: Sequence[str] = (),
         source: str = "",
         occurred_at: datetime | None = None,
@@ -124,9 +127,7 @@ class MemoryService:
 
         cleaned = normalize(content)
         if not cleaned:
-            raise ValidationError(
-                "content is empty after normalization", field="content"
-            )
+            raise ValidationError("content is empty after normalization", field="content")
         size = len(cleaned.encode("utf-8"))
         if size > self.settings.max_content_bytes:
             raise PayloadTooLargeError(
@@ -136,29 +137,41 @@ class MemoryService:
 
         # -- exact duplicate: cheapest check, before any embedding ----------
         if dedupe:
-            from .domain.models import content_hash  # noqa: PLC0415
+            from .domain.models import content_hash
 
             existing = await self.store.find_by_content_hash(
                 org_id, space_id, content_hash(cleaned)
             )
             if existing is not None:
                 incoming = Memory(
-                    org_id=org_id, space_id=space_id, content=cleaned,
-                    metadata=dict(metadata or {}), tags=list(tags),
-                    source=source, occurred_at=occurred_at or utcnow(),
+                    org_id=org_id,
+                    space_id=space_id,
+                    content=cleaned,
+                    metadata=dict(metadata or {}),
+                    tags=list(tags),
+                    source=source,
+                    occurred_at=occurred_at or utcnow(),
                 )
                 merged = merge_duplicate(existing, incoming)
                 await self.store.upsert_memory(merged)
                 INGESTED.labels(outcome="duplicate_exact").inc()
                 return IngestResult(
-                    memory=merged, created=False, duplicate_of=existing.id,
-                    duplicate_kind=DuplicateKind.EXACT, similarity=1.0,
+                    memory=merged,
+                    created=False,
+                    duplicate_of=existing.id,
+                    duplicate_kind=DuplicateKind.EXACT,
+                    similarity=1.0,
                     chunk_count=len(merged.chunks),
                 )
 
         memory = Memory(
-            org_id=org_id, space_id=space_id, content=cleaned, summary=summary,
-            metadata=dict(metadata or {}), tags=list(tags), source=source,
+            org_id=org_id,
+            space_id=space_id,
+            content=cleaned,
+            summary=summary,
+            metadata=dict(metadata or {}),
+            tags=list(tags),
+            source=source,
             occurred_at=occurred_at or utcnow(),
         )
 
@@ -173,9 +186,7 @@ class MemoryService:
 
         try:
             result = await self.embedder.embed([p.text for p in pieces])
-            EMBEDDINGS.labels(
-                provider=self.embedder.name, outcome="ok"
-            ).inc(len(pieces))
+            EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(pieces))
         except Exception:
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()
             INGESTED.labels(outcome="embed_error").inc()
@@ -183,33 +194,35 @@ class MemoryService:
 
         chunks = [
             Chunk(
-                memory_id=memory.id, ordinal=piece.ordinal, text=piece.text,
-                token_estimate=piece.token_estimate, embedding=vector,
+                memory_id=memory.id,
+                ordinal=piece.ordinal,
+                text=piece.text,
+                token_estimate=piece.token_estimate,
+                embedding=vector,
             )
-            for piece, vector in zip(pieces, result.vectors)
+            for piece, vector in zip(pieces, result.vectors, strict=True)
         ]
         memory = memory.model_copy(update={"chunks": chunks})
 
         # -- near duplicate ----------------------------------------------------
         if dedupe and chunks:
-            candidates = await self.store.sample_embeddings(
-                org_id, space_id, limit=512
-            )
+            candidates = await self.store.sample_embeddings(org_id, space_id, limit=512)
             verdict = detect_near_duplicate(
-                chunks[0].embedding or [], candidates,
+                chunks[0].embedding or [],
+                candidates,
                 threshold=self.settings.dedupe_threshold,
             )
             if verdict.is_duplicate and verdict.existing_id:
-                existing = await self.store.get_memory(
-                    org_id, space_id, verdict.existing_id
-                )
+                existing = await self.store.get_memory(org_id, space_id, verdict.existing_id)
                 if existing is not None:
                     merged = merge_duplicate(existing, memory)
                     await self.store.upsert_memory(merged)
                     INGESTED.labels(outcome="duplicate_near").inc()
                     return IngestResult(
-                        memory=merged, created=False,
-                        duplicate_of=existing.id, duplicate_kind=DuplicateKind.NEAR,
+                        memory=merged,
+                        created=False,
+                        duplicate_of=existing.id,
+                        duplicate_kind=DuplicateKind.NEAR,
                         similarity=verdict.similarity,
                         chunk_count=len(merged.chunks),
                     )
@@ -226,7 +239,9 @@ class MemoryService:
                 if m.chunks and m.chunks[0].embedding is not None
             ]
             proposals = propose_supersessions(
-                memory, chunks[0].embedding or [], pairs  # type: ignore[arg-type]
+                memory,
+                chunks[0].embedding or [],
+                pairs,
             )
             for proposal in proposals:
                 old = await self.store.get_memory(org_id, space_id, proposal.old_id)
@@ -239,7 +254,9 @@ class MemoryService:
         stored = await self.store.upsert_memory(memory)
         INGESTED.labels(outcome="created").inc()
         return IngestResult(
-            memory=stored, created=True, superseded=superseded,
+            memory=stored,
+            created=True,
+            superseded=superseded,
             chunk_count=len(chunks),
         )
 
@@ -256,8 +273,13 @@ class MemoryService:
             raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
 
     async def list_memories(
-        self, org_id: str, space_id: str, *, filters: MemoryFilter,
-        limit: int, cursor: str | None,
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        filters: MemoryFilter,
+        limit: int,
+        cursor: str | None,
     ) -> Page:
         await self.get_space_or_raise(org_id, space_id)
         return await self.store.list_memories(
@@ -265,8 +287,14 @@ class MemoryService:
         )
 
     async def link(
-        self, org_id: str, space_id: str, *, source_id: str, target_id: str,
-        relation: RelationType, reason: str = "",
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        source_id: str,
+        target_id: str,
+        relation: RelationType,
+        reason: str = "",
     ) -> Memory:
         """Create a typed relation, applying its side effects."""
         if source_id == target_id:
@@ -274,9 +302,7 @@ class MemoryService:
         source = await self.get_memory(org_id, space_id, source_id)
         target = await self.get_memory(org_id, space_id, target_id)
 
-        if any(
-            r.type is relation and r.target_id == target_id for r in source.relations
-        ):
+        if any(r.type is relation and r.target_id == target_id for r in source.relations):
             return source
 
         updated = source.model_copy(
@@ -304,18 +330,16 @@ class MemoryService:
         elif relation.symmetric:
             # `contradicts` is mutual; recording one direction only would make
             # the answer depend on which memory you happened to look at.
-            if not any(
-                r.type is relation and r.target_id == source_id
-                for r in target.relations
-            ):
+            already_mutual = any(
+                r.type is relation and r.target_id == source_id for r in target.relations
+            )
+            if not already_mutual:
                 await self.store.upsert_memory(
                     target.model_copy(
                         update={
                             "relations": [
                                 *target.relations,
-                                Relation(
-                                    type=relation, target_id=source_id, reason=reason
-                                ),
+                                Relation(type=relation, target_id=source_id, reason=reason),
                             ],
                             "version": target.version + 1,
                         }
@@ -330,9 +354,7 @@ class MemoryService:
         with SEARCH_LATENCY.time():
             response = await self.pipeline.search(request)
         for stage, ms in response.timings_ms.items():
-            SEARCH_STAGE_LATENCY.labels(stage=stage.removesuffix("_ms")).observe(
-                ms / 1000.0
-            )
+            SEARCH_STAGE_LATENCY.labels(stage=stage.removesuffix("_ms")).observe(ms / 1000.0)
         return response
 
 

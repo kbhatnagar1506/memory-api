@@ -1,0 +1,550 @@
+"""PostgreSQL + pgvector implementation of MemoryStore.
+
+Held to the same conformance suite as the in-memory backend, which is what
+guarantees the two agree on the semantics the retrieval layer depends on:
+tenant scoping, filter behaviour, cursor stability and score direction.
+
+Two details that are easy to get wrong and expensive to discover later:
+
+  * pgvector's `<=>` is cosine *distance*. The retrieval layer works in cosine
+    *similarity*, so every query converts with `1 - distance`. Returning the
+    distance would silently invert the entire ranking.
+  * Filters are applied inside the same statement as the ANN scan, not
+    afterwards. Post-filtering a top-k means a query restricted to one tag can
+    return nothing at all while matching rows sit just outside k.
+"""
+
+from __future__ import annotations
+
+import base64
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, delete, func, select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from ...core.errors import BadRequestError, ConflictError, StoreError
+from ...core.logging import get_logger
+from ...domain.embeddings.base import Vector
+from ...domain.models import (
+    ApiKey,
+    Chunk,
+    Memory,
+    MemoryStatus,
+    Organization,
+    Relation,
+    Scope,
+    Space,
+)
+from ..base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
+from .models import ApiKeyRow, Base, ChunkRow, MemoryRow, OrganizationRow, SpaceRow
+
+log = get_logger(__name__)
+
+
+def _encode_cursor(value: str) -> str:
+    return base64.urlsafe_b64encode(value.encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> str:
+    try:
+        padding = "=" * (-len(cursor) % 4)
+        return base64.urlsafe_b64decode(cursor + padding).decode()
+    except Exception as exc:
+        raise BadRequestError("malformed cursor", field="cursor") from exc
+
+
+def _require_aware(value: datetime) -> datetime:
+    """Timezone-aware form of a value the domain guarantees is present."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
+class PostgresStore(MemoryStore):
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        dimensions: int = 768,
+        pool_size: int = 10,
+        max_overflow: int = 10,
+        statement_timeout_ms: int = 15_000,
+        echo: bool = False,
+    ) -> None:
+        self.dimensions = dimensions
+        self._engine = create_async_engine(
+            database_url,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_pre_ping=True,
+            echo=echo,
+            connect_args={"server_settings": {"statement_timeout": str(statement_timeout_ms)}},
+        )
+        self._session = async_sessionmaker(self._engine, expire_on_commit=False)
+
+    async def initialize(self) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+            from .models import HNSW_INDEX_DDL
+
+            await conn.execute(text(HNSW_INDEX_DDL))
+
+    async def aclose(self) -> None:
+        await self._engine.dispose()
+
+    async def ping(self) -> bool:
+        try:
+            async with self._engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            return True
+        except Exception as exc:
+            log.warning("postgres_ping_failed", error=str(exc)[:200])
+            return False
+
+    # -- mapping ------------------------------------------------------------
+
+    @staticmethod
+    def _to_memory(row: MemoryRow) -> Memory:
+        return Memory(
+            id=row.id,
+            org_id=row.org_id,
+            space_id=row.space_id,
+            content=row.content,
+            summary=row.summary,
+            metadata=dict(row.meta or {}),
+            tags=list(row.tags or []),
+            source=row.source,
+            status=MemoryStatus(row.status),
+            occurred_at=row.occurred_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            content_sha256=row.content_sha256,
+            version=row.version,
+            relations=[Relation(**r) for r in (row.relations or [])],
+            chunks=[
+                Chunk(
+                    id=c.id,
+                    memory_id=c.memory_id,
+                    ordinal=c.ordinal,
+                    text=c.text,
+                    token_estimate=c.token_estimate,
+                    embedding=list(c.embedding) if c.embedding is not None else None,
+                )
+                for c in row.chunks
+            ],
+        )
+
+    def _apply_filters(self, stmt: Any, filters: MemoryFilter, model: Any = MemoryRow) -> Any:
+        stmt = stmt.where(model.status.in_([s.value for s in filters.statuses]))
+        if filters.tags:
+            stmt = stmt.where(model.tags.contains(list(filters.tags)))
+        for key, value in filters.metadata:
+            stmt = stmt.where(model.meta[key].astext == str(value))
+        if filters.occurred_after is not None:
+            stmt = stmt.where(model.occurred_at >= _aware(filters.occurred_after))
+        if filters.occurred_before is not None:
+            stmt = stmt.where(model.occurred_at <= _aware(filters.occurred_before))
+        if filters.source is not None:
+            stmt = stmt.where(model.source == filters.source)
+        return stmt
+
+    # -- organizations & spaces --------------------------------------------
+
+    async def create_organization(self, org: Organization) -> Organization:
+        async with self._session() as session, session.begin():
+            session.add(OrganizationRow(id=org.id, name=org.name, created_at=org.created_at))
+        return org
+
+    async def get_organization(self, org_id: str) -> Organization | None:
+        async with self._session() as session:
+            row = await session.get(OrganizationRow, org_id)
+            if row is None:
+                return None
+            return Organization(id=row.id, name=row.name, created_at=row.created_at)
+
+    async def create_space(self, space: Space) -> Space:
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            async with self._session() as session, session.begin():
+                session.add(
+                    SpaceRow(
+                        id=space.id,
+                        org_id=space.org_id,
+                        slug=space.slug,
+                        name=space.name,
+                        description=space.description,
+                        meta=space.metadata,
+                        created_at=space.created_at,
+                        updated_at=space.updated_at,
+                    )
+                )
+        except IntegrityError as exc:
+            raise ConflictError(
+                f"slug {space.slug!r} is already used in this organization"
+            ) from exc
+        return space
+
+    @staticmethod
+    def _to_space(row: SpaceRow) -> Space:
+        return Space(
+            id=row.id,
+            org_id=row.org_id,
+            slug=row.slug,
+            name=row.name,
+            description=row.description,
+            metadata=dict(row.meta or {}),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    async def get_space(self, org_id: str, space_id: str) -> Space | None:
+        async with self._session() as session:
+            row = await session.scalar(
+                select(SpaceRow).where(SpaceRow.id == space_id, SpaceRow.org_id == org_id)
+            )
+            return self._to_space(row) if row else None
+
+    async def get_space_by_slug(self, org_id: str, slug: str) -> Space | None:
+        async with self._session() as session:
+            row = await session.scalar(
+                select(SpaceRow).where(SpaceRow.org_id == org_id, SpaceRow.slug == slug)
+            )
+            return self._to_space(row) if row else None
+
+    async def list_spaces(self, org_id: str) -> list[Space]:
+        async with self._session() as session:
+            rows = await session.scalars(
+                select(SpaceRow).where(SpaceRow.org_id == org_id).order_by(SpaceRow.id)
+            )
+            return [self._to_space(r) for r in rows]
+
+    async def delete_space(self, org_id: str, space_id: str) -> bool:
+        async with self._session() as session, session.begin():
+            result = await session.execute(
+                delete(SpaceRow).where(SpaceRow.id == space_id, SpaceRow.org_id == org_id)
+            )
+            return bool(cast(CursorResult[Any], result).rowcount)
+
+    # -- api keys ------------------------------------------------------------
+
+    async def create_api_key(self, key: ApiKey) -> ApiKey:
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            async with self._session() as session, session.begin():
+                session.add(
+                    ApiKeyRow(
+                        id=key.id,
+                        org_id=key.org_id,
+                        name=key.name,
+                        key_hash=key.key_hash,
+                        prefix=key.prefix,
+                        scopes=[s.value for s in key.scopes],
+                        created_at=key.created_at,
+                        expires_at=key.expires_at,
+                    )
+                )
+        except IntegrityError as exc:
+            raise ConflictError("api key already exists") from exc
+        return key
+
+    @staticmethod
+    def _to_key(row: ApiKeyRow) -> ApiKey:
+        return ApiKey(
+            id=row.id,
+            org_id=row.org_id,
+            name=row.name,
+            key_hash=row.key_hash,
+            prefix=row.prefix,
+            scopes=frozenset(Scope(s) for s in row.scopes),
+            created_at=row.created_at,
+            last_used_at=row.last_used_at,
+            expires_at=row.expires_at,
+            revoked_at=row.revoked_at,
+        )
+
+    async def get_api_key_by_hash(self, key_hash: str) -> ApiKey | None:
+        async with self._session() as session:
+            row = await session.scalar(select(ApiKeyRow).where(ApiKeyRow.key_hash == key_hash))
+            return self._to_key(row) if row else None
+
+    async def list_api_keys(self, org_id: str) -> list[ApiKey]:
+        async with self._session() as session:
+            rows = await session.scalars(
+                select(ApiKeyRow).where(ApiKeyRow.org_id == org_id).order_by(ApiKeyRow.id)
+            )
+            return [self._to_key(r) for r in rows]
+
+    async def revoke_api_key(self, org_id: str, key_id: str) -> bool:
+        async with self._session() as session, session.begin():
+            row = await session.scalar(
+                select(ApiKeyRow).where(ApiKeyRow.id == key_id, ApiKeyRow.org_id == org_id)
+            )
+            if row is None or row.revoked_at is not None:
+                return False
+            row.revoked_at = datetime.now(UTC)
+            return True
+
+    async def touch_api_key(self, key_id: str, when: datetime) -> None:
+        try:
+            async with self._session() as session, session.begin():
+                row = await session.get(ApiKeyRow, key_id)
+                if row is not None:
+                    row.last_used_at = when
+        except Exception as exc:
+            log.debug("touch_api_key_failed", error=str(exc)[:120])
+
+    # -- memories ------------------------------------------------------------
+
+    async def upsert_memory(self, memory: Memory) -> Memory:
+        async with self._session() as session, session.begin():
+            row = await session.get(MemoryRow, memory.id)
+            if row is None:
+                row = MemoryRow(id=memory.id)
+                session.add(row)
+            row.org_id = memory.org_id
+            row.space_id = memory.space_id
+            row.content = memory.content
+            row.summary = memory.summary
+            row.meta = memory.metadata
+            row.tags = memory.tags
+            row.source = memory.source
+            row.status = memory.status.value
+            row.occurred_at = _require_aware(memory.occurred_at)
+            row.created_at = _require_aware(memory.created_at)
+            row.updated_at = _require_aware(memory.updated_at)
+            row.content_sha256 = memory.content_sha256
+            row.version = memory.version
+            row.relations = [r.model_dump(mode="json") for r in memory.relations]
+
+            # Chunks are replaced wholesale: a re-embedded memory has entirely
+            # new vectors, and reconciling them individually is more code and
+            # more ways to leave a stale vector behind.
+            await session.execute(delete(ChunkRow).where(ChunkRow.memory_id == memory.id))
+            for chunk in memory.chunks:
+                if chunk.embedding is not None and len(chunk.embedding) != self.dimensions:
+                    raise StoreError(
+                        f"chunk {chunk.id} has {len(chunk.embedding)} dimensions, "
+                        f"index expects {self.dimensions}"
+                    )
+                session.add(
+                    ChunkRow(
+                        id=chunk.id,
+                        memory_id=memory.id,
+                        org_id=memory.org_id,
+                        space_id=memory.space_id,
+                        ordinal=chunk.ordinal,
+                        text=chunk.text,
+                        token_estimate=chunk.token_estimate,
+                        embedding=chunk.embedding,
+                    )
+                )
+        return memory
+
+    async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
+        async with self._session() as session:
+            row = await session.scalar(
+                select(MemoryRow).where(
+                    MemoryRow.id == memory_id,
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                )
+            )
+            return self._to_memory(row) if row else None
+
+    async def get_memories(
+        self, org_id: str, space_id: str, memory_ids: Sequence[str]
+    ) -> dict[str, Memory]:
+        if not memory_ids:
+            return {}
+        async with self._session() as session:
+            rows = await session.scalars(
+                select(MemoryRow).where(
+                    MemoryRow.id.in_(list(memory_ids)),
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                )
+            )
+            return {r.id: self._to_memory(r) for r in rows}
+
+    async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> bool:
+        async with self._session() as session, session.begin():
+            result = await session.execute(
+                delete(MemoryRow).where(
+                    MemoryRow.id == memory_id,
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                )
+            )
+            return bool(cast(CursorResult[Any], result).rowcount)
+
+    async def list_memories(
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        filters: MemoryFilter,
+        limit: int,
+        cursor: str | None = None,
+    ) -> Page:
+        if limit <= 0:
+            return Page(items=[])
+        async with self._session() as session:
+            stmt = select(MemoryRow).where(
+                MemoryRow.org_id == org_id, MemoryRow.space_id == space_id
+            )
+            stmt = self._apply_filters(stmt, filters)
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total = await session.scalar(count_stmt) or 0
+
+            if cursor:
+                stmt = stmt.where(MemoryRow.id > _decode_cursor(cursor))
+            stmt = stmt.order_by(MemoryRow.id).limit(limit + 1)
+            rows = list(await session.scalars(stmt))
+
+            has_more = len(rows) > limit
+            window = rows[:limit]
+            return Page(
+                items=[self._to_memory(r) for r in window],
+                next_cursor=_encode_cursor(window[-1].id) if window and has_more else None,
+                total=total,
+            )
+
+    async def count_memories(self, org_id: str, space_id: str, *, filters: MemoryFilter) -> int:
+        async with self._session() as session:
+            stmt = select(MemoryRow.id).where(
+                MemoryRow.org_id == org_id, MemoryRow.space_id == space_id
+            )
+            stmt = self._apply_filters(stmt, filters)
+            return await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+
+    async def find_by_content_hash(
+        self, org_id: str, space_id: str, digest: str
+    ) -> Memory | None:
+        async with self._session() as session:
+            row = await session.scalar(
+                select(MemoryRow)
+                .where(
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                    MemoryRow.content_sha256 == digest,
+                    MemoryRow.status != MemoryStatus.ARCHIVED.value,
+                )
+                .order_by(MemoryRow.id)
+                .limit(1)
+            )
+            return self._to_memory(row) if row else None
+
+    # -- retrieval ------------------------------------------------------------
+
+    async def vector_search(
+        self,
+        org_id: str,
+        space_id: str,
+        embedding: Vector,
+        *,
+        limit: int,
+        filters: MemoryFilter,
+    ) -> list[VectorHit]:
+        if not embedding or limit <= 0:
+            return []
+        if len(embedding) != self.dimensions:
+            raise StoreError(
+                f"query embedding has {len(embedding)} dimensions, "
+                f"index expects {self.dimensions}"
+            )
+        async with self._session() as session:
+            # `<=>` is cosine DISTANCE; the retrieval layer works in similarity.
+            distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
+            stmt = (
+                select(ChunkRow.memory_id, ChunkRow.id, ChunkRow.text, distance)
+                .join(MemoryRow, MemoryRow.id == ChunkRow.memory_id)
+                .where(
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
+                    ChunkRow.embedding.is_not(None),
+                )
+            )
+            # Filters ride inside the ANN statement. Filtering after a top-k
+            # scan would let a restrictive filter return nothing.
+            stmt = self._apply_filters(stmt, filters)
+            # Over-fetch: one memory can contribute several chunks, and we
+            # return the best chunk per memory.
+            stmt = stmt.order_by(distance).limit(limit * 4)
+
+            best: dict[str, VectorHit] = {}
+            for memory_id, chunk_id, chunk_text, dist in await session.execute(stmt):
+                similarity = 1.0 - float(dist)
+                current = best.get(memory_id)
+                if current is None or similarity > current.score:
+                    best[memory_id] = VectorHit(memory_id, chunk_id, similarity, chunk_text)
+            hits = sorted(best.values(), key=lambda h: (-h.score, h.memory_id))
+            return hits[:limit]
+
+    async def lexical_search(
+        self,
+        org_id: str,
+        space_id: str,
+        query: str,
+        *,
+        limit: int,
+        filters: MemoryFilter,
+    ) -> list[LexicalHit]:
+        if not query.strip() or limit <= 0:
+            return []
+        async with self._session() as session:
+            # websearch_to_tsquery tolerates arbitrary user input; plainto_ and
+            # to_tsquery raise on characters a user will absolutely type.
+            tsquery = func.websearch_to_tsquery("english", query)
+            rank = func.ts_rank_cd(ChunkRow.search_vector, tsquery).label("rank")
+            stmt = (
+                select(ChunkRow.memory_id, ChunkRow.id, ChunkRow.text, rank)
+                .join(MemoryRow, MemoryRow.id == ChunkRow.memory_id)
+                .where(
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
+                    ChunkRow.search_vector.op("@@")(tsquery),
+                )
+            )
+            stmt = self._apply_filters(stmt, filters)
+            stmt = stmt.order_by(rank.desc()).limit(limit * 4)
+
+            best: dict[str, LexicalHit] = {}
+            for memory_id, chunk_id, chunk_text, score in await session.execute(stmt):
+                current = best.get(memory_id)
+                if current is None or float(score) > current.score:
+                    best[memory_id] = LexicalHit(memory_id, chunk_id, float(score), chunk_text)
+            hits = sorted(best.values(), key=lambda h: (-h.score, h.memory_id))
+            return hits[:limit]
+
+    async def sample_embeddings(
+        self, org_id: str, space_id: str, *, limit: int
+    ) -> list[tuple[str, Vector]]:
+        async with self._session() as session:
+            stmt = (
+                select(ChunkRow.memory_id, ChunkRow.embedding)
+                .join(MemoryRow, MemoryRow.id == ChunkRow.memory_id)
+                .where(
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
+                    ChunkRow.ordinal == 0,
+                    ChunkRow.embedding.is_not(None),
+                    MemoryRow.status != MemoryStatus.ARCHIVED.value,
+                )
+                .order_by(ChunkRow.memory_id)
+                .limit(limit)
+            )
+            return [
+                (memory_id, list(vector)) for memory_id, vector in await session.execute(stmt)
+            ]
+
+
+__all__ = ["PostgresStore"]

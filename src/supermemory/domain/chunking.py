@@ -23,7 +23,8 @@ from dataclasses import dataclass
 CHARS_PER_TOKEN = 4
 
 _PARAGRAPH_RE = re.compile(r"\n\s*\n")
-_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(\[])|(?<=[。！？])\s*")
+# The fullwidth stops below are intentional: they end sentences in CJK text.
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(\[])|(?<=[。！？])\s*")  # noqa: RUF001
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -53,9 +54,7 @@ def normalize(text: str) -> str:
     if not text:
         return ""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    return "".join(
-        ch for ch in text if ch == "\n" or ch == "\t" or ord(ch) >= 32
-    ).strip()
+    return "".join(ch for ch in text if ch == "\n" or ch == "\t" or ord(ch) >= 32).strip()
 
 
 def _hard_split(text: str, budget_chars: int) -> list[str]:
@@ -77,8 +76,7 @@ def _split_units(text: str, budget_chars: int) -> list[str]:
                 # A single unit can still exceed the budget (one enormous
                 # sentence); recurse on it with the next-weaker boundary.
                 out.extend(
-                    [part] if len(part) <= budget_chars
-                    else _split_units(part, budget_chars)
+                    [part] if len(part) <= budget_chars else _split_units(part, budget_chars)
                 )
             return out
     return _hard_split(text, budget_chars)

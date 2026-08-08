@@ -16,18 +16,18 @@ from .deterministic import DeterministicEmbedder
 
 def build_embedder(settings: Settings) -> EmbeddingProvider:
     """Construct the configured provider. Import errors surface as config errors."""
-    common = dict(
-        model=settings.embedding_model,
-        dimensions=settings.embedding_dimensions,
-        batch_size=settings.embedding_batch_size,
-        timeout_s=settings.embedding_timeout_s,
-        cache_size=settings.embedding_cache_size,
-    )
+    common = {
+        "model": settings.embedding_model,
+        "dimensions": settings.embedding_dimensions,
+        "batch_size": settings.embedding_batch_size,
+        "timeout_s": settings.embedding_timeout_s,
+        "cache_size": settings.embedding_cache_size,
+    }
     backend = settings.embedding_backend
     if backend is EmbeddingBackend.DETERMINISTIC:
         return DeterministicEmbedder(**common)  # type: ignore[arg-type]
     if backend is EmbeddingBackend.GEMINI:
-        from .gemini import GeminiEmbedder  # noqa: PLC0415
+        from .gemini import GeminiEmbedder
 
         return GeminiEmbedder(
             project=settings.google_cloud_project,
@@ -36,7 +36,7 @@ def build_embedder(settings: Settings) -> EmbeddingProvider:
             **common,  # type: ignore[arg-type]
         )
     if backend is EmbeddingBackend.OPENAI:
-        from .openai import OpenAIEmbedder  # noqa: PLC0415
+        from .openai import OpenAIEmbedder
 
         return OpenAIEmbedder(api_key=settings.openai_api_key, **common)  # type: ignore[arg-type]
     raise ConfigurationError(f"unknown embedding backend: {backend}")

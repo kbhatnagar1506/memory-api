@@ -14,7 +14,7 @@ it to suppress facts that have been overtaken. See domain/consolidation.py.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Self
 
@@ -33,7 +33,7 @@ NonEmptyStr = Annotated[str, StringConstraints(min_length=1, strip_whitespace=Tr
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def content_hash(text: str) -> str:
@@ -212,9 +212,7 @@ class Memory(Base):
 
     def superseded_by(self) -> list[str]:
         """Ids of memories that supersede this one."""
-        return [
-            r.target_id for r in self.relations if r.type is RelationType.SUPERSEDES
-        ]
+        return [r.target_id for r in self.relations if r.type is RelationType.SUPERSEDES]
 
 
 class ApiKey(Base):
@@ -272,8 +270,8 @@ __all__ = [
     "Organization",
     "Relation",
     "RelationType",
-    "ScoredMemory",
     "Scope",
+    "ScoredMemory",
     "Space",
     "content_hash",
     "utcnow",

@@ -18,7 +18,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .config import (
-    EmbeddingBackend,
     RerankBackend,
     Settings,
     get_settings,
@@ -65,7 +64,7 @@ def build_reranker(settings: Settings) -> Reranker:
     if backend is RerankBackend.HEURISTIC:
         return HeuristicReranker()
     if backend is RerankBackend.LLM:
-        from .domain.retrieval.rerank import LLMReranker  # noqa: PLC0415
+        from .domain.retrieval.rerank import LLMReranker
 
         try:
             return LLMReranker(
@@ -75,7 +74,7 @@ def build_reranker(settings: Settings) -> Reranker:
                 location=settings.google_cloud_location,
                 api_key=settings.gemini_api_key,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Reranking is an enhancement. Refusing to boot because an optional
             # provider is unreachable would be the wrong trade.
             log.warning("llm_reranker_unavailable", error=str(exc)[:200])
@@ -90,9 +89,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if problems:
         for problem in problems:
             log.error("production_config_problem", problem=problem)
-        raise ConfigurationError(
-            f"refusing to start in production: {'; '.join(problems)}"
-        )
+        raise ConfigurationError(f"refusing to start in production: {'; '.join(problems)}")
 
     store = build_store(settings)
     await store.initialize()
@@ -148,9 +145,7 @@ async def _seed_bootstrap(app: FastAPI, settings: Settings) -> None:
         return
 
     org = await store.create_organization(Organization(name="Bootstrap"))
-    space = await store.create_space(
-        Space(org_id=org.id, slug="default", name="Default space")
-    )
+    space = await store.create_space(Space(org_id=org.id, slug="default", name="Default space"))
     await store.create_api_key(
         ApiKey(
             org_id=org.id,
@@ -195,9 +190,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return _problem(request, exc)
 
     @app.exception_handler(RequestValidationError)
-    async def _handle_validation(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def _handle_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         first = exc.errors()[0] if exc.errors() else {}
         location = ".".join(str(p) for p in first.get("loc", ()) if p != "body")
         wrapped = ValidationError(
@@ -206,9 +199,7 @@ def register_error_handlers(app: FastAPI) -> None:
             extra={
                 "errors": [
                     {
-                        "field": ".".join(
-                            str(p) for p in e.get("loc", ()) if p != "body"
-                        ),
+                        "field": ".".join(str(p) for p in e.get("loc", ()) if p != "body"),
                         "message": e.get("msg", ""),
                         "type": e.get("type", ""),
                     }
@@ -219,9 +210,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return _problem(request, wrapped)
 
     @app.exception_handler(StarletteHTTPException)
-    async def _handle_http(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         mapped: SupermemoryError
         if exc.status_code == 404:
             mapped = NotFoundError(str(exc.detail))

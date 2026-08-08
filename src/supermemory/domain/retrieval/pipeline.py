@@ -108,7 +108,7 @@ class RetrievalPipeline:
             if embed_query is not None:
                 return await embed_query(query)  # type: ignore[no-any-return]
             return await self.embedder.embed_one(query)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("query_embedding_failed", error=str(exc)[:200])
             return None
 
@@ -132,15 +132,21 @@ class RetrievalPipeline:
         t0 = loop.time()
         vector_task = (
             self.store.vector_search(
-                request.org_id, request.space_id, embedding,
-                limit=fetch, filters=request.filters,
+                request.org_id,
+                request.space_id,
+                embedding,
+                limit=fetch,
+                filters=request.filters,
             )
             if embedding is not None
             else None
         )
         lexical_task = self.store.lexical_search(
-            request.org_id, request.space_id, query,
-            limit=fetch, filters=request.filters,
+            request.org_id,
+            request.space_id,
+            query,
+            limit=fetch,
+            filters=request.filters,
         )
         if vector_task is not None:
             vector_hits, lexical_hits = await asyncio.gather(vector_task, lexical_task)
@@ -221,7 +227,7 @@ class RetrievalPipeline:
         degraded = False
         if request.use_rerank and len(scored) > 1:
             t0 = loop.time()
-            candidates = [
+            rerank_candidates = [
                 RerankCandidate(
                     id=s.memory.id,
                     text=s.matched_text or s.memory.summary or s.memory.content,
@@ -230,7 +236,7 @@ class RetrievalPipeline:
                 for s in scored
             ]
             reranked = await self.reranker.rerank(
-                query, candidates, limit=len(candidates)
+                query, rerank_candidates, limit=len(rerank_candidates)
             )
             timings["rerank_ms"] = (loop.time() - t0) * 1000
             degraded = bool(reranked) and not reranked[0].reranked
@@ -253,8 +259,10 @@ class RetrievalPipeline:
             now = datetime.now(tz=None).astimezone()
             for s in scored:
                 decayed, factor = apply_decay(
-                    s.score, s.memory.occurred_at,
-                    now=now, half_life_days=request.half_life_days,
+                    s.score,
+                    s.memory.occurred_at,
+                    now=now,
+                    half_life_days=request.half_life_days,
                 )
                 s.recency_factor = factor
                 s.score = decayed
@@ -269,7 +277,7 @@ class RetrievalPipeline:
         t0 = loop.time()
         if request.use_mmr and len(scored) > 1:
             by_id = {s.memory.id: s for s in scored}
-            candidates = [
+            mmr_candidates = [
                 MMRCandidate(
                     id=s.memory.id,
                     relevance=s.score,
@@ -278,7 +286,7 @@ class RetrievalPipeline:
                 for s in scored
             ]
             selection = maximal_marginal_relevance(
-                candidates, limit=request.limit, lambda_=request.mmr_lambda
+                mmr_candidates, limit=request.limit, lambda_=request.mmr_lambda
             )
             ordered = []
             for sel in selection:
@@ -296,7 +304,8 @@ class RetrievalPipeline:
             if len(kept) != len(scored):
                 log.debug(
                     "min_score_filtered",
-                    dropped=len(scored) - len(kept), threshold=request.min_score,
+                    dropped=len(scored) - len(kept),
+                    threshold=request.min_score,
                 )
             scored = kept
 
@@ -329,9 +338,8 @@ class RetrievalPipeline:
         superseded_here: set[str] = set()
         for s in scored:
             for relation in s.memory.relations:
-                if relation.type is RelationType.SUPERSEDES:
-                    if relation.target_id in present:
-                        superseded_here.add(relation.target_id)
+                if relation.type is RelationType.SUPERSEDES and relation.target_id in present:
+                    superseded_here.add(relation.target_id)
 
         out: list[ScoredMemory] = []
         for s in scored:

@@ -13,8 +13,9 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic_core.core_schema import ValidationInfo
 
-from ..domain.models import Memory, MemoryStatus, RelationType, ScoredMemory, Scope
+from ..domain.models import Memory, MemoryStatus, RelationType, Scope, ScoredMemory
 
 Slug = Annotated[
     str, StringConstraints(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
@@ -132,8 +133,10 @@ class MemoryResponse(Response):
             chunk_count=len(memory.chunks),
             relations=[
                 RelationResponse(
-                    type=r.type, target_id=r.target_id,
-                    reason=r.reason, confidence=r.confidence,
+                    type=r.type,
+                    target_id=r.target_id,
+                    reason=r.reason,
+                    confidence=r.confidence,
                 )
                 for r in memory.relations
             ],
@@ -195,7 +198,7 @@ class SearchRequestBody(Request):
 
     @field_validator("occurred_before")
     @classmethod
-    def _range_is_ordered(cls, v: datetime | None, info) -> datetime | None:
+    def _range_is_ordered(cls, v: datetime | None, info: ValidationInfo) -> datetime | None:
         after = info.data.get("occurred_after")
         if v is not None and after is not None and v < after:
             raise ValueError("occurred_before must not precede occurred_after")
@@ -280,10 +283,23 @@ class HealthResponse(Response):
 
 
 __all__ = [
-    "ApiKeyListResponse", "ApiKeyResponse", "BulkCreateMemoryRequest",
-    "BulkCreateMemoryResponse", "CreateApiKeyRequest", "CreateApiKeyResponse",
-    "CreateMemoryRequest", "CreateMemoryResponse", "CreateSpaceRequest",
-    "HealthResponse", "LinkRequest", "MemoryListResponse", "MemoryResponse",
-    "RelationResponse", "SearchHit", "SearchRequestBody", "SearchResponseBody",
-    "SpaceListResponse", "SpaceResponse",
+    "ApiKeyListResponse",
+    "ApiKeyResponse",
+    "BulkCreateMemoryRequest",
+    "BulkCreateMemoryResponse",
+    "CreateApiKeyRequest",
+    "CreateApiKeyResponse",
+    "CreateMemoryRequest",
+    "CreateMemoryResponse",
+    "CreateSpaceRequest",
+    "HealthResponse",
+    "LinkRequest",
+    "MemoryListResponse",
+    "MemoryResponse",
+    "RelationResponse",
+    "SearchHit",
+    "SearchRequestBody",
+    "SearchResponseBody",
+    "SpaceListResponse",
+    "SpaceResponse",
 ]

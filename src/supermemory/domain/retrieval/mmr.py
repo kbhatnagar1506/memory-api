@@ -89,12 +89,12 @@ def maximal_marginal_relevance(
         for cid, cand in remaining.items():
             redundancy = 0.0
             if cand.embedding is not None and selected_vectors:
-                redundancy = max(
-                    cosine_similarity(cand.embedding, v) for v in selected_vectors
-                )
+                redundancy = max(cosine_similarity(cand.embedding, v) for v in selected_vectors)
             score = lambda_ * normalized[cid] - (1.0 - lambda_) * redundancy
             # Ties break on id so paging is stable across identical requests.
-            if score > best_score or (score == best_score and (best_id is None or cid < best_id)):
+            if score > best_score or (
+                score == best_score and (best_id is None or cid < best_id)
+            ):
                 best_id, best_score, best_redundancy = cid, score, redundancy
 
         assert best_id is not None  # remaining is non-empty

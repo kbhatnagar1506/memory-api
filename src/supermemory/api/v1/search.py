@@ -11,7 +11,7 @@ from ...core.ids import is_valid
 from ...domain.models import Scope
 from ...domain.retrieval.pipeline import SearchRequest
 from ...store.base import MemoryFilter
-from ..deps import ServiceDep, SettingsDep, require_scope
+from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import SearchHit, SearchRequestBody, SearchResponseBody
 
 router = APIRouter(prefix="/spaces/{space_id}", tags=["search"])
@@ -23,14 +23,14 @@ async def search(
     body: SearchRequestBody,
     service: ServiceDep,
     settings: SettingsDep,
-    principal: Annotated[object, Depends(require_scope(Scope.SEARCH))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.SEARCH))],
 ) -> SearchResponseBody:
     if not is_valid(space_id, "space"):
         raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
 
     statuses = set(body.statuses)
     if body.include_superseded:
-        from ...domain.models import MemoryStatus  # noqa: PLC0415
+        from ...domain.models import MemoryStatus
 
         statuses.add(MemoryStatus.SUPERSEDED)
 
@@ -44,7 +44,7 @@ async def search(
     )
     request = SearchRequest(
         query=body.query,
-        org_id=principal.org_id,  # type: ignore[attr-defined]
+        org_id=principal.org_id,
         space_id=space_id,
         limit=min(body.limit, settings.max_limit),
         filters=filters,

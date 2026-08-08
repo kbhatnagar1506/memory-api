@@ -22,11 +22,15 @@ class OpenAIEmbedder(EmbeddingProvider):
         **_: object,
     ) -> None:
         super().__init__(
-            model=model, dimensions=dimensions, batch_size=batch_size,
-            timeout_s=timeout_s, max_attempts=3, cache_size=cache_size,
+            model=model,
+            dimensions=dimensions,
+            batch_size=batch_size,
+            timeout_s=timeout_s,
+            max_attempts=3,
+            cache_size=cache_size,
         )
         try:
-            from openai import OpenAI  # noqa: PLC0415
+            from openai import OpenAI
         except ImportError as exc:  # pragma: no cover
             raise ConfigurationError(
                 "openai is not installed. Install the 'openai' extra."
@@ -41,7 +45,9 @@ class OpenAIEmbedder(EmbeddingProvider):
 
     def _call(self, texts: list[str]) -> list[Vector]:
         resp = self._client.embeddings.create(
-            model=self.model, input=list(texts), dimensions=self.dimensions,
+            model=self.model,
+            input=list(texts),
+            dimensions=self.dimensions,
         )
         if not resp.data:
             raise ProviderError("openai returned no embeddings")

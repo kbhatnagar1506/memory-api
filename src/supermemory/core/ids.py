@@ -27,7 +27,9 @@ PREFIXES: Final[dict[str, str]] = {
     "job": "job",
 }
 
-_ID_RE: Final = re.compile(rf"^([a-z]{{3,5}})_([{_ALPHABET}]{{{_TIME_CHARS + _RANDOM_CHARS}}})$")
+_ID_RE: Final = re.compile(
+    rf"^([a-z]{{3,5}})_([{_ALPHABET}]{{{_TIME_CHARS + _RANDOM_CHARS}}})$"
+)
 
 
 def _encode(value: int, length: int) -> str:

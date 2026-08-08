@@ -78,15 +78,17 @@ def parse_authorization(header: str | None) -> str | None:
     """
     if not header:
         return None
-    value = header.strip()
-    if not value:
+    # Split rather than prefix-match: "Bearer   " strips to "Bearer", whose
+    # prefix check then fails, and the scheme name itself gets returned as if
+    # it were the key.
+    parts = header.strip().split()
+    if not parts:
         return None
-    lowered = value.lower()
-    if lowered.startswith("bearer "):
-        value = value[7:].strip()
-    elif lowered.startswith("token "):
-        value = value[6:].strip()
-    return value or None
+    if len(parts) >= 2 and parts[0].lower() in {"bearer", "token"}:
+        return parts[1] or None
+    if len(parts) == 1 and parts[0].lower() in {"bearer", "token"}:
+        return None
+    return parts[0] or None
 
 
 def default_scopes() -> frozenset[Scope]:

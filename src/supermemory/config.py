@@ -15,6 +15,7 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
+from pydantic_core.core_schema import ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -95,13 +96,16 @@ class Settings(BaseSettings):
     default_limit: int = Field(default=10, ge=1, le=200)
     max_limit: int = Field(default=100, ge=1, le=1000)
     candidate_multiplier: int = Field(
-        default=6, ge=1, le=50,
+        default=6,
+        ge=1,
+        le=50,
         description="Candidates fetched per requested result before fusion.",
     )
     rrf_k: int = Field(default=60, ge=1, description="Reciprocal Rank Fusion damping.")
     mmr_lambda: float = Field(default=0.7, ge=0.0, le=1.0)
     half_life_days: float = Field(
-        default=180.0, gt=0,
+        default=180.0,
+        gt=0,
         description="Recency half-life. Older memories decay toward this schedule.",
     )
 
@@ -110,7 +114,9 @@ class Settings(BaseSettings):
     chunk_target_tokens: int = Field(default=320, ge=16, le=4096)
     chunk_overlap_tokens: int = Field(default=48, ge=0, le=1024)
     dedupe_threshold: float = Field(
-        default=0.97, ge=0.0, le=1.0,
+        default=0.97,
+        ge=0.0,
+        le=1.0,
         description="Cosine similarity at or above which a write is a duplicate.",
     )
 
@@ -139,7 +145,7 @@ class Settings(BaseSettings):
 
     @field_validator("chunk_overlap_tokens")
     @classmethod
-    def _overlap_fits(cls, v: int, info) -> int:
+    def _overlap_fits(cls, v: int, info: ValidationInfo) -> int:
         target = info.data.get("chunk_target_tokens", 320)
         if v >= target:
             raise ValueError(
@@ -177,15 +183,11 @@ class Settings(BaseSettings):
         if self.store_backend is not StoreBackend.POSTGRES:
             problems.append("store_backend must be postgres in production")
         if self.embedding_backend is EmbeddingBackend.DETERMINISTIC:
-            problems.append(
-                "embedding_backend=deterministic produces non-semantic vectors"
-            )
+            problems.append("embedding_backend=deterministic produces non-semantic vectors")
         if self.bootstrap_admin_key:
             problems.append("bootstrap_admin_key must not be set in production")
         if not self.redis_url:
-            problems.append(
-                "redis_url is unset: rate limiting would be per-process only"
-            )
+            problems.append("redis_url is unset: rate limiting would be per-process only")
         return problems
 
 
@@ -211,7 +213,7 @@ __all__ = [
     "Settings",
     "StoreBackend",
     "get_settings",
+    "os",
     "reset_settings_cache",
     "settings_from_env",
-    "os",
 ]

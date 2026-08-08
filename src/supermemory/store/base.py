@@ -17,7 +17,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ..domain.embeddings.base import Vector
@@ -72,20 +72,17 @@ class MemoryFilter:
         for key, value in self.metadata:
             if memory.metadata.get(key) != value:
                 return False
-        if self.occurred_after is not None:
-            if _epoch(memory.occurred_at) < _epoch(self.occurred_after):
-                return False
-        if self.occurred_before is not None:
-            if _epoch(memory.occurred_at) > _epoch(self.occurred_before):
-                return False
+        occurred = _epoch(memory.occurred_at)
+        if self.occurred_after is not None and occurred < _epoch(self.occurred_after):
+            return False
+        if self.occurred_before is not None and occurred > _epoch(self.occurred_before):
+            return False
         return not (self.source is not None and memory.source != self.source)
 
 
 def _epoch(value: datetime) -> float:
     if value.tzinfo is None:
-        from datetime import timezone
-
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return value.timestamp()
 
 
@@ -154,9 +151,7 @@ class MemoryStore(abc.ABC):
         """Insert or replace by id. Chunks and embeddings are replaced wholesale."""
 
     @abc.abstractmethod
-    async def get_memory(
-        self, org_id: str, space_id: str, memory_id: str
-    ) -> Memory | None: ...
+    async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None: ...
 
     @abc.abstractmethod
     async def get_memories(

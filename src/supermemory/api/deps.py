@@ -7,6 +7,8 @@ not hash the key twice.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -81,10 +83,9 @@ async def authenticate(request: Request) -> Principal:
     request.state.principal = principal
     org_id_var.set(principal.org_id)
 
-    try:
+    # Last-used tracking must never fail a request.
+    with contextlib.suppress(Exception):
         await store.touch_api_key(record.id, utcnow())
-    except Exception:  # noqa: BLE001 - last-used tracking must never 500 a request
-        pass
     return principal
 
 
@@ -105,7 +106,7 @@ async def enforce_rate_limit(
     return principal
 
 
-def require_scope(scope: Scope):
+def require_scope(scope: Scope) -> Callable[..., Awaitable[Principal]]:
     """Dependency factory: authenticate, rate limit, then check one scope."""
 
     async def _dep(
@@ -123,7 +124,15 @@ SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 StoreDep = Annotated[MemoryStore, Depends(get_store)]
 
 __all__ = [
-    "CurrentPrincipal", "Principal", "ServiceDep", "SettingsDep", "StoreDep",
-    "authenticate", "enforce_rate_limit", "get_service", "get_settings_dep",
-    "get_store", "require_scope",
+    "CurrentPrincipal",
+    "Principal",
+    "ServiceDep",
+    "SettingsDep",
+    "StoreDep",
+    "authenticate",
+    "enforce_rate_limit",
+    "get_service",
+    "get_settings_dep",
+    "get_store",
+    "require_scope",
 ]

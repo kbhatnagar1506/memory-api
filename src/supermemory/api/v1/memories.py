@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from ...core.errors import ValidationError
 from ...core.ids import is_valid
 from ...domain.models import MemoryStatus, Scope
+from ...service import IngestResult
 from ...store.base import MemoryFilter
-from ..deps import CurrentPrincipal, ServiceDep, SettingsDep, require_scope
+from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import (
     BulkCreateMemoryRequest,
     BulkCreateMemoryResponse,
@@ -26,13 +27,11 @@ router = APIRouter(prefix="/spaces/{space_id}/memories", tags=["memories"])
 
 def _validate_space_id(space_id: str) -> str:
     if not is_valid(space_id, "space"):
-        raise ValidationError(
-            f"{space_id!r} is not a valid space id", field="space_id"
-        )
+        raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
     return space_id
 
 
-def _to_response(result) -> CreateMemoryResponse:
+def _to_response(result: IngestResult) -> CreateMemoryResponse:
     return CreateMemoryResponse(
         memory=MemoryResponse.from_domain(result.memory),
         created=result.created,
@@ -55,11 +54,11 @@ async def create_memory(
     body: CreateMemoryRequest,
     service: ServiceDep,
     response: Response,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_WRITE))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> CreateMemoryResponse:
     _validate_space_id(space_id)
     result = await service.ingest(
-        org_id=principal.org_id,  # type: ignore[attr-defined]
+        org_id=principal.org_id,
         space_id=space_id,
         content=body.content,
         summary=body.summary,
@@ -87,7 +86,7 @@ async def bulk_create(
     space_id: str,
     body: BulkCreateMemoryRequest,
     service: ServiceDep,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_WRITE))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> BulkCreateMemoryResponse:
     _validate_space_id(space_id)
     items: list[CreateMemoryResponse] = []
@@ -95,7 +94,7 @@ async def bulk_create(
     # duplicates of each other would race the dedup check and store both.
     for item in body.items:
         result = await service.ingest(
-            org_id=principal.org_id,  # type: ignore[attr-defined]
+            org_id=principal.org_id,
             space_id=space_id,
             content=item.content,
             summary=item.summary,
@@ -119,7 +118,7 @@ async def list_memories(
     space_id: str,
     service: ServiceDep,
     settings: SettingsDep,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_READ))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
     limit: Annotated[int, Query(ge=1, le=200)] = 25,
     cursor: str | None = None,
     tag: Annotated[list[str] | None, Query()] = None,
@@ -134,7 +133,7 @@ async def list_memories(
         source=source,
     )
     page = await service.list_memories(
-        principal.org_id,  # type: ignore[attr-defined]
+        principal.org_id,
         space_id,
         filters=filters,
         limit=limit,
@@ -153,15 +152,15 @@ async def get_memory(
     memory_id: str,
     service: ServiceDep,
     response: Response,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_READ))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
 ) -> MemoryResponse:
     _validate_space_id(space_id)
     if not is_valid(memory_id, "memory"):
-        raise ValidationError(
-            f"{memory_id!r} is not a valid memory id", field="memory_id"
-        )
+        raise ValidationError(f"{memory_id!r} is not a valid memory id", field="memory_id")
     memory = await service.get_memory(
-        principal.org_id, space_id, memory_id  # type: ignore[attr-defined]
+        principal.org_id,
+        space_id,
+        memory_id,
     )
     response.headers["etag"] = f'W/"{memory.version}"'
     return MemoryResponse.from_domain(memory)
@@ -176,15 +175,15 @@ async def delete_memory(
     space_id: str,
     memory_id: str,
     service: ServiceDep,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_WRITE))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> None:
     _validate_space_id(space_id)
     if not is_valid(memory_id, "memory"):
-        raise ValidationError(
-            f"{memory_id!r} is not a valid memory id", field="memory_id"
-        )
+        raise ValidationError(f"{memory_id!r} is not a valid memory id", field="memory_id")
     await service.delete_memory(
-        principal.org_id, space_id, memory_id  # type: ignore[attr-defined]
+        principal.org_id,
+        space_id,
+        memory_id,
     )
 
 
@@ -198,7 +197,7 @@ async def link_memory(
     memory_id: str,
     body: LinkRequest,
     service: ServiceDep,
-    principal: Annotated[object, Depends(require_scope(Scope.MEMORIES_WRITE))],
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> MemoryResponse:
     _validate_space_id(space_id)
     for value, kind, field in (
@@ -208,7 +207,7 @@ async def link_memory(
         if not is_valid(value, kind):
             raise ValidationError(f"{value!r} is not a valid memory id", field=field)
     updated = await service.link(
-        principal.org_id,  # type: ignore[attr-defined]
+        principal.org_id,
         space_id,
         source_id=memory_id,
         target_id=body.target_id,

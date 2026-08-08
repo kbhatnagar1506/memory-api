@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from .embeddings.base import Vector, cosine_similarity
@@ -61,9 +61,7 @@ class SupersessionProposal:
     confidence: float
 
 
-def detect_exact_duplicate(
-    content: str, existing: Sequence[Memory]
-) -> DuplicateVerdict:
+def detect_exact_duplicate(content: str, existing: Sequence[Memory]) -> DuplicateVerdict:
     """Match on normalized content hash: whitespace and case are not meaning."""
     digest = content_hash(content)
     for memory in existing:
@@ -111,9 +109,22 @@ SUPERSEDE_HIGH = 0.97
 #: Surface markers of a corrected or reversed statement. Deliberately a weak
 #: signal: it raises confidence, it never decides on its own.
 _REVISION_MARKERS = (
-    "no longer", "instead of", "replaced", "replaces", "superseded", "updated",
-    "correction", "actually", "changed to", "moved to", "now uses", "reverted",
-    "cancelled", "canceled", "deprecated", "rescinded",
+    "no longer",
+    "instead of",
+    "replaced",
+    "replaces",
+    "superseded",
+    "updated",
+    "correction",
+    "actually",
+    "changed to",
+    "moved to",
+    "now uses",
+    "reverted",
+    "cancelled",
+    "canceled",
+    "deprecated",
+    "rescinded",
 )
 _NEGATIONS = ("not ", "never ", "won't", "will not", "cannot", "can't", "stopped")
 
@@ -186,9 +197,7 @@ def propose_supersessions(
 def _as_naive(value: datetime) -> float:
     """Comparable epoch seconds regardless of tzinfo awareness."""
     if value.tzinfo is None:
-        from datetime import timezone
-
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return value.timestamp()
 
 
@@ -242,9 +251,7 @@ def merge_duplicate(existing: Memory, incoming: Memory) -> Memory:
     """
     merged_meta = {**existing.metadata, **incoming.metadata}
     merged_tags = list(dict.fromkeys([*existing.tags, *incoming.tags]))
-    occurred = max(
-        existing.occurred_at, incoming.occurred_at, key=_as_naive
-    )
+    occurred = max(existing.occurred_at, incoming.occurred_at, key=_as_naive)
     return existing.model_copy(
         update={
             "metadata": merged_meta,

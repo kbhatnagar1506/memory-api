@@ -114,8 +114,7 @@ def weighted_score_fusion(
 
     for ranked in materialized:
         source = ranked.scores or {
-            doc_id: 1.0 / position
-            for position, doc_id in enumerate(ranked.ids, start=1)
+            doc_id: 1.0 / position for position, doc_id in enumerate(ranked.ids, start=1)
         }
         normalized = _min_max(source)
         for position, doc_id in enumerate(ranked.ids, start=1):

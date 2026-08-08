@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from ..core.errors import CONTENT_TYPE, PayloadTooLargeError
 from ..core.logging import get_logger, org_id_var, request_id_var
@@ -42,7 +43,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # Trust an inbound id only if it looks like one; otherwise it is a log
         # injection vector.
         request_id = (
-            incoming if incoming and 8 <= len(incoming) <= 128 and incoming.isprintable()
+            incoming
+            if incoming and 8 <= len(incoming) <= 128 and incoming.isprintable()
             else uuid.uuid4().hex
         )
         token = request_id_var.set(request_id)
@@ -80,7 +82,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Reject oversized bodies by Content-Length before reading them."""
 
-    def __init__(self, app, max_bytes: int) -> None:
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
         super().__init__(app)
         self.max_bytes = max_bytes
 
@@ -104,5 +106,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 __all__ = [
-    "REQUEST_ID_HEADER", "BodySizeLimitMiddleware", "RequestContextMiddleware",
+    "REQUEST_ID_HEADER",
+    "BodySizeLimitMiddleware",
+    "RequestContextMiddleware",
 ]

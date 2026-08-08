@@ -23,8 +23,10 @@ router = APIRouter(tags=["operations"])
 async def health(request: Request) -> HealthResponse:
     settings = request.app.state.settings
     return HealthResponse(
-        status="ok", version=__version__,
-        environment=str(settings.environment), checks={"process": True},
+        status="ok",
+        version=__version__,
+        environment=str(settings.environment),
+        checks={"process": True},
     )
 
 
@@ -34,7 +36,7 @@ async def ready(request: Request, response: Response) -> HealthResponse:
     settings = request.app.state.settings
     try:
         store_ok = await store.ping()
-    except Exception:  # noqa: BLE001 - a readiness probe must never raise
+    except Exception:
         store_ok = False
     STORE_UP.set(1 if store_ok else 0)
 

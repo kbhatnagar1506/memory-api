@@ -63,7 +63,9 @@ class InMemoryRateLimiter(RateLimiter):
                 tokens -= cost
                 self._buckets[key] = (tokens, now)
                 return RateLimitDecision(
-                    True, int(tokens), self.burst,
+                    True,
+                    int(tokens),
+                    self.burst,
                     (self.burst - tokens) / self.refill_per_second,
                 )
             self._buckets[key] = (tokens, now)
@@ -98,8 +100,9 @@ return {allowed, tostring(tokens)}
 class RedisRateLimiter(RateLimiter):
     """Shared token bucket. The Lua script makes read-modify-write atomic."""
 
-    def __init__(self, redis_client: object, *, per_minute: int, burst: int,
-                 namespace: str = "sm:rl") -> None:
+    def __init__(
+        self, redis_client: object, *, per_minute: int, burst: int, namespace: str = "sm:rl"
+    ) -> None:
         super().__init__(per_minute=per_minute, burst=burst)
         self._redis = redis_client
         self._namespace = namespace
@@ -115,14 +118,16 @@ class RedisRateLimiter(RateLimiter):
                 args=[self.burst, self.refill_per_second, time.time(), cost],
             )
             tokens = float(tokens_raw)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Fail OPEN. A rate limiter outage must not become a service outage;
             # the alternative is that one Redis blip rejects all traffic.
             log.warning("ratelimit_backend_error", error=str(exc)[:200])
             return RateLimitDecision(True, self.burst, self.burst, 0.0)
         if int(allowed) == 1:
             return RateLimitDecision(
-                True, int(tokens), self.burst,
+                True,
+                int(tokens),
+                self.burst,
                 (self.burst - tokens) / self.refill_per_second,
             )
         retry = max(cost - tokens, 0) / self.refill_per_second
@@ -132,16 +137,19 @@ class RedisRateLimiter(RateLimiter):
 def build_rate_limiter(*, per_minute: int, burst: int, redis_url: str | None) -> RateLimiter:
     if redis_url:
         try:
-            import redis.asyncio as aioredis  # noqa: PLC0415
+            import redis.asyncio as aioredis
 
             client = aioredis.from_url(redis_url, decode_responses=True)
             return RedisRateLimiter(client, per_minute=per_minute, burst=burst)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("ratelimit_redis_unavailable", error=str(exc)[:200])
     return InMemoryRateLimiter(per_minute=per_minute, burst=burst)
 
 
 __all__ = [
-    "InMemoryRateLimiter", "RateLimitDecision", "RateLimiter", "RedisRateLimiter",
+    "InMemoryRateLimiter",
+    "RateLimitDecision",
+    "RateLimiter",
+    "RedisRateLimiter",
     "build_rate_limiter",
 ]

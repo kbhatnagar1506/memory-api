@@ -53,7 +53,7 @@ class GeminiEmbedder(EmbeddingProvider):
             cache_size=cache_size,
         )
         try:
-            from google import genai  # noqa: PLC0415
+            from google import genai
         except ImportError as exc:  # pragma: no cover
             raise ConfigurationError(
                 "google-genai is not installed. Install the 'gemini' extra."
@@ -80,7 +80,7 @@ class GeminiEmbedder(EmbeddingProvider):
         return "gemini"
 
     def _call(self, texts: list[str], task_type: str) -> list[Vector]:
-        from google.genai import types  # noqa: PLC0415
+        from google.genai import types
 
         config: dict[str, Any] = {
             "task_type": task_type,
@@ -88,7 +88,7 @@ class GeminiEmbedder(EmbeddingProvider):
         }
         response = self._client.models.embed_content(
             model=self.model,
-            contents=list(texts),
+            contents=list(texts),  # type: ignore[arg-type]  # SDK stub is narrower than runtime
             config=types.EmbedContentConfig(**config),
         )
         embeddings = getattr(response, "embeddings", None)
@@ -123,4 +123,4 @@ class GeminiEmbedder(EmbeddingProvider):
         return vec
 
 
-__all__ = ["GeminiEmbedder", "TASK_DOCUMENT", "TASK_QUERY"]
+__all__ = ["TASK_DOCUMENT", "TASK_QUERY", "GeminiEmbedder"]

@@ -12,7 +12,7 @@ def build_store(settings: Settings) -> MemoryStore:
     if settings.store_backend is StoreBackend.MEMORY:
         return InMemoryStore()
     if settings.store_backend is StoreBackend.POSTGRES:
-        from .postgres.store import PostgresStore  # noqa: PLC0415
+        from .postgres.store import PostgresStore
 
         if not settings.database_url:
             raise ConfigurationError("database_url is required for the postgres backend")
@@ -27,6 +27,11 @@ def build_store(settings: Settings) -> MemoryStore:
 
 
 __all__ = [
-    "InMemoryStore", "LexicalHit", "MemoryFilter", "MemoryStore", "Page",
-    "VectorHit", "build_store",
+    "InMemoryStore",
+    "LexicalHit",
+    "MemoryFilter",
+    "MemoryStore",
+    "Page",
+    "VectorHit",
+    "build_store",
 ]

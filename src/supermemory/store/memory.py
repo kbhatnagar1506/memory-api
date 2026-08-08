@@ -17,7 +17,6 @@ import asyncio
 import base64
 import json
 import math
-import re
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime
@@ -25,18 +24,13 @@ from datetime import datetime
 from ..core.errors import ConflictError
 from ..domain.embeddings.base import Vector, cosine_similarity
 from ..domain.models import ApiKey, Memory, MemoryStatus, Organization, Space
+from ..domain.text import analyze, analyze_query
 from .base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
-
-_WORD_RE = re.compile(r"\w+", re.UNICODE)
 
 # BM25 parameters. k1 controls term-frequency saturation, b the strength of
 # length normalization. These are the standard defaults.
 _BM25_K1 = 1.2
 _BM25_B = 0.75
-
-
-def _tokenize(text: str) -> list[str]:
-    return _WORD_RE.findall(text.casefold())
 
 
 def _encode_cursor(value: str) -> str:
@@ -47,7 +41,7 @@ def _decode_cursor(cursor: str) -> str | None:
     try:
         padding = "=" * (-len(cursor) % 4)
         return base64.urlsafe_b64decode(cursor + padding).decode()
-    except Exception:  # noqa: BLE001 - a malformed cursor is a client error
+    except Exception:
         return None
 
 
@@ -170,9 +164,7 @@ class InMemoryStore(MemoryStore):
             self._memories[memory.id] = memory
             return memory
 
-    async def get_memory(
-        self, org_id: str, space_id: str, memory_id: str
-    ) -> Memory | None:
+    async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
         memory = self._memories.get(memory_id)
         if memory is None:
             return None
@@ -231,23 +223,15 @@ class InMemoryStore(MemoryStore):
                 from ..core.errors import BadRequestError
 
                 raise BadRequestError("malformed cursor", field="cursor")
-            start = next(
-                (i for i, m in enumerate(matching) if m.id > after), len(matching)
-            )
+            start = next((i for i, m in enumerate(matching) if m.id > after), len(matching))
         window = matching[start : start + limit]
         next_cursor = (
-            _encode_cursor(window[-1].id)
-            if window and start + limit < len(matching)
-            else None
+            _encode_cursor(window[-1].id) if window and start + limit < len(matching) else None
         )
         return Page(items=window, next_cursor=next_cursor, total=len(matching))
 
-    async def count_memories(
-        self, org_id: str, space_id: str, *, filters: MemoryFilter
-    ) -> int:
-        return sum(
-            1 for m in self._space_memories(org_id, space_id) if filters.matches(m)
-        )
+    async def count_memories(self, org_id: str, space_id: str, *, filters: MemoryFilter) -> int:
+        return sum(1 for m in self._space_memories(org_id, space_id) if filters.matches(m))
 
     async def find_by_content_hash(
         self, org_id: str, space_id: str, digest: str
@@ -296,7 +280,7 @@ class InMemoryStore(MemoryStore):
         limit: int,
         filters: MemoryFilter,
     ) -> list[LexicalHit]:
-        terms = _tokenize(query)
+        terms = analyze_query(query)
         if not terms or limit <= 0:
             return []
 
@@ -306,7 +290,7 @@ class InMemoryStore(MemoryStore):
             if not filters.matches(memory):
                 continue
             for chunk in memory.chunks:
-                docs.append((memory.id, chunk.id, _tokenize(chunk.text), chunk.text))
+                docs.append((memory.id, chunk.id, analyze(chunk.text), chunk.text))
         if not docs:
             return []
 
@@ -340,13 +324,9 @@ class InMemoryStore(MemoryStore):
                 continue
             current = best_per_memory.get(memory_id)
             if current is None or score > current.score:
-                best_per_memory[memory_id] = LexicalHit(
-                    memory_id, chunk_id, score, text
-                )
+                best_per_memory[memory_id] = LexicalHit(memory_id, chunk_id, score, text)
 
-        hits = sorted(
-            best_per_memory.values(), key=lambda h: (-h.score, h.memory_id)
-        )
+        hits = sorted(best_per_memory.values(), key=lambda h: (-h.score, h.memory_id))
         return hits[:limit]
 
     async def sample_embeddings(

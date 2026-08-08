@@ -39,6 +39,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ...core.logging import get_logger
+from ..text import analyze
 
 log = get_logger(__name__)
 
@@ -47,9 +48,48 @@ _WORD_RE = re.compile(r"\w+", re.UNICODE)
 _FENCE_CHARS = re.compile("[`\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]")
 _MAX_DOC_CHARS = 1200
 _STOPWORDS = frozenset(
-    """a an and are as at be but by for if in into is it no not of on or such
-    that the their then there these they this to was will with what which who
-    when where how why""".split()
+    [
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "but",
+        "by",
+        "for",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "no",
+        "not",
+        "of",
+        "on",
+        "or",
+        "such",
+        "that",
+        "the",
+        "their",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "to",
+        "was",
+        "will",
+        "with",
+        "what",
+        "which",
+        "who",
+        "when",
+        "where",
+        "how",
+        "why",
+    ]
 )
 
 
@@ -82,9 +122,7 @@ class Reranker(abc.ABC):
     ) -> list[RerankResult]: ...
 
     @staticmethod
-    def _fallback(
-        candidates: Sequence[RerankCandidate], limit: int
-    ) -> list[RerankResult]:
+    def _fallback(candidates: Sequence[RerankCandidate], limit: int) -> list[RerankResult]:
         ordered = sorted(candidates, key=lambda c: (-c.prior_score, c.id))
         return [
             RerankResult(c.id, c.prior_score, i + 1, reranked=False)
@@ -114,7 +152,9 @@ class HeuristicReranker(Reranker):
 
     @staticmethod
     def _tokens(text: str) -> list[str]:
-        return [t for t in _WORD_RE.findall(text.casefold()) if t not in _STOPWORDS]
+        # Same analyzer as the lexical index, so the reranker and the retriever
+        # agree on what a term is.
+        return analyze(text)
 
     async def rerank(
         self, query: str, candidates: Sequence[RerankCandidate], *, limit: int
@@ -211,16 +251,16 @@ class LLMReranker(Reranker):
 
     @staticmethod
     def _build_client(project: str | None, location: str, api_key: str | None) -> object:
-        import os  # noqa: PLC0415
+        import os
 
-        from google import genai  # noqa: PLC0415
+        from google import genai
 
         key = api_key or os.getenv("GEMINI_API_KEY")
         if key:
             return genai.Client(api_key=key)
         proj = project or os.getenv("GOOGLE_CLOUD_PROJECT")
         if not proj:
-            from ...core.errors import ConfigurationError  # noqa: PLC0415
+            from ...core.errors import ConfigurationError
 
             raise ConfigurationError(
                 "LLM reranking needs GEMINI_API_KEY, or GOOGLE_CLOUD_PROJECT for "
@@ -241,9 +281,7 @@ class LLMReranker(Reranker):
         return cleaned
 
     def _build_prompt(self, query: str, candidates: Sequence[RerankCandidate]) -> str:
-        docs = "\n".join(
-            f"[{i}] {self._sanitize(c.text)}" for i, c in enumerate(candidates)
-        )
+        docs = "\n".join(f"[{i}] {self._sanitize(c.text)}" for i, c in enumerate(candidates))
         return _PROMPT.format(query=self._sanitize(query), documents=docs)
 
     @staticmethod
@@ -289,7 +327,7 @@ class LLMReranker(Reranker):
         return cleaned
 
     def _call(self, prompt: str) -> str:
-        from google.genai import types  # noqa: PLC0415
+        from google.genai import types
 
         response = self._client.models.generate_content(  # type: ignore[union-attr]
             model=self.model,
@@ -322,10 +360,10 @@ class LLMReranker(Reranker):
             raw = await asyncio.wait_for(
                 asyncio.to_thread(self._call, prompt), timeout=self.timeout_s
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.warning("rerank_timeout", model=self.model, n=len(candidates))
             return self._fallback(candidates, limit)
-        except Exception as exc:  # noqa: BLE001 - provider SDKs raise anything
+        except Exception as exc:
             log.warning("rerank_failed", model=self.model, error=str(exc)[:200])
             return self._fallback(candidates, limit)
 

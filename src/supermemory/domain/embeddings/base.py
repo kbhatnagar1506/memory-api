@@ -52,7 +52,7 @@ def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
     if not a:
         raise ValueError("cannot compare empty vectors")
     dot = na = nb = 0.0
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=True):
         dot += x * y
         na += x * x
         nb += y * y
@@ -163,12 +163,14 @@ class EmbeddingProvider(abc.ABC):
 
         resolved: list[Vector | None] = [self._cache_get(t) for t in texts]
         cache_hits = sum(1 for v in resolved if v is not None)
-        pending = [(i, t) for i, (t, v) in enumerate(zip(texts, resolved)) if v is None]
+        pending = [
+            (i, t) for i, (t, v) in enumerate(zip(texts, resolved, strict=True)) if v is None
+        ]
 
         for start in range(0, len(pending), self.batch_size):
             batch = pending[start : start + self.batch_size]
             vectors = await self._with_retries([t for _, t in batch])
-            for (idx, text), vec in zip(batch, vectors):
+            for (idx, text), vec in zip(batch, vectors, strict=True):
                 resolved[idx] = vec
                 self._cache_put(text, vec)
 
@@ -190,14 +192,10 @@ class EmbeddingProvider(abc.ABC):
         last: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
-                raw = await asyncio.wait_for(
-                    self._embed_batch(texts), timeout=self.timeout_s
-                )
+                raw = await asyncio.wait_for(self._embed_batch(texts), timeout=self.timeout_s)
                 return self._validate(raw, len(texts))
-            except asyncio.TimeoutError as exc:
-                last = ProviderTimeoutError(
-                    f"{self.name} timed out after {self.timeout_s}s"
-                )
+            except TimeoutError as exc:
+                last = ProviderTimeoutError(f"{self.name} timed out after {self.timeout_s}s")
                 log.warning("embedding_timeout", provider=self.name, attempt=attempt)
                 _ = exc
             except ProviderError as exc:
@@ -206,13 +204,17 @@ class EmbeddingProvider(abc.ABC):
                     raise
                 last = exc
                 log.warning(
-                    "embedding_failed", provider=self.name, attempt=attempt,
+                    "embedding_failed",
+                    provider=self.name,
+                    attempt=attempt,
                     error=str(exc)[:200],
                 )
-            except Exception as exc:  # noqa: BLE001 - provider SDKs raise anything
+            except Exception as exc:
                 last = ProviderError(f"{self.name}: {type(exc).__name__}: {exc}")
                 log.warning(
-                    "embedding_error", provider=self.name, attempt=attempt,
+                    "embedding_error",
+                    provider=self.name,
+                    attempt=attempt,
                     error=str(exc)[:200],
                 )
             if attempt < self.max_attempts:
@@ -224,7 +226,7 @@ class EmbeddingProvider(abc.ABC):
         try:
             await self.embed_one("health check")
             return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     async def aclose(self) -> None:

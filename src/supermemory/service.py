@@ -51,6 +51,24 @@ from .store.base import MemoryFilter, MemoryStore, Page
 log = get_logger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class MemoryContext:
+    """A memory resolved together with its whole relation neighborhood.
+
+    `current_head` is non-empty exactly when `is_current` is false. Neighbors
+    that no longer resolve (erased) are omitted, not stubbed.
+    """
+
+    memory: Memory
+    is_current: bool
+    current_head: list[Memory]
+    replaced: list[Memory]
+    derived_from: list[Memory]
+    derivatives: list[Memory]
+    references: list[Memory]
+    contradicts: list[Memory]
+
+
 @dataclass(slots=True)
 class IngestResult:
     memory: Memory
@@ -383,6 +401,55 @@ class MemoryService:
             "is_current": not forward,
             "head": forward[-1].source_id if forward else memory_id,
         }
+
+    async def get_memory_context(
+        self, org_id: str, space_id: str, memory_id: str, *, limit_per_relation: int = 20
+    ) -> MemoryContext:
+        """The full relation neighborhood of one memory, resolved to content.
+
+        This is the "entire context" read: one call answers what an agent
+        otherwise assembles from four — the memory itself, whether it is still
+        current (and what replaced it), what it replaced, what it was derived
+        from, what was derived from it, and what it references or contradicts.
+
+        Neighbors whose memory no longer resolves (erased, or outside this
+        tenant's view) are silently omitted rather than surfaced as broken
+        stubs: an erased source must not leak even its existence through the
+        context of a surviving derivative.
+        """
+        memory = await self.get_memory(org_id, space_id, memory_id)
+        lineage = await self.get_lineage(org_id, space_id, memory_id)
+
+        async def resolve(ids: list[str]) -> list[Memory]:
+            out: list[Memory] = []
+            for candidate in ids[:limit_per_relation]:
+                found = await self.store.get_memory(org_id, space_id, candidate)
+                if found is not None:
+                    out.append(found)
+            return out
+
+        outgoing = await self.store.list_relations(org_id, space_id, memory_id, direction="out")
+        incoming = await self.store.list_relations(org_id, space_id, memory_id, direction="in")
+
+        def ids_of(edges: list[RelationEdge], kind: RelationType, *, source: bool) -> list[str]:
+            return [(e.source_id if source else e.target_id) for e in edges if e.type is kind]
+
+        is_current = bool(lineage["is_current"])
+        return MemoryContext(
+            memory=memory,
+            is_current=is_current,
+            current_head=[] if is_current else await resolve([str(lineage["head"])]),
+            replaced=await resolve(ids_of(outgoing, RelationType.SUPERSEDES, source=False)),
+            derived_from=await resolve(
+                ids_of(outgoing, RelationType.DERIVED_FROM, source=False)
+            ),
+            derivatives=await resolve(ids_of(incoming, RelationType.DERIVED_FROM, source=True)),
+            references=await resolve(ids_of(outgoing, RelationType.REFERENCES, source=False)),
+            contradicts=await resolve(
+                ids_of(outgoing, RelationType.CONTRADICTS, source=False)
+                + ids_of(incoming, RelationType.CONTRADICTS, source=True)
+            ),
+        )
 
     async def get_memory_as_of(
         self, org_id: str, space_id: str, memory_id: str, as_of: datetime

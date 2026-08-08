@@ -832,3 +832,63 @@ async def test_erase_requires_write_scope(app_context, space_id) -> None:
             f"/v1/spaces/{space_id}/memories/mem_00000000000000000000000000/erase"
         )
         assert response.status_code == 403
+
+
+async def test_context_assembles_the_entire_neighborhood(client, space_id) -> None:
+    """One read returns the memory plus everything an agent needs to trust it:
+    currency, what replaced it, provenance, derivatives, references. The
+    cluster is the relation graph made readable."""
+
+    async def add(content: str) -> dict:
+        response = await client.post(
+            f"/v1/spaces/{space_id}/memories", json={"content": content}
+        )
+        return response.json()["memory"]
+
+    async def link(source: dict, target: dict, relation: str) -> None:
+        response = await client.post(
+            f"/v1/spaces/{space_id}/memories/{source['id']}/relations",
+            json={"target_id": target["id"], "relation": relation},
+        )
+        assert response.status_code == 201
+
+    old = await add("We deploy with Jenkins")
+    new = await add("We deploy with GitHub Actions")
+    source_a = await add("Standup note: gym on Monday")
+    source_b = await add("Retro note: gym again on Thursday")
+    derived = await add("Derived: went to the gym twice this week")
+    reference = await add("See the fitness challenge thread")
+
+    await link(new, old, "supersedes")
+    await link(derived, source_a, "derived_from")
+    await link(derived, source_b, "derived_from")
+    await link(derived, reference, "references")
+
+    # The derived fact: provenance cluster plus references, and it is current.
+    context = (
+        await client.get(f"/v1/spaces/{space_id}/memories/{derived['id']}/context")
+    ).json()
+    assert context["is_current"] is True
+    assert context["current_head"] == []
+    assert {m["id"] for m in context["derived_from"]} == {source_a["id"], source_b["id"]}
+    assert [m["id"] for m in context["references"]] == [reference["id"]]
+
+    # A source sees the derivative pointing back at it.
+    context = (
+        await client.get(f"/v1/spaces/{space_id}/memories/{source_a['id']}/context")
+    ).json()
+    assert [m["id"] for m in context["derivatives"]] == [derived["id"]]
+
+    # The superseded memory knows it is stale and names its replacement.
+    context = (await client.get(f"/v1/spaces/{space_id}/memories/{old['id']}/context")).json()
+    assert context["is_current"] is False
+    assert [m["id"] for m in context["current_head"]] == [new["id"]]
+
+    # An erased source disappears from the derivative's context — omitted,
+    # not stubbed: erasure must not leak through surviving neighbors.
+    erased = await client.post(f"/v1/spaces/{space_id}/memories/{source_b['id']}/erase")
+    assert erased.status_code == 200
+    context = (
+        await client.get(f"/v1/spaces/{space_id}/memories/{derived['id']}/context")
+    ).json()
+    assert {m["id"] for m in context["derived_from"]} == {source_a["id"]}

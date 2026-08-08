@@ -174,6 +174,25 @@ class MemoryVersionResponse(Response):
         )
 
 
+class MemoryContextResponse(Response):
+    """A memory resolved together with its whole relation neighborhood.
+
+    `current_head` is non-empty exactly when `is_current` is false: the memory
+    has been superseded and the head is what an agent should trust instead.
+    Neighbors that no longer resolve (erased) are omitted, not stubbed — an
+    erased source must not leak through the context of its derivative.
+    """
+
+    memory: MemoryResponse
+    is_current: bool
+    current_head: list[MemoryResponse]
+    replaced: list[MemoryResponse]
+    derived_from: list[MemoryResponse]
+    derivatives: list[MemoryResponse]
+    references: list[MemoryResponse]
+    contradicts: list[MemoryResponse]
+
+
 class MemoryVersionListResponse(Response):
     memory_id: str
     items: list[MemoryVersionResponse]

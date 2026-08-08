@@ -21,6 +21,7 @@ from ..schemas import (
     EraseAttestation,
     LineageResponse,
     LinkRequest,
+    MemoryContextResponse,
     MemoryListResponse,
     MemoryResponse,
     MemoryVersionListResponse,
@@ -279,6 +280,38 @@ async def get_lineage(
     _validate_memory_id(memory_id)
     lineage = await service.get_lineage(principal.org_id, space_id, memory_id)
     return LineageResponse(**lineage)  # type: ignore[arg-type]
+
+
+@router.get(
+    "/{memory_id}/context",
+    response_model=MemoryContextResponse,
+    summary="A memory with its entire relation neighborhood",
+)
+async def get_memory_context(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+) -> MemoryContextResponse:
+    """One call instead of four: the memory, whether it is still current (and
+    what replaced it), what it replaced, its provenance (`derived_from`), what
+    was derived from it, and what it references or contradicts — each resolved
+    to full content, not bare ids. This is the read an agent wants before
+    trusting a fact."""
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    context = await service.get_memory_context(principal.org_id, space_id, memory_id)
+    as_response = MemoryResponse.from_domain
+    return MemoryContextResponse(
+        memory=as_response(context.memory),
+        is_current=context.is_current,
+        current_head=[as_response(m) for m in context.current_head],
+        replaced=[as_response(m) for m in context.replaced],
+        derived_from=[as_response(m) for m in context.derived_from],
+        derivatives=[as_response(m) for m in context.derivatives],
+        references=[as_response(m) for m in context.references],
+        contradicts=[as_response(m) for m in context.contradicts],
+    )
 
 
 @router.get(

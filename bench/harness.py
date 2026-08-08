@@ -30,6 +30,8 @@ from supermemory.domain.embeddings.base import EmbeddingProvider
 from supermemory.domain.models import Chunk, Memory, Organization, Space
 from supermemory.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
 from supermemory.domain.retrieval.rerank import Reranker
+from supermemory.domain.synthesis import QuestionKind, classify
+from supermemory.domain.synthesis.derive import SourceDoc, derive_answer
 from supermemory.store.memory import InMemoryStore
 
 from .cache import DiskVectorCache, cache_key
@@ -659,6 +661,7 @@ async def evaluate_end_to_end(
     max_session_chars: int = 12_000,
     official_judge: bool = True,
     measure_judge_bias: bool = True,
+    use_derive: bool = False,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
     answerer = build_model_client(answer_model, project)
@@ -720,6 +723,41 @@ async def evaluate_end_to_end(
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
             prediction = parse_answer(raw)
             declined = prediction.upper().startswith("NO_ANSWER")
+
+            # -- derive path (opt-in, ablation-flagged) -----------------------
+            # Two triggers, both measured on lme-full:
+            #   * aggregate kinds (COUNT/ORDER/...): 45% of all failures with
+            #     complete evidence were counts — "three bikes" answered
+            #     "Multiple". Code-computed answers are PREFERRED over a
+            #     non-declined direct answer for these kinds, because the
+            #     direct model demonstrably miscounts with the evidence in
+            #     hand. The flag exists so this policy is attributable.
+            #   * declines: 126 questions declined while holding complete
+            #     evidence. Escalate any decline through extract-then-compose.
+            # Truly unanswerable questions stay safe through mechanism, not
+            # special-casing: extraction finds no relevant rows, the table is
+            # empty, derivation returns None, the decline stands.
+            derive_kind = classify(question.text)
+            derived_used = False
+            if use_derive and (declined or derive_kind is not QuestionKind.DIRECT):
+                docs = [
+                    SourceDoc(
+                        id=hit.memory.id,
+                        text=hit.memory.content[:max_session_chars],
+                        occurred_at=hit.memory.occurred_at,
+                    )
+                    for hit in ordered
+                ]
+
+                async def complete_text(prompt: str) -> str:
+                    text, _ = await answerer.complete(prompt, max_tokens=1024)
+                    return text
+
+                derived = await derive_answer(question.text, derive_kind, docs, complete_text)
+                if derived is not None and (declined or derived.computed):
+                    prediction = derived.answer
+                    declined = False
+                    derived_used = True
 
             self_correct: bool | None = None
             if question.is_abstention:
@@ -794,6 +832,8 @@ async def evaluate_end_to_end(
                 "verdict": verdict,
                 "correct": correct,
                 "self_correct": self_correct,
+                "derive_kind": str(derive_kind),
+                "derived": derived_used,
                 "search_ms": round(search_ms, 2),
                 "context_tokens": context_tokens,
                 "full_recall@k": full_recall_at_k(retrieved, set(question.evidence_ids), k)

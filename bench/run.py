@@ -166,6 +166,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             answer_model=args.answer_model,
             judge_model=args.judge_model,
             official_judge=not args.strict_judge,
+            use_derive=args.derive,
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             concurrency=args.concurrency,
         )
@@ -358,6 +359,13 @@ async def main() -> int:
         "different vendor shares no training lineage, so it does not "
         "inherit the answerer's blind spots the way a same-family judge "
         "does. Also enables self-preference measurement.",
+    )
+    parser.add_argument(
+        "--derive",
+        action="store_true",
+        help="route aggregate questions (count/order/date-arith) through the "
+        "map->ground->reduce derive path and escalate declines through it; "
+        "code does the arithmetic, the model only finds instances",
     )
     parser.add_argument(
         "--strict-judge",

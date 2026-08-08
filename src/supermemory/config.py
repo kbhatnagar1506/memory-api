@@ -87,7 +87,14 @@ class Settings(BaseSettings):
     embedding_cache_size: int = Field(default=4096, ge=0)
 
     # -- reranking --------------------------------------------------------
-    rerank_backend: RerankBackend = RerankBackend.HEURISTIC
+    #: Default OFF on measured evidence. The heuristic reranker is lexical
+    #: overlap, which is a poor signal on long documents: on LongMemEval
+    #: (~12,000-character sessions, n=500) it cost 8 points of full recall
+    #: (0.968 -> 0.888). It helped on LoCoMo's ~400-character turns (+0.022
+    #: MRR), so it is worth enabling for short-document corpora — but the
+    #: downside is 4x the upside, and a default should take the safe side of
+    #: an asymmetric bet.
+    rerank_backend: RerankBackend = RerankBackend.NONE
     rerank_model: str = "gemini-2.5-flash"
     rerank_candidates: int = Field(default=32, ge=1, le=256)
     rerank_timeout_s: float = Field(default=12.0, gt=0)

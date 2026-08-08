@@ -86,7 +86,12 @@ class SearchRequest:
     half_life_days: float = 180.0
     use_decay: bool = True
     use_rerank: bool = True
-    use_mmr: bool = True
+    #: Default OFF on measured evidence. MMR suppresses near-duplicates, but
+    #: measured twice on conversational corpora it changed no retrieval metric
+    #: while costing 2.5x latency (61ms -> 110ms on LoCoMo). It is still the
+    #: right tool for corpora that genuinely accumulate restatements; it is not
+    #: free enough to be a default.
+    use_mmr: bool = False
     #: Return memories that a newer memory has superseded.
     include_superseded: bool = False
     candidate_multiplier: int = 6

@@ -12,6 +12,22 @@ disjoint, but both name Caroline. So: retrieve seeds, pull the salient
 entities out of them, and look those entities up directly. One indexed lookup
 bridges a gap that similarity search cannot.
 
+MEASURED RESULT: this does not work, on any corpus tested. Keep it only as a
+documented negative.
+
+  * LoCoMo: 0.10 usable entities per turn, 91% of turns have none, 63 distinct
+    entities in a 5,882-turn corpus. Nothing to bridge with. 0 results
+    attributed to bridging.
+  * LongMemEval: ~50 entities per session, so density was not the blocker --
+    and it still produced IDENTICAL full recall (0.888) at 2.6x the latency
+    (6,666ms vs 2,537ms) on n=500.
+
+The dispersion diagnosis that motivated it was correct (97% of multi-hop
+evidence is in another session, median 204 turns away). The remedy was not:
+entity co-occurrence is too weak a bridge, and where entities are dense they
+are generic ("use", "consider", "keep"). Disabled by default; do not enable
+without re-measuring on the target corpus.
+
 No LLM. Extraction is a heuristic over capitalisation and shape, which keeps
 the write path lossless and free — the property that distinguishes us from
 extraction-based memory systems, and which the independent cost study

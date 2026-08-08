@@ -165,6 +165,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             config=winner,
             answer_model=args.answer_model,
             judge_model=args.judge_model,
+            official_judge=not args.strict_judge,
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             concurrency=args.concurrency,
         )
@@ -249,7 +250,9 @@ def write_report(out: Path, payloads: list[dict[str, Any]]) -> None:
                 "",
                 f"### End-to-end (LongMemEval's published metric) — `{e2e['name']}`",
                 "",
-                f"Answering model `{e2e['answer_model']}`, judge `{e2e['judge_model']}`.",
+                f"Answering model `{e2e['answer_model']}`, judge "
+                f"`{e2e['judge_model']}`, judge protocol "
+                f"`{e2e.get('judge_protocol', 'unknown')}`.",
                 "",
                 f"**QA accuracy: {e2e['accuracy']:.1%}** "
                 f"(95% CI {lo:.1%}-{hi:.1%}, n={e2e['n_answerable']})  ",
@@ -267,7 +270,50 @@ def write_report(out: Path, payloads: list[dict[str, Any]]) -> None:
                     f"{clo:.2f}-{chi:.2f} |"
                 )
         errors = sum(c["n_failed"] for c in payload["configs"])
-        lines += ["", f"Failed searches: {errors} (excluded, never substituted).", ""]
+        bias = (e2e or {}).get("judge_bias")
+        if bias:
+            direction = (
+                "more generous to itself"
+                if bias["delta_self_minus_independent"] > 0
+                else "stricter on itself"
+            )
+            lines += [
+                "",
+                "### Judge independence",
+                "",
+                "The answering model does not grade itself. Both arms below "
+                "grade the **same** predictions with the **same** prompt; the "
+                "only variable is whether the grader produced them.",
+                "",
+                "| arm | grader | accuracy |",
+                "|---|---|---|",
+                f"| independent (headline) | `{bias['independent_judge']}` | "
+                f"{bias['independent_accuracy']:.1%} |",
+                f"| self-graded (control) | `{bias['self_judge']}` | "
+                f"{bias['self_accuracy']:.1%} |",
+                "",
+                f"Self-preference: **{bias['delta_self_minus_independent']:+.1%}** "
+                f"({direction}), judge agreement {bias['agreement']:.1%} on "
+                f"n={bias['n_paired']}. The headline uses the independent "
+                "grader; this delta is what a self-graded number would have "
+                "silently added.",
+            ]
+        lines += ["", "### Completeness", ""]
+        lines.append(
+            f"Failed searches: **{errors}** (excluded from retrieval metrics, "
+            "never substituted)."
+        )
+        if e2e:
+            attempted = e2e["n_attempted"]
+            scored = e2e["n_scored"]
+            lines.append(
+                f"Failed answer/judge calls: **{e2e['n_errors']}** of {attempted} "
+                f"attempted; {scored} scored. An API failure is missing data, not a "
+                "wrong answer, so it is excluded from accuracy — but the gap is "
+                "reported here because an unreported gap silently inflates the "
+                "headline."
+            )
+        lines.append("")
 
     (out / "report.md").write_text("\n".join(lines) + "\n")
 
@@ -297,7 +343,26 @@ async def main() -> int:
         ),
     )
     parser.add_argument("--answer-model", default="gemini-2.5-flash")
-    parser.add_argument("--judge-model", default="gemini-2.5-flash")
+    parser.add_argument(
+        "--judge-model",
+        # Deliberately NOT the answering model. Grading your own output is a
+        # known self-preference bias, and a self-graded headline is the first
+        # thing a reader should distrust -- the largest published gap on this
+        # benchmark (94.4% self-reported vs 49.0% independently measured) is
+        # attributed to judge configuration, not to the memory engine. When
+        # this differs from --answer-model the harness also runs the answerer
+        # as a second grader and reports the measured gap.
+        default="gemini-2.5-pro",
+        help="grader; keep it different from --answer-model (default: a "
+        "stronger, non-self model, which also enables bias measurement)",
+    )
+    parser.add_argument(
+        "--strict-judge",
+        action="store_true",
+        help="grade with our custom stricter prompt instead of LongMemEval's "
+        "official per-question-type prompts. Not comparable to published "
+        "numbers; kept for ablation.",
+    )
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 

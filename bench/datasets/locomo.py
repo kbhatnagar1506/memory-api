@@ -42,6 +42,34 @@ def _parse_date(raw: str | None) -> datetime:
     return datetime(2023, 1, 1, tzinfo=UTC)
 
 
+#: LoCoMo evidence is mostly a list of dia_ids, but a handful of entries pack
+#: several into one string ("D8:6; D9:17") and a few name turns that do not
+#: exist in the transcript. Both silently score 0 on full recall forever: the
+#: id can never match a retrieved document, so the question is unwinnable no
+#: matter what retrieval does. 9 of 1,986 questions are affected (0.5%).
+_EVIDENCE_SPLIT = re.compile(r"[;,]\s*")
+
+
+def _clean_evidence(raw: object, known_ids: set[str]) -> tuple[str, ...]:
+    """Split packed ids and drop ones with no matching turn.
+
+    Dropping is the honest choice over keeping: a label pointing at a turn that
+    does not exist measures the dataset, not the retriever. Questions left with
+    NO resolvable evidence are excluded from retrieval scoring by the harness,
+    which skips questions with empty `evidence_ids`.
+    """
+    if raw is None:
+        return ()
+    items = [raw] if isinstance(raw, str) else list(raw)
+    out: list[str] = []
+    for item in items:
+        for part in _EVIDENCE_SPLIT.split(str(item)):
+            candidate = part.strip()
+            if candidate and candidate in known_ids and candidate not in out:
+                out.append(candidate)
+    return tuple(out)
+
+
 class LoCoMo(Dataset):
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -84,13 +112,12 @@ class LoCoMo(Dataset):
                         )
                     )
 
+            known_ids = {d.id for d in corpus.documents}
             for index, item in enumerate(sample.get("qa", []) or []):
                 question = (item.get("question") or "").strip()
                 if not question:
                     continue
-                evidence = item.get("evidence") or []
-                if isinstance(evidence, str):
-                    evidence = [evidence]
+                evidence = _clean_evidence(item.get("evidence"), known_ids)
                 category = int(item.get("category", 0) or 0)
                 corpus.questions.append(
                     Question(
@@ -100,7 +127,7 @@ class LoCoMo(Dataset):
                         answer=str(
                             item.get("answer", item.get("adversarial_answer", ""))
                         ).strip(),
-                        evidence_ids=tuple(str(e) for e in evidence),
+                        evidence_ids=evidence,
                         category=CATEGORY_NAMES.get(category, f"category_{category}"),
                         is_abstention=category == ADVERSARIAL,
                     )

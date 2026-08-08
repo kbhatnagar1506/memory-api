@@ -389,7 +389,19 @@ Reply in exactly this form:
 FACTS: <the relevant facts, or "none">
 ANSWER: <the answer in as few words as possible, or NO_ANSWER>"""
 
-JUDGE_PROMPT = """\
+#: The official judge asks for "yes or no only", and the reflex is to cap output
+#: at ~8 tokens to match. That silently breaks thinking models: measured here,
+#: gemini-2.5-pro spent 19 tokens reasoning before its first output token and
+#: returned a truncated 'N' at max_tokens=24 -- which parses as "no" and would
+#: have scored every answer wrong while looking like a working grader. The
+#: verdict is still one word; the budget is headroom for the thinking that
+#: precedes it.
+_JUDGE_MAX_TOKENS = 800
+
+#: Our own judge. Kept ONLY as the strict comparison arm — it is not the
+#: benchmark's metric, and using it as the headline made our numbers
+#: incomparable to every published result. See OFFICIAL_JUDGE below.
+STRICT_JUDGE_PROMPT = """\
 You are grading a question-answering system against a reference answer.
 
 Question: {question}
@@ -402,6 +414,113 @@ written differently but must refer to the same date. Numbers must match. \
 Mark INCORRECT otherwise.
 
 Reply with exactly one word: CORRECT or INCORRECT"""
+
+#: LongMemEval's official judge prompts, verbatim from the benchmark's own
+#: `src/evaluation/evaluate_qa.py` (`get_anscheck_prompt`). Reproduced exactly,
+#: including the per-question-type wording, because paraphrasing a judge is
+#: paraphrasing the metric.
+#:
+#: We ran a homegrown judge first and it was systematically STRICTER than the
+#: benchmark on three of our four weakest categories:
+#:
+#:   * single-session-preference -- the `answer` field is a 391-char RUBRIC, not
+#:     an answer (every other type averages 20-44 chars). Grading it with
+#:     "conveys the same fact as the reference" is a category error: a short
+#:     factual reply cannot convey the same fact as a preference rubric. This
+#:     alone accounted for our worst score (16.7%) with no memory failure.
+#:   * temporal-reasoning -- gold answers literally read "7 days. 8 days
+#:     (including the last day) is also acceptable", and the official prompt
+#:     says not to penalise off-by-one day counts. Ours said "Numbers must
+#:     match", overriding the dataset's own stated tolerance on 133 questions.
+#:   * knowledge-update -- restating the superseded value alongside the updated
+#:     one is explicitly correct here; our prompt gave no such allowance.
+_OFFICIAL_FACTUAL = (
+    "I will give you a question, a correct answer, and a response from a "
+    "model. Please answer yes if the response contains the correct answer. "
+    "Otherwise, answer no. If the response is equivalent to the correct answer "
+    "or contains all the intermediate steps to get the correct answer, you "
+    "should also answer yes. If the response only contains a subset of the "
+    "information required by the answer, answer no. "
+)
+_OFFICIAL_TAIL = (
+    "\n\nQuestion: {question}\n\nCorrect Answer: {reference}\n\n"
+    "Model Response: {prediction}\n\nIs the model response correct? "
+    "Answer yes or no only."
+)
+
+OFFICIAL_JUDGE_PROMPTS: dict[str, str] = {
+    "single-session-user": _OFFICIAL_FACTUAL + _OFFICIAL_TAIL,
+    "single-session-assistant": _OFFICIAL_FACTUAL + _OFFICIAL_TAIL,
+    "multi-session": _OFFICIAL_FACTUAL + _OFFICIAL_TAIL,
+    "temporal-reasoning": _OFFICIAL_FACTUAL
+    + "In addition, do not penalize off-by-one errors for the number of days. "
+    "If the question asks for the number of days/weeks/months, etc., and the "
+    "model makes off-by-one errors (e.g., predicting 19 days when the answer "
+    "is 18), the model's response is still correct. " + _OFFICIAL_TAIL,
+    "knowledge-update": (
+        "I will give you a question, a correct answer, and a response from a "
+        "model. Please answer yes if the response contains the correct answer. "
+        "Otherwise, answer no. If the response contains some previous "
+        "information along with an updated answer, the response should be "
+        "considered as correct as long as the updated answer is the required "
+        "answer." + _OFFICIAL_TAIL
+    ),
+    "single-session-preference": (
+        "I will give you a question, a rubric for desired personalized "
+        "response, and a response from a model. Please answer yes if the "
+        "response satisfies the desired response. Otherwise, answer no. The "
+        "model does not need to reflect all the points in the rubric. The "
+        "response is correct as long as it recalls and utilizes the user's "
+        "personal information correctly."
+        "\n\nQuestion: {question}\n\nRubric: {reference}\n\n"
+        "Model Response: {prediction}\n\nIs the model response correct? "
+        "Answer yes or no only."
+    ),
+}
+
+#: Abstention gets its own prompt: the reference field holds an EXPLANATION of
+#: why the question is unanswerable, not an answer. We score abstention
+#: judge-free (did the model decline?) and use this only as a fallback for
+#: models that decline in prose without emitting the sentinel.
+OFFICIAL_ABSTENTION_PROMPT = (
+    "I will give you an unanswerable question, an explanation, and a response "
+    "from a model. Please answer yes if the model correctly identifies the "
+    "question as unanswerable. The model could say that the information is "
+    "incomplete, or some other information is given but the asked information "
+    "is not.\n\nQuestion: {question}\n\nExplanation: {reference}\n\n"
+    "Model Response: {prediction}\n\nDoes the model correctly identify the "
+    "question as unanswerable? Answer yes or no only."
+)
+
+
+def judge_prompt(
+    category: str, question: str, reference: str, prediction: str, *, official: bool
+) -> str:
+    """Build the grading prompt for one question.
+
+    Unknown categories fall back to the generic factual template rather than
+    raising: a new question type should score, not crash a four-hour run.
+    """
+    if not official:
+        return STRICT_JUDGE_PROMPT.format(
+            question=question, reference=reference, prediction=prediction
+        )
+    template = OFFICIAL_JUDGE_PROMPTS.get(category, _OFFICIAL_FACTUAL + _OFFICIAL_TAIL)
+    return template.format(question=question, reference=reference, prediction=prediction)
+
+
+def parse_grade(raw: str, *, official: bool) -> bool:
+    """Read a verdict. Official grammar is yes/no, ours is CORRECT/INCORRECT.
+
+    `INCORRECT` contains `CORRECT` as a substring, so the strict arm must
+    exclude it explicitly — checking for the positive word alone would grade
+    every wrong answer as right.
+    """
+    text = raw.strip().lower()
+    if official:
+        return text.startswith("yes") or "yes" in text[:20]
+    upper = raw.upper()
+    return "CORRECT" in upper and "INCORRECT" not in upper
 
 
 def parse_answer(raw: str) -> str:
@@ -482,10 +601,20 @@ async def evaluate_end_to_end(
     project: str | None,
     concurrency: int = 8,
     max_session_chars: int = 12_000,
+    official_judge: bool = True,
+    measure_judge_bias: bool = True,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
     answerer = Gemini(answer_model, project)
     judge = Gemini(judge_model, project)
+    # Only a control arm when the judge is genuinely a different model. Pointing
+    # both at the same model would "measure" a bias of exactly zero by
+    # construction and read as evidence of impartiality.
+    bias_judge = (
+        Gemini(answer_model, project)
+        if measure_judge_bias and judge_model != answer_model
+        else None
+    )
     semaphore = asyncio.Semaphore(concurrency)
     questions = [q for c in corpora for q in c.questions]
 
@@ -536,31 +665,60 @@ async def evaluate_end_to_end(
             prediction = parse_answer(raw)
             declined = prediction.upper().startswith("NO_ANSWER")
 
+            self_correct: bool | None = None
             if question.is_abstention:
                 # Correct behaviour on an unanswerable question is to decline.
-                # Scored without a judge, so no judge variance enters here.
-                correct, verdict = declined, "DECLINED" if declined else "ANSWERED"
+                # The sentinel path is judge-free, so no judge variance enters.
+                # A model that declines in prose ("I don't have that") without
+                # emitting the sentinel is still right, and the official
+                # abstention prompt is the only way to catch that -- scoring it
+                # ANSWERED would penalise phrasing, not memory.
+                if declined:
+                    correct, verdict = True, "DECLINED"
+                else:
+                    try:
+                        grade, _ = await judge.complete(
+                            OFFICIAL_ABSTENTION_PROMPT.format(
+                                question=question.text,
+                                reference=question.answer,
+                                prediction=prediction,
+                            ),
+                            max_tokens=_JUDGE_MAX_TOKENS,
+                        )
+                    except Exception as exc:
+                        return {"qid": question.qid, "error": f"judge: {exc}"[:200]}
+                    correct = parse_grade(grade, official=True)
+                    verdict = "DECLINED_PROSE" if correct else "ANSWERED"
             elif declined:
                 correct, verdict = False, "DECLINED"
             else:
+                prompt = judge_prompt(
+                    question.category,
+                    question.text,
+                    question.answer,
+                    prediction,
+                    official=official_judge,
+                )
                 try:
-                    grade, _ = await judge.complete(
-                        JUDGE_PROMPT.format(
-                            question=question.text,
-                            reference=question.answer,
-                            prediction=prediction,
-                        ),
-                        max_tokens=8,
-                    )
+                    grade, _ = await judge.complete(prompt, max_tokens=_JUDGE_MAX_TOKENS)
                 except Exception as exc:
                     return {"qid": question.qid, "error": f"judge: {exc}"[:200]}
-                upper = grade.upper()
-                verdict = (
-                    "CORRECT"
-                    if "CORRECT" in upper and "INCORRECT" not in upper
-                    else "INCORRECT"
-                )
-                correct = verdict == "CORRECT"
+                correct = parse_grade(grade, official=official_judge)
+                verdict = "CORRECT" if correct else "INCORRECT"
+
+                # Self-grading control. The primary judge is a DIFFERENT model
+                # from the answerer; this re-grades the same prediction with the
+                # answerer itself. The gap between the two is a direct estimate
+                # of self-preference bias on our own data, which turns "we grade
+                # ourselves" from an unquantified caveat into a number.
+                if bias_judge is not None:
+                    try:
+                        self_grade, _ = await bias_judge.complete(
+                            prompt, max_tokens=_JUDGE_MAX_TOKENS
+                        )
+                        self_correct = parse_grade(self_grade, official=official_judge)
+                    except Exception:
+                        self_correct = None  # never fail a run over the control arm
 
             retrieved = [ingested.doc_by_memory.get(h.memory.id, "") for h in response.results]
             return {
@@ -572,6 +730,7 @@ async def evaluate_end_to_end(
                 "prediction": prediction[:300],
                 "verdict": verdict,
                 "correct": correct,
+                "self_correct": self_correct,
                 "search_ms": round(search_ms, 2),
                 "context_tokens": context_tokens,
                 "full_recall@k": full_recall_at_k(retrieved, set(question.evidence_ids), k)
@@ -603,6 +762,27 @@ async def evaluate_end_to_end(
     lo, hi = wilson(correct, total) if total else (0.0, 0.0)
     latencies = [r["search_ms"] for r in ok]
     tokens = [r["context_tokens"] for r in ok if r["context_tokens"]]
+
+    # Self-grading bias, measured rather than disclaimed. Both arms grade the
+    # SAME predictions with the SAME prompt; the only difference is whether the
+    # grader is the model that produced them. `delta` > 0 means the answerer was
+    # more generous to itself than an independent grader was, in accuracy points.
+    judge_bias: dict[str, Any] | None = None
+    paired = [r for r in answerable if r.get("self_correct") is not None]
+    if paired:
+        indep = sum(1 for r in paired if r["correct"])
+        selfg = sum(1 for r in paired if r["self_correct"])
+        agree = sum(1 for r in paired if r["correct"] == r["self_correct"])
+        judge_bias = {
+            "n_paired": len(paired),
+            "independent_judge": judge_model,
+            "self_judge": answer_model,
+            "independent_accuracy": round(indep / len(paired), 4),
+            "self_accuracy": round(selfg / len(paired), 4),
+            "delta_self_minus_independent": round((selfg - indep) / len(paired), 4),
+            "agreement": round(agree / len(paired), 4),
+        }
+
     return {
         "config": config,
         "answer_model": answer_model,
@@ -622,6 +802,8 @@ async def evaluate_end_to_end(
         "latency_ms_mean": round(statistics.fmean(latencies), 2) if latencies else 0.0,
         "context_tokens_mean": round(statistics.fmean(tokens), 1) if tokens else 0.0,
         "by_category": by_category,
+        "judge_protocol": "longmemeval-official" if official_judge else "strict-custom",
+        "judge_bias": judge_bias,
         "errors": errors[:10],
         "per_question": ok,
     }

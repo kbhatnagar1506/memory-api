@@ -725,9 +725,16 @@ async def evaluate_end_to_end(
                 "qid": question.qid,
                 "category": question.category,
                 "is_abstention": question.is_abstention,
-                "question": question.text[:300],
-                "reference": question.answer[:300],
-                "prediction": prediction[:300],
+                # Stored untruncated so a run can be RE-GRADED offline without
+                # repeating it. Retrieval and answering cost hours; judging is
+                # seconds, so the judge must never be the reason to re-run.
+                # These were capped at 300 chars, which silently cut
+                # single-session-preference rubrics (mean 391) -- re-grading
+                # would have used a truncated rubric on the most fragile
+                # capability and looked like a memory failure.
+                "question": question.text,
+                "reference": question.answer,
+                "prediction": prediction,
                 "verdict": verdict,
                 "correct": correct,
                 "self_correct": self_correct,

@@ -195,6 +195,9 @@ class EraseAttestation(Response):
     content_sha256: str
     chunks_removed: int
     edges_removed: int
+    #: SUPERSEDES edges re-created around the erased memory so revision
+    #: chains survive it; carries surviving ids only, never erased content.
+    edges_bridged: int
     versions_purged: int
     derived_memories_affected: list[str]
     erased_at: str

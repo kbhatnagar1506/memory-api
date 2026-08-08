@@ -25,6 +25,7 @@ from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ...core.errors import BadRequestError, ConflictError, StoreError
+from ...core.ids import new_id
 from ...core.logging import get_logger
 from ...domain.embeddings.base import Vector
 from ...domain.models import (
@@ -470,8 +471,81 @@ class PostgresStore(MemoryStore):
             )
             return {r.id: self._to_memory(r) for r in rows}
 
+    async def _bridge_supersession(
+        self, session: Any, org_id: str, space_id: str, memory_id: str
+    ) -> int:
+        """Preserve revision chains across the removal of `memory_id`.
+
+        A supersedes B supersedes C: removing B severs the only path from A to
+        C, and C — a fact the user explicitly replaced — resurfaces as current
+        (found live: erasing the middle of a Portland -> Austin -> Seattle
+        chain brought Portland back). For each (X -> memory, memory -> Y) pair
+        of SUPERSEDES edges, insert X -> Y before the FK cascade or explicit
+        delete takes the originals.
+
+        Runs inside the caller's transaction so a failed removal cannot leave
+        bridges to a memory that still exists. `ON CONFLICT DO NOTHING` against
+        the (space, source, target, type) unique constraint makes it idempotent
+        and race-safe. Only SUPERSEDES composes transitively; the other edge
+        types are deliberately left to break visibly.
+
+        The bridge references only the two surviving ids — nothing of the
+        removed memory's content — so the erasure path stays compliant.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        incoming = (
+            await session.execute(
+                select(RelationEdgeRow.source_id, RelationEdgeRow.confidence).where(
+                    RelationEdgeRow.org_id == org_id,
+                    RelationEdgeRow.space_id == space_id,
+                    RelationEdgeRow.target_id == memory_id,
+                    RelationEdgeRow.type == RelationType.SUPERSEDES.value,
+                )
+            )
+        ).all()
+        outgoing = (
+            await session.execute(
+                select(RelationEdgeRow.target_id, RelationEdgeRow.confidence).where(
+                    RelationEdgeRow.org_id == org_id,
+                    RelationEdgeRow.space_id == space_id,
+                    RelationEdgeRow.source_id == memory_id,
+                    RelationEdgeRow.type == RelationType.SUPERSEDES.value,
+                )
+            )
+        ).all()
+        if not incoming or not outgoing:
+            return 0
+        rows = [
+            {
+                "id": new_id("rel"),
+                "org_id": org_id,
+                "space_id": space_id,
+                "source_id": upstream.source_id,
+                "target_id": downstream.target_id,
+                "type": RelationType.SUPERSEDES.value,
+                "reason": "bridged across a removed intermediate revision",
+                "confidence": min(upstream.confidence, downstream.confidence),
+            }
+            for upstream in incoming
+            for downstream in outgoing
+            if upstream.source_id != downstream.target_id
+        ]
+        if not rows:
+            return 0
+        statement = (
+            pg_insert(RelationEdgeRow)
+            .values(rows)
+            .on_conflict_do_nothing(constraint="uq_edges_triple")
+        )
+        result = await session.execute(statement)
+        return int(cast(CursorResult[Any], result).rowcount or 0)
+
     async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> bool:
         async with self._session() as session, session.begin():
+            # Bridge BEFORE the row delete: the FK cascade on relation_edges
+            # destroys this memory's edges in the same statement as the row.
+            await self._bridge_supersession(session, org_id, space_id, memory_id)
             result = await session.execute(
                 delete(MemoryRow).where(
                     MemoryRow.id == memory_id,
@@ -497,6 +571,9 @@ class PostgresStore(MemoryStore):
                     )
                 )
                 or 0
+            )
+            edges_bridged = await self._bridge_supersession(
+                session, org_id, space_id, memory_id
             )
             edge_result = await session.execute(
                 delete(RelationEdgeRow).where(
@@ -533,6 +610,7 @@ class PostgresStore(MemoryStore):
                 chunks_removed=chunk_count if row_existed else 0,
                 edges_removed=edges_removed,
                 versions_purged=versions_purged,
+                edges_bridged=edges_bridged,
             )
 
     async def list_memories(

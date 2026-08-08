@@ -459,6 +459,7 @@ class MemoryService:
             "content_sha256": digest,
             "chunks_removed": report.chunks_removed,
             "edges_removed": report.edges_removed,
+            "edges_bridged": report.edges_bridged,
             "versions_purged": report.versions_purged,
             "derived_memories_affected": derivatives,
             "erased_at": utcnow().isoformat(),

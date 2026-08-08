@@ -66,6 +66,12 @@ class EraseReport:
     chunks_removed: int = 0
     edges_removed: int = 0
     versions_purged: int = 0
+    #: SUPERSEDES edges re-created around the removed memory so revision chains
+    #: survive it. Removing the middle of A->B->C used to sever the path from A
+    #: to C, and C — a fact the user explicitly replaced — resurfaced as
+    #: current. The bridge (A->C) carries only the two surviving ids, never the
+    #: removed memory's content, so erasure compliance is unaffected.
+    edges_bridged: int = 0
 
 
 @dataclass(frozen=True, slots=True)

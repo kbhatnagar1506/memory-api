@@ -781,3 +781,132 @@ async def test_erase_leaves_search_clean(tenant) -> None:
     )
     found = {h.memory_id for h in vector_hits} | {h.memory_id for h in lexical_hits}
     assert found == {keep.id}
+
+
+# -- supersession bridging across removal --------------------------------------
+#
+# Found live: erasing the middle of a "Portland" -> "Austin" -> "Seattle"
+# revision chain brought "lives in Portland" back as a current fact, because
+# the only SUPERSEDES path from the newest to the oldest ran through the
+# removed middle. Every removal path must bridge around the gap.
+
+
+async def _chain(store, org, space, *texts: str) -> list[Memory]:
+    """Oldest first; each later memory supersedes the one before it."""
+    memories = []
+    for offset, text in enumerate(texts):
+        memories.append(
+            await _add(store, org, space, text, occurred_at=NOW + timedelta(days=offset))
+        )
+    for newer, older in zip(memories[1:], memories, strict=False):
+        await store.create_relation(
+            RelationEdge(
+                org_id=org.id,
+                space_id=space.id,
+                source_id=newer.id,
+                target_id=older.id,
+                type=RelationType.SUPERSEDES,
+                confidence=0.9,
+            )
+        )
+    return memories
+
+
+async def test_erasing_a_middle_revision_does_not_resurrect_the_oldest(tenant) -> None:
+    store, org, space = tenant
+    oldest, middle, newest = await _chain(
+        store, org, space, "lives in Portland", "moved to Austin", "moved to Seattle"
+    )
+    report = await store.erase_memory(org.id, space.id, middle.id)
+    assert report.edges_bridged == 1
+    superseders = await store.reachable_superseders(org.id, space.id, oldest.id)
+    assert newest.id in superseders, "the replaced fact resurfaced as current"
+
+
+async def test_deleting_a_middle_revision_does_not_resurrect_the_oldest(tenant) -> None:
+    """Plain delete severed chains the same way erase did — postgres via FK
+    cascade, in-memory via the explicit edge sweep."""
+    store, org, space = tenant
+    oldest, middle, newest = await _chain(store, org, space, "v1", "v2", "v3")
+    assert await store.delete_memory(org.id, space.id, middle.id)
+    superseders = await store.reachable_superseders(org.id, space.id, oldest.id)
+    assert newest.id in superseders
+
+
+async def test_bridge_survives_removing_two_consecutive_middles(tenant) -> None:
+    """A -> B -> C -> D, remove C then B: each removal re-bridges over the
+    hole the previous one left, so D still transitively supersedes A."""
+    store, org, space = tenant
+    a, b, c, d = await _chain(store, org, space, "v1", "v2", "v3", "v4")
+    await store.erase_memory(org.id, space.id, c.id)
+    await store.erase_memory(org.id, space.id, b.id)
+    superseders = await store.reachable_superseders(org.id, space.id, a.id)
+    assert d.id in superseders
+
+
+async def test_bridge_confidence_is_the_weakest_hop(tenant) -> None:
+    store, org, space = tenant
+    oldest, middle, newest = await _chain(store, org, space, "v1", "v2", "v3")
+    await store.erase_memory(org.id, space.id, middle.id)
+    edges = await store.list_relations(
+        org.id, space.id, newest.id, direction="out", type=RelationType.SUPERSEDES
+    )
+    bridges = [e for e in edges if e.target_id == oldest.id]
+    assert len(bridges) == 1
+    assert bridges[0].confidence == pytest.approx(0.9)
+
+
+async def test_bridge_reason_leaks_nothing_of_the_erased_memory(tenant) -> None:
+    """The bridge is created BY an erasure; it must not defeat the erasure.
+    Neither the removed memory's id nor any of its content may survive on it."""
+    store, org, space = tenant
+    oldest, middle, newest = await _chain(store, org, space, "v1", "SECRET-PAYLOAD-42", "v3")
+    await store.erase_memory(org.id, space.id, middle.id)
+    edges = await store.list_relations(
+        org.id, space.id, newest.id, direction="out", type=RelationType.SUPERSEDES
+    )
+    bridge = next(e for e in edges if e.target_id == oldest.id)
+    assert "SECRET-PAYLOAD-42" not in bridge.reason
+    assert middle.id not in bridge.reason
+
+
+async def test_non_supersession_edges_are_not_bridged(tenant) -> None:
+    """derived_from does not compose: if B derived from C and A derived from
+    B, nothing says A derived from C. A broken derivation must stay visibly
+    broken rather than acquire an invented provenance."""
+    store, org, space = tenant
+    a, b, c = await _chain(store, org, space, "v1", "v2", "v3")
+    await store.create_relation(
+        RelationEdge(
+            org_id=org.id,
+            space_id=space.id,
+            source_id=c.id,
+            target_id=b.id,
+            type=RelationType.DERIVED_FROM,
+        )
+    )
+    await store.create_relation(
+        RelationEdge(
+            org_id=org.id,
+            space_id=space.id,
+            source_id=b.id,
+            target_id=a.id,
+            type=RelationType.DERIVED_FROM,
+        )
+    )
+    await store.erase_memory(org.id, space.id, b.id)
+    derived = await store.list_relations(
+        org.id, space.id, c.id, direction="out", type=RelationType.DERIVED_FROM
+    )
+    assert all(e.target_id != a.id for e in derived)
+
+
+async def test_erasing_an_endpoint_bridges_nothing(tenant) -> None:
+    """Only middles need bridging. Erasing the newest (no incoming SUPERSEDES)
+    or the oldest (no outgoing) must not invent edges."""
+    store, org, space = tenant
+    oldest, _middle, newest = await _chain(store, org, space, "v1", "v2", "v3")
+    report = await store.erase_memory(org.id, space.id, newest.id)
+    assert report.edges_bridged == 0
+    report = await store.erase_memory(org.id, space.id, oldest.id)
+    assert report.edges_bridged == 0

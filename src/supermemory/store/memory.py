@@ -234,11 +234,69 @@ class InMemoryStore(MemoryStore):
             bucket = self._by_space.get((org_id, space_id))
             if bucket and memory_id in bucket:
                 bucket.remove(memory_id)
+            self._bridge_supersession_locked(space_id, memory_id)
             self._remove_edges_touching(space_id, memory_id)
             # Version history is a durable log, decoupled from the live table's
             # lifecycle on purpose: deleting a memory must not erase its audit
             # trail. It is left in self._versions.
             return True
+
+    def _bridge_supersession_locked(self, space_id: str, memory_id: str) -> int:
+        """Preserve revision chains across the removal of `memory_id`.
+
+        Given A supersedes B supersedes C, removing B used to take the only
+        path from A to C with it — and C, a fact the user explicitly replaced,
+        resurfaced as current in every search. Found by erasing the middle of
+        a "lives in Portland" -> "Austin" -> "Seattle" chain: Portland came
+        back. For each (X -> memory, memory -> Y) pair of SUPERSEDES edges,
+        insert X -> Y before the removal severs them.
+
+        Only SUPERSEDES bridges. The other edge types do not compose: if B was
+        derived from C, A deriving from B says nothing about C; a broken
+        derivation should stay visibly broken.
+
+        Confidence is the min of the two hops — a chain is as strong as its
+        weakest link. The bridge reason names neither the removed memory nor
+        its content, so the erasure path stays compliant.
+
+        Caller must hold `self._lock` (both callers do).
+        """
+        incoming = [
+            self._edges[eid]
+            for eid in self._edges_by_target.get((space_id, memory_id), [])
+            if self._edges[eid].type is RelationType.SUPERSEDES
+        ]
+        outgoing = [
+            self._edges[eid]
+            for eid in self._edges_by_source.get((space_id, memory_id), [])
+            if self._edges[eid].type is RelationType.SUPERSEDES
+        ]
+        bridged = 0
+        for upstream in incoming:
+            for downstream in outgoing:
+                if upstream.source_id == downstream.target_id:
+                    continue  # would be a self-loop
+                exists = any(
+                    self._edges[eid].target_id == downstream.target_id
+                    and self._edges[eid].type is RelationType.SUPERSEDES
+                    for eid in self._edges_by_source.get((space_id, upstream.source_id), [])
+                )
+                if exists:
+                    continue
+                bridge = RelationEdge(
+                    org_id=upstream.org_id,
+                    space_id=space_id,
+                    source_id=upstream.source_id,
+                    target_id=downstream.target_id,
+                    type=RelationType.SUPERSEDES,
+                    reason="bridged across a removed intermediate revision",
+                    confidence=min(upstream.confidence, downstream.confidence),
+                )
+                self._edges[bridge.id] = bridge
+                self._edges_by_source[(space_id, bridge.source_id)].append(bridge.id)
+                self._edges_by_target[(space_id, bridge.target_id)].append(bridge.id)
+                bridged += 1
+        return bridged
 
     def _remove_edges_touching(self, space_id: str, memory_id: str) -> int:
         """Cascade-delete edges when their source or target memory is gone.
@@ -283,11 +341,13 @@ class InMemoryStore(MemoryStore):
 
             chunks = len(memory.chunks) if live and memory is not None else 0
             edges = 0
+            bridged = 0
             if live:
                 del self._memories[memory_id]
                 bucket = self._by_space.get((org_id, space_id))
                 if bucket and memory_id in bucket:
                     bucket.remove(memory_id)
+                bridged = self._bridge_supersession_locked(space_id, memory_id)
                 edges = self._remove_edges_touching(space_id, memory_id)
 
             versions = len(residual)
@@ -307,6 +367,7 @@ class InMemoryStore(MemoryStore):
                 chunks_removed=chunks,
                 edges_removed=edges,
                 versions_purged=versions,
+                edges_bridged=bridged,
             )
 
     def _space_memories(self, org_id: str, space_id: str) -> list[Memory]:

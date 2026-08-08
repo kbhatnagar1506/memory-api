@@ -303,7 +303,9 @@ async def test_supersede_relation_hides_the_older_memory(client, space_id) -> No
         f"/v1/spaces/{space_id}/memories/{new['id']}/relations",
         json={"target_id": old["id"], "relation": "supersedes", "reason": "migrated"},
     )
-    assert linked.status_code == 200
+    assert linked.status_code == 201
+    assert linked.json()["source_id"] == new["id"]
+    assert linked.json()["target_id"] == old["id"]
 
     results = (
         await client.post(
@@ -338,8 +340,10 @@ async def test_contradiction_is_recorded_on_both_memories(client, space_id) -> N
         f"/v1/spaces/{space_id}/memories/{a['id']}/relations",
         json={"target_id": b["id"], "relation": "contradicts"},
     )
-    other = (await client.get(f"/v1/spaces/{space_id}/memories/{b['id']}")).json()
-    assert any(r["target_id"] == a["id"] for r in other["relations"])
+    # `contradicts` is symmetric, so B must know about A without being asked
+    # about A first -- otherwise the answer depends on lookup order.
+    other = (await client.get(f"/v1/spaces/{space_id}/memories/{b['id']}/relations")).json()
+    assert any(r["target_id"] == a["id"] for r in other["items"])
 
 
 async def test_self_relation_is_rejected(client, space_id) -> None:
@@ -561,3 +565,185 @@ async def test_concurrent_searches_are_consistent(client, seeded) -> None:
     orderings = {tuple(h["memory"]["id"] for h in r.json()["results"]) for r in responses}
     # Deterministic pipeline: identical requests must produce identical order.
     assert len(orderings) == 1
+
+
+# -- temporal graph: multi-hop suppression, lineage, history -------------------
+
+
+async def _chain_of_three(client, space_id):
+    """Jenkins <- CircleCI <- GitHub Actions, oldest first."""
+    ids = []
+    for content in (
+        "Deploys go through Jenkins",
+        "Deploys go through CircleCI",
+        "Deploys go through GitHub Actions",
+    ):
+        created = await client.post(
+            f"/v1/spaces/{space_id}/memories", json={"content": content}
+        )
+        ids.append(created.json()["memory"]["id"])
+    oldest, middle, newest = ids
+    for source, target in ((middle, oldest), (newest, middle)):
+        await client.post(
+            f"/v1/spaces/{space_id}/memories/{source}/relations",
+            json={"target_id": target, "relation": "supersedes"},
+        )
+    return oldest, middle, newest
+
+
+async def test_multi_hop_supersession_hides_every_stale_revision(client, space_id) -> None:
+    """The bug this graph exists to fix.
+
+    With a relations list on each memory, suppression could only see one hop:
+    the two-hops-stale fact survived as though it were current.
+    """
+    await _chain_of_three(client, space_id)
+    results = (
+        await client.post(
+            f"/v1/spaces/{space_id}/search",
+            json={"query": "how do deploys work", "limit": 10},
+        )
+    ).json()["results"]
+    contents = [r["memory"]["content"] for r in results]
+
+    assert any("GitHub Actions" in c for c in contents)
+    assert not any("CircleCI" in c for c in contents), "one hop stale"
+    assert not any("Jenkins" in c for c in contents), "two hops stale"
+
+
+async def test_lineage_resolves_the_head_of_truth(client, space_id) -> None:
+    oldest, middle, newest = await _chain_of_three(client, space_id)
+
+    stale = (await client.get(f"/v1/spaces/{space_id}/memories/{oldest}/lineage")).json()
+    assert stale["is_current"] is False
+    assert stale["successors"] == [middle, newest]
+    assert stale["head"] == newest
+
+    current = (await client.get(f"/v1/spaces/{space_id}/memories/{newest}/lineage")).json()
+    assert current["is_current"] is True
+    assert current["ancestors"] == [middle, oldest]
+    assert current["head"] == newest
+
+
+async def test_relations_endpoint_both_directions(client, space_id) -> None:
+    oldest, middle, newest = await _chain_of_three(client, space_id)
+
+    outgoing = (
+        await client.get(
+            f"/v1/spaces/{space_id}/memories/{newest}/relations",
+            params={"direction": "out"},
+        )
+    ).json()["items"]
+    assert [e["target_id"] for e in outgoing] == [middle]
+
+    incoming = (
+        await client.get(
+            f"/v1/spaces/{space_id}/memories/{oldest}/relations",
+            params={"direction": "in"},
+        )
+    ).json()["items"]
+    assert [e["source_id"] for e in incoming] == [middle]
+
+
+async def test_relations_endpoint_rejects_a_bad_direction(client, space_id) -> None:
+    created = await client.post(f"/v1/spaces/{space_id}/memories", json={"content": "anything"})
+    memory_id = created.json()["memory"]["id"]
+    response = await client.get(
+        f"/v1/spaces/{space_id}/memories/{memory_id}/relations",
+        params={"direction": "sideways"},
+    )
+    assert response.status_code == 422
+
+
+async def test_version_history_records_the_supersession(client, space_id) -> None:
+    oldest, _, _ = await _chain_of_three(client, space_id)
+    versions = (await client.get(f"/v1/spaces/{space_id}/memories/{oldest}/versions")).json()[
+        "items"
+    ]
+
+    assert [v["version"] for v in versions] == [1, 2]
+    assert [v["status"] for v in versions] == ["active", "superseded"]
+    # Exactly one open version, and it is the last.
+    assert [v["valid_to"] is None for v in versions] == [False, True]
+
+
+async def test_point_in_time_read_returns_the_older_state(client, space_id) -> None:
+    oldest, _, _ = await _chain_of_three(client, space_id)
+    versions = (await client.get(f"/v1/spaces/{space_id}/memories/{oldest}/versions")).json()[
+        "items"
+    ]
+
+    historical = (
+        await client.get(
+            f"/v1/spaces/{space_id}/memories/{oldest}",
+            params={"as_of": versions[0]["valid_from"]},
+        )
+    ).json()
+    assert historical["status"] == "active"
+    assert historical["version"] == 1
+
+    current = (await client.get(f"/v1/spaces/{space_id}/memories/{oldest}")).json()
+    assert current["status"] == "superseded"
+    assert current["version"] == 2
+
+
+async def test_point_in_time_before_creation_is_404(client, space_id) -> None:
+    created = await client.post(f"/v1/spaces/{space_id}/memories", json={"content": "recent"})
+    memory_id = created.json()["memory"]["id"]
+    response = await client.get(
+        f"/v1/spaces/{space_id}/memories/{memory_id}",
+        params={"as_of": "2001-01-01T00:00:00Z"},
+    )
+    assert response.status_code == 404
+
+
+async def test_relation_creation_is_idempotent_over_http(client, space_id) -> None:
+    oldest, middle, _ = await _chain_of_three(client, space_id)
+    repeat = await client.post(
+        f"/v1/spaces/{space_id}/memories/{middle}/relations",
+        json={"target_id": oldest, "relation": "supersedes"},
+    )
+    assert repeat.status_code == 201
+    edges = (
+        await client.get(
+            f"/v1/spaces/{space_id}/memories/{middle}/relations",
+            params={"direction": "out"},
+        )
+    ).json()["items"]
+    assert len(edges) == 1
+
+
+async def test_relation_to_a_missing_memory_is_404(client, space_id) -> None:
+    created = await client.post(f"/v1/spaces/{space_id}/memories", json={"content": "solo"})
+    memory_id = created.json()["memory"]["id"]
+    response = await client.post(
+        f"/v1/spaces/{space_id}/memories/{memory_id}/relations",
+        json={
+            "target_id": "mem_00000000000000000000000000",
+            "relation": "supersedes",
+        },
+    )
+    assert response.status_code == 404
+
+
+async def test_lineage_is_tenant_scoped(app_context, client, space_id) -> None:
+    oldest, _, _ = await _chain_of_three(client, space_id)
+
+    store = app_context["store"]
+    intruder = await store.create_organization(Organization(name="Intruder"))
+    record, plaintext = build_api_key(
+        org_id=intruder.id,
+        name="k",
+        pepper="test-pepper",
+        scopes=frozenset(Scope.all()),
+    )
+    await store.create_api_key(record)
+    transport = httpx.ASGITransport(app=app_context["app"])
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"Authorization": f"Bearer {plaintext}"},
+    ) as other:
+        assert (
+            await other.get(f"/v1/spaces/{space_id}/memories/{oldest}/lineage")
+        ).status_code == 404

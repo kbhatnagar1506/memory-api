@@ -28,6 +28,7 @@ from sqlalchemy import (
     CheckConstraint,
     Computed,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -35,6 +36,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -153,9 +155,6 @@ class MemoryRow(Base):
     )
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    relations: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB().with_variant(JSON, "sqlite"), default=list, nullable=False
-    )
 
     chunks: Mapped[list[ChunkRow]] = relationship(
         back_populates="memory",
@@ -198,6 +197,99 @@ class ChunkRow(Base):
     memory: Mapped[MemoryRow] = relationship(back_populates="chunks")
 
 
+class RelationEdgeRow(Base):
+    """Typed graph edges between memories.
+
+    Indexed in BOTH directions. The reverse index is the whole point: "what
+    supersedes this memory" is the question retrieval asks on every result,
+    and answering it from a JSONB blob on each memory meant scanning the
+    table. Graph walks are per-hop indexed lookups rather than scans.
+
+    The unique constraint makes `create_relation` idempotent at the database
+    level, so a retried request cannot produce two parallel edges even if two
+    workers race.
+    """
+
+    __tablename__ = "relation_edges"
+    __table_args__ = (
+        Index("ix_edges_source", "org_id", "space_id", "source_id", "type"),
+        Index("ix_edges_target", "org_id", "space_id", "target_id", "type"),
+        UniqueConstraint("space_id", "source_id", "target_id", "type", name="uq_edges_triple"),
+        CheckConstraint("source_id <> target_id", name="ck_edges_no_self_loop"),
+        CheckConstraint(
+            "type in ('supersedes','contradicts','derived_from','references')",
+            name="ck_edges_type_valid",
+        ),
+        CheckConstraint(
+            "confidence >= 0 and confidence <= 1", name="ck_edges_confidence_range"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    org_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    space_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False
+    )
+    source_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
+    )
+    target_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MemoryVersionRow(Base):
+    """Append-only bitemporal snapshots of a memory's own fields.
+
+    `valid_from`/`valid_to` are SYSTEM time (when our database believed this),
+    distinct from `occurred_at` inside the snapshot, which is EVENT time (when
+    the thing happened). Keeping both is what lets the API answer "what did we
+    know on the 3rd about what happened in January".
+
+    No foreign key to `memories`: the audit trail must outlive the row it
+    describes, so deleting a memory does not erase the history of what it
+    said. That is deliberate, and the reason this table is not cascaded.
+    """
+
+    __tablename__ = "memory_versions"
+    __table_args__ = (
+        Index("ix_versions_lookup", "org_id", "space_id", "memory_id", "valid_from"),
+        # Partial index over the single current row per memory: the common
+        # "as of now" read never scans history.
+        Index(
+            "ix_versions_current",
+            "memory_id",
+            postgresql_where=text("valid_to IS NULL"),
+        ),
+        UniqueConstraint("memory_id", "version", name="uq_versions_memory_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    memory_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    org_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    space_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    meta: Mapped[dict[str, Any]] = mapped_column(
+        JSONB().with_variant(JSON, "sqlite"), default=dict, nullable=False
+    )
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(String).with_variant(JSON, "sqlite"), default=list, nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 #: Created out-of-band in the migration: SQLAlchemy cannot express HNSW options.
 HNSW_INDEX_DDL = """
 CREATE INDEX IF NOT EXISTS ix_chunks_embedding_hnsw
@@ -211,6 +303,8 @@ __all__ = [
     "Base",
     "ChunkRow",
     "MemoryRow",
+    "MemoryVersionRow",
     "OrganizationRow",
+    "RelationEdgeRow",
     "SpaceRow",
 ]

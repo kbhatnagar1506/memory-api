@@ -17,13 +17,25 @@ Most "memory" APIs are a vector index with a REST façade. That design fails on
 contact with real usage, in three specific ways this service addresses.
 
 **1. Facts go stale, and appending does not fix that.**
-Ask a document index "how do we deploy?" after a team migrates from Jenkins to
-GitHub Actions, and it returns both answers with no signal about which is
-current. Memories here form a typed graph — `supersedes`, `contradicts`,
-`derived_from`, `references` — and retrieval suppresses a memory when something
-that replaced it is present in the same result set. That last condition matters:
-hiding the old fact when the new one *did not* match the query would answer the
-question with silence, which is worse than answering it with something stale.
+Ask a document index "how do we deploy?" after a team migrates Jenkins →
+CircleCI → GitHub Actions, and it returns all three with no signal about which
+is current. Memories here form a typed graph — `supersedes`, `contradicts`,
+`derived_from`, `references` — stored as indexed edges, and retrieval suppresses
+a memory when something that **transitively** supersedes it is present in the
+results. Transitively matters: with a one-hop check, the two-hops-stale
+"Jenkins" answer survives as though it were current. That condition — *present
+in the results* — matters too: hiding the old fact when the new one did not
+match the query would answer with silence, which is worse than answering with
+something stale.
+
+Because the graph is indexed in both directions, you can also just ask:
+`GET /memories/{id}/lineage` → `{"is_current": false, "head": "mem_…"}`.
+
+**1b. And you can ask what you believed last week.**
+Every write records a version snapshot, with system time (`valid_from`/
+`valid_to`) kept separate from event time (`occurred_at`). So
+`GET /memories/{id}?as_of=2026-03-01T00:00:00Z` returns the memory as the
+database understood it then — not what is true now.
 
 **2. Dense vectors alone miss exactly what you search for most.**
 Embeddings are poor at exact tokens — an order number, `error TS2345`, a
@@ -80,6 +92,18 @@ relevance and has no idea how old anything is.
 | Rerank | LLM listwise, or offline heuristic | Precision at the top; degrades to first-stage order on any failure |
 | Decay | Exponential with a floor | Old-but-unique memories stay findable |
 | Diversity | MMR (λ = 0.7) | Suppresses near-duplicate results |
+| Staleness | Transitive graph walk | One hop is not enough; see ARCHITECTURE §4 |
+
+### Indexing
+
+| Data | Postgres | In-memory reference |
+|---|---|---|
+| Vectors | HNSW (`vector_cosine_ops`, m=16, ef=64) | Exact cosine scan |
+| Full text | Generated `tsvector` + GIN | BM25 (k1=1.2, b=0.75) |
+| Graph edges | btree on `(org, space, source, type)` **and** `(…, target, type)` | Dicts keyed both directions |
+| Versions | `(org, space, memory, valid_from)` + partial index on the open row | Per-memory list |
+| Tags / metadata | GIN on `tags`, GIN on `meta` JSONB | Linear filter |
+| Listing | `(org, space, status, id)` for cursor pagination | Sorted ids |
 
 ---
 
@@ -151,11 +175,22 @@ Or `GEMINI_API_KEY` / `OPENAI_API_KEY` for the key-based APIs.
 | `POST` | `/v1/spaces` | Create a namespace |
 | `POST` | `/v1/spaces/{id}/memories` | Ingest (chunk, embed, dedupe) |
 | `POST` | `/v1/spaces/{id}/memories/bulk` | Up to 100 at once |
-| `POST` | `/v1/spaces/{id}/memories/{id}/relations` | Supersede, contradict, link |
 | `POST` | `/v1/spaces/{id}/search` | Hybrid search |
 | `GET` | `/v1/spaces/{id}/memories` | Cursor-paginated listing |
+| `GET` | `/v1/spaces/{id}/memories/{id}?as_of=…` | Point-in-time read |
+| `POST` | `/v1/spaces/{id}/memories/{id}/relations` | Supersede, contradict, link |
+| `GET` | `/v1/spaces/{id}/memories/{id}/relations?direction=in\|out` | Graph edges, either direction |
+| `GET` | `/v1/spaces/{id}/memories/{id}/lineage` | Is this stale, and what replaced it |
+| `GET` | `/v1/spaces/{id}/memories/{id}/versions` | Full version history |
 | `POST` | `/v1/keys` | Mint a scoped API key |
 | `GET` | `/health`, `/ready`, `/metrics` | Liveness, readiness, Prometheus |
+
+Asking whether a fact is still current:
+
+```bash
+curl localhost:8000/v1/spaces/$SPACE/memories/$ID/lineage -H "Authorization: Bearer $KEY"
+# {"is_current": false, "successors": ["mem_…", "mem_…"], "head": "mem_…"}
+```
 
 ```bash
 curl -X POST localhost:8000/v1/spaces/$SPACE/search \
@@ -207,11 +242,13 @@ documented third-party stub gaps.
 A few things the tests caught during development, kept here because they are the
 interesting part: chunking silently dropped content when a document repeated
 itself; `parse_authorization("Bearer   ")` returned the literal string `Bearer`
-as the key; and the in-memory BM25 index indexed stopwords and did not stem, so
+as the key; the in-memory BM25 index indexed stopwords and did not stem, so
 "how do we **deploy**?" ranked an unrelated memory first *and* missed the one
 document that answered it — a real divergence from Postgres's `english` text
-search configuration, now pinned by
-[`test_text.py`](tests/unit/test_text.py).
+search configuration, now pinned by [`test_text.py`](tests/unit/test_text.py);
+and supersession suppression only ever looked one hop, so a fact two revisions
+out of date was returned as current
+([`test_multi_hop_supersession_hides_every_stale_revision`](tests/e2e/test_api.py)).
 
 ---
 

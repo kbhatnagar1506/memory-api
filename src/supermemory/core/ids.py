@@ -25,6 +25,8 @@ PREFIXES: Final[dict[str, str]] = {
     "chunk": "chk",
     "key": "key",
     "job": "job",
+    "edge": "edg",
+    "version": "ver",
 }
 
 _ID_RE: Final = re.compile(

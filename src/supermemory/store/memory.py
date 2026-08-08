@@ -19,11 +19,21 @@ import json
 import math
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 from ..core.errors import ConflictError
 from ..domain.embeddings.base import Vector, cosine_similarity
-from ..domain.models import ApiKey, Memory, MemoryStatus, Organization, Space
+from ..domain.models import (
+    ApiKey,
+    Memory,
+    MemoryStatus,
+    MemoryVersion,
+    Organization,
+    RelationEdge,
+    RelationType,
+    Space,
+    utcnow,
+)
 from ..domain.text import analyze, analyze_query
 from .base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
 
@@ -31,6 +41,10 @@ from .base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
 # length normalization. These are the standard defaults.
 _BM25_K1 = 1.2
 _BM25_B = 0.75
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def _encode_cursor(value: str) -> str:
@@ -55,6 +69,13 @@ class InMemoryStore(MemoryStore):
         self._memories: dict[str, Memory] = {}
         #: (org_id, space_id) -> ordered memory ids
         self._by_space: dict[tuple[str, str], list[str]] = defaultdict(list)
+        self._edges: dict[str, RelationEdge] = {}
+        #: (space_id, memory_id) -> edge ids, indexed both directions so
+        #: "what does X relate to" and "what relates to X" are both O(1).
+        self._edges_by_source: dict[tuple[str, str], list[str]] = defaultdict(list)
+        self._edges_by_target: dict[tuple[str, str], list[str]] = defaultdict(list)
+        #: memory_id -> versions, oldest first. The last entry has valid_to=None.
+        self._versions: dict[str, list[MemoryVersion]] = defaultdict(list)
 
     async def ping(self) -> bool:
         return True
@@ -67,6 +88,10 @@ class InMemoryStore(MemoryStore):
             self._key_by_hash.clear()
             self._memories.clear()
             self._by_space.clear()
+            self._edges.clear()
+            self._edges_by_source.clear()
+            self._edges_by_target.clear()
+            self._versions.clear()
 
     # -- organizations & spaces -------------------------------------------
 
@@ -116,6 +141,7 @@ class InMemoryStore(MemoryStore):
                 return False
             for memory_id in self._by_space.pop((org_id, space_id), []):
                 self._memories.pop(memory_id, None)
+                self._remove_edges_touching(space_id, memory_id)
             del self._spaces[space_id]
             return True
 
@@ -155,13 +181,29 @@ class InMemoryStore(MemoryStore):
 
     # -- memories ----------------------------------------------------------
 
-    async def upsert_memory(self, memory: Memory) -> Memory:
+    async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
         async with self._lock:
             bucket = self._by_space.setdefault((memory.org_id, memory.space_id), [])
             if memory.id not in self._memories:
                 bucket.append(memory.id)
                 bucket.sort()
             self._memories[memory.id] = memory
+
+            # See PostgresStore.upsert_memory: a write that does not bump
+            # `version` is an in-place correction and overwrites the open
+            # snapshot; only a version bump opens a new one. Both backends
+            # apply this rule, and the conformance suite pins it.
+            versions = self._versions[memory.id]
+            when = now or utcnow()
+            open_version = versions[-1] if versions and versions[-1].valid_to is None else None
+            if open_version is not None and open_version.version == memory.version:
+                versions[-1] = MemoryVersion.snapshot(
+                    memory, valid_from=open_version.valid_from
+                ).model_copy(update={"id": open_version.id})
+            else:
+                if open_version is not None:
+                    versions[-1] = open_version.model_copy(update={"valid_to": when})
+                versions.append(MemoryVersion.snapshot(memory, valid_from=when))
             return memory
 
     async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
@@ -192,7 +234,30 @@ class InMemoryStore(MemoryStore):
             bucket = self._by_space.get((org_id, space_id))
             if bucket and memory_id in bucket:
                 bucket.remove(memory_id)
+            self._remove_edges_touching(space_id, memory_id)
+            # Version history is a durable log, decoupled from the live table's
+            # lifecycle on purpose: deleting a memory must not erase its audit
+            # trail. It is left in self._versions.
             return True
+
+    def _remove_edges_touching(self, space_id: str, memory_id: str) -> None:
+        """Cascade-delete edges when their source or target memory is gone.
+
+        An edge whose endpoint no longer exists is worse than no edge: a
+        lineage walk would dereference a memory id that resolves to nothing.
+        """
+        for edge_id in list(self._edges_by_source.pop((space_id, memory_id), [])):
+            edge = self._edges.pop(edge_id, None)
+            if edge is not None:
+                other = self._edges_by_target.get((space_id, edge.target_id))
+                if other and edge_id in other:
+                    other.remove(edge_id)
+        for edge_id in list(self._edges_by_target.pop((space_id, memory_id), [])):
+            edge = self._edges.pop(edge_id, None)
+            if edge is not None:
+                other = self._edges_by_source.get((space_id, edge.source_id))
+                if other and edge_id in other:
+                    other.remove(edge_id)
 
     def _space_memories(self, org_id: str, space_id: str) -> list[Memory]:
         return [
@@ -240,6 +305,97 @@ class InMemoryStore(MemoryStore):
             if memory.content_sha256 == digest and memory.status is not MemoryStatus.ARCHIVED:
                 return memory
         return None
+
+    # -- relations: a typed, indexed graph ----------------------------------
+
+    async def create_relation(self, edge: RelationEdge) -> RelationEdge:
+        async with self._lock:
+            for existing_id in self._edges_by_source.get((edge.space_id, edge.source_id), []):
+                existing = self._edges[existing_id]
+                if existing.target_id == edge.target_id and existing.type == edge.type:
+                    return existing
+            self._edges[edge.id] = edge
+            self._edges_by_source[(edge.space_id, edge.source_id)].append(edge.id)
+            self._edges_by_target[(edge.space_id, edge.target_id)].append(edge.id)
+            return edge
+
+    async def list_relations(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        direction: str = "out",
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        if direction not in ("out", "in"):
+            raise ValueError(f"direction must be 'out' or 'in', got {direction!r}")
+        index = self._edges_by_source if direction == "out" else self._edges_by_target
+        edges = [self._edges[eid] for eid in index.get((space_id, memory_id), [])]
+        edges = [e for e in edges if e.org_id == org_id]
+        if type is not None:
+            edges = [e for e in edges if e.type == type]
+        # Oldest first: `walk_supersession_chain` relies on this to pick the
+        # original supersession decision when a memory has more than one.
+        return sorted(edges, key=lambda e: (e.created_at, e.id))
+
+    async def get_relations_between(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        id_set = set(memory_ids)
+        found: dict[str, RelationEdge] = {}
+        for memory_id in id_set:
+            for edge_id in self._edges_by_source.get((space_id, memory_id), []):
+                edge = self._edges[edge_id]
+                if (
+                    edge.org_id == org_id
+                    and edge.target_id in id_set
+                    and (type is None or edge.type == type)
+                ):
+                    found[edge.id] = edge
+        return sorted(found.values(), key=lambda e: (e.created_at, e.id))
+
+    # -- bitemporal history --------------------------------------------------
+
+    async def get_memory_as_of(
+        self, org_id: str, space_id: str, memory_id: str, as_of: datetime
+    ) -> Memory | None:
+        as_of_aware = _aware(as_of)
+        for version in reversed(self._versions.get(memory_id, [])):
+            if version.org_id != org_id or version.space_id != space_id:
+                continue
+            valid_from = _aware(version.valid_from)
+            valid_to = _aware(version.valid_to) if version.valid_to else None
+            if valid_from <= as_of_aware and (valid_to is None or as_of_aware < valid_to):
+                return Memory(
+                    id=version.memory_id,
+                    org_id=version.org_id,
+                    space_id=version.space_id,
+                    content=version.content,
+                    summary=version.summary,
+                    metadata=version.metadata,
+                    tags=version.tags,
+                    source=version.source,
+                    status=version.status,
+                    occurred_at=version.occurred_at,
+                    version=version.version,
+                    chunks=[],
+                )
+        return None
+
+    async def list_memory_versions(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> list[MemoryVersion]:
+        return [
+            v
+            for v in self._versions.get(memory_id, [])
+            if v.org_id == org_id and v.space_id == space_id
+        ]
 
     # -- retrieval ---------------------------------------------------------
 

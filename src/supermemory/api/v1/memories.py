@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -17,9 +18,14 @@ from ..schemas import (
     BulkCreateMemoryResponse,
     CreateMemoryRequest,
     CreateMemoryResponse,
+    LineageResponse,
     LinkRequest,
     MemoryListResponse,
     MemoryResponse,
+    MemoryVersionListResponse,
+    MemoryVersionResponse,
+    RelationListResponse,
+    RelationResponse,
 )
 
 router = APIRouter(prefix="/spaces/{space_id}/memories", tags=["memories"])
@@ -29,6 +35,12 @@ def _validate_space_id(space_id: str) -> str:
     if not is_valid(space_id, "space"):
         raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
     return space_id
+
+
+def _validate_memory_id(memory_id: str) -> str:
+    if not is_valid(memory_id, "memory"):
+        raise ValidationError(f"{memory_id!r} is not a valid memory id", field="memory_id")
+    return memory_id
 
 
 def _to_response(result: IngestResult) -> CreateMemoryResponse:
@@ -153,10 +165,22 @@ async def get_memory(
     service: ServiceDep,
     response: Response,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+    as_of: Annotated[
+        datetime | None,
+        Query(description="Return the memory as it stood at this instant (system time)."),
+    ] = None,
 ) -> MemoryResponse:
     _validate_space_id(space_id)
-    if not is_valid(memory_id, "memory"):
-        raise ValidationError(f"{memory_id!r} is not a valid memory id", field="memory_id")
+    _validate_memory_id(memory_id)
+    if as_of is not None:
+        # Point-in-time read: the memory as our database understood it then.
+        # Chunks are not versioned, so chunk_count is 0 on a historical read.
+        historical = await service.get_memory_as_of(
+            principal.org_id, space_id, memory_id, as_of
+        )
+        response.headers["etag"] = f'W/"{historical.version}"'
+        return MemoryResponse.from_domain(historical)
+
     memory = await service.get_memory(
         principal.org_id,
         space_id,
@@ -178,8 +202,7 @@ async def delete_memory(
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> None:
     _validate_space_id(space_id)
-    if not is_valid(memory_id, "memory"):
-        raise ValidationError(f"{memory_id!r} is not a valid memory id", field="memory_id")
+    _validate_memory_id(memory_id)
     await service.delete_memory(
         principal.org_id,
         space_id,
@@ -189,7 +212,8 @@ async def delete_memory(
 
 @router.post(
     "/{memory_id}/relations",
-    response_model=MemoryResponse,
+    response_model=RelationResponse,
+    status_code=status.HTTP_201_CREATED,
     summary="Relate one memory to another",
 )
 async def link_memory(
@@ -198,7 +222,7 @@ async def link_memory(
     body: LinkRequest,
     service: ServiceDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
-) -> MemoryResponse:
+) -> RelationResponse:
     _validate_space_id(space_id)
     for value, kind, field in (
         (memory_id, "memory", "memory_id"),
@@ -206,7 +230,7 @@ async def link_memory(
     ):
         if not is_valid(value, kind):
             raise ValidationError(f"{value!r} is not a valid memory id", field=field)
-    updated = await service.link(
+    edge = await service.link(
         principal.org_id,
         space_id,
         source_id=memory_id,
@@ -214,7 +238,66 @@ async def link_memory(
         relation=body.relation,
         reason=body.reason,
     )
-    return MemoryResponse.from_domain(updated)
+    return RelationResponse.from_domain(edge)
+
+
+@router.get(
+    "/{memory_id}/relations",
+    response_model=RelationListResponse,
+    summary="List a memory's relations",
+)
+async def get_relations(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+    direction: Annotated[str, Query(pattern="^(out|in)$")] = "out",
+) -> RelationListResponse:
+    """`out` = relations this memory asserts. `in` = relations pointing at it,
+    which is how you ask "what supersedes this"."""
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    edges = await service.list_relations(
+        principal.org_id, space_id, memory_id, direction=direction
+    )
+    return RelationListResponse(items=[RelationResponse.from_domain(e) for e in edges])
+
+
+@router.get(
+    "/{memory_id}/lineage",
+    response_model=LineageResponse,
+    summary="Where a memory sits in its supersession chain",
+)
+async def get_lineage(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+) -> LineageResponse:
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    lineage = await service.get_lineage(principal.org_id, space_id, memory_id)
+    return LineageResponse(**lineage)  # type: ignore[arg-type]
+
+
+@router.get(
+    "/{memory_id}/versions",
+    response_model=MemoryVersionListResponse,
+    summary="Full version history of a memory",
+)
+async def get_versions(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+) -> MemoryVersionListResponse:
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    versions = await service.list_memory_versions(principal.org_id, space_id, memory_id)
+    return MemoryVersionListResponse(
+        memory_id=memory_id,
+        items=[MemoryVersionResponse.from_domain(v) for v in versions],
+    )
 
 
 __all__ = ["router"]

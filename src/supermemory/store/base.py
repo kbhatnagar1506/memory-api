@@ -21,7 +21,16 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..domain.embeddings.base import Vector
-from ..domain.models import ApiKey, Memory, MemoryStatus, Organization, Space
+from ..domain.models import (
+    ApiKey,
+    Memory,
+    MemoryStatus,
+    MemoryVersion,
+    Organization,
+    RelationEdge,
+    RelationType,
+    Space,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,8 +156,15 @@ class MemoryStore(abc.ABC):
     # -- memories ----------------------------------------------------------
 
     @abc.abstractmethod
-    async def upsert_memory(self, memory: Memory) -> Memory:
-        """Insert or replace by id. Chunks and embeddings are replaced wholesale."""
+    async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
+        """Insert or replace by id. Chunks and embeddings are replaced wholesale.
+
+        Also records a `MemoryVersion` snapshot: closes the previous version's
+        `valid_to` (if one exists) and opens a new one at `now`. Callers never
+        need to remember to version separately — every write is bitemporal by
+        construction. `now` defaults to the current time; it is a parameter
+        only so tests can pin it.
+        """
 
     @abc.abstractmethod
     async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None: ...
@@ -182,6 +198,160 @@ class MemoryStore(abc.ABC):
     async def find_by_content_hash(
         self, org_id: str, space_id: str, digest: str
     ) -> Memory | None: ...
+
+    # -- relations: a typed, indexed graph ----------------------------------
+
+    @abc.abstractmethod
+    async def create_relation(self, edge: RelationEdge) -> RelationEdge:
+        """Idempotent: an identical (source, target, type) edge is returned,
+        not duplicated, so a retried request cannot create parallel edges."""
+
+    @abc.abstractmethod
+    async def list_relations(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        direction: str = "out",
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        """Edges touching `memory_id`. `direction` is "out" (memory_id is the
+        source) or "in" (memory_id is the target, i.e. a reverse lookup)."""
+
+    @abc.abstractmethod
+    async def get_relations_between(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        """Edges whose source AND target are both within `memory_ids`.
+
+        The induced subgraph over a result set. Note what this does NOT give
+        you: transitive reachability. If A supersedes B supersedes C and only
+        A and C are in `memory_ids`, this returns nothing, because neither
+        edge has both endpoints in the set. Suppression that needs the
+        transitive answer must walk the graph per candidate — see
+        `reachable_superseders` — and this method is the cheap bulk prefilter,
+        not the whole answer.
+        """
+
+    async def walk_supersession_chain(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        direction: str = "backward",
+        max_depth: int = 20,
+    ) -> list[RelationEdge]:
+        """The supersession lineage starting at `memory_id`.
+
+        "backward" (default) follows what `memory_id` supersedes, transitively
+        — its ancestry, oldest facts it replaced. "forward" follows what
+        supersedes `memory_id`, transitively — the path to the current head of
+        truth.
+
+        Concrete on the ABC, built once from `list_relations`, rather than
+        duplicated per backend: a graph walk re-implemented in SQL and in
+        Python is two places for cycle/depth-guard logic to quietly diverge.
+        Depth-bounded and cycle-guarded because a malformed edge set (which
+        should never happen, but "should never happen" is not a guarantee)
+        must not hang a request.
+
+        Follows a single strand: if a memory supersedes more than one target
+        (a consolidation, not a simple replacement) this walks only the oldest
+        edge at each step and the rest are not a "chain" at all but a DAG.
+        Callers who need the full fan-out should use `list_relations` or
+        `get_relations_between` directly rather than this convenience walker.
+        """
+        if max_depth < 1:
+            raise ValueError("max_depth must be at least 1")
+        list_direction = "out" if direction == "backward" else "in"
+        chain: list[RelationEdge] = []
+        visited: set[str] = {memory_id}
+        current = memory_id
+        for _ in range(max_depth):
+            edges = await self.list_relations(
+                org_id,
+                space_id,
+                current,
+                direction=list_direction,
+                type=RelationType.SUPERSEDES,
+            )
+            if not edges:
+                break
+            edge = edges[0]
+            nxt = edge.target_id if direction == "backward" else edge.source_id
+            if nxt in visited:
+                break
+            chain.append(edge)
+            visited.add(nxt)
+            current = nxt
+        return chain
+
+    async def reachable_superseders(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        max_depth: int = 20,
+    ) -> set[str]:
+        """Every memory that transitively supersedes `memory_id`.
+
+        A breadth-first walk backwards along incoming SUPERSEDES edges, so
+        A->B->C returns {A, B} for C even when B was never retrieved. This is
+        the correct basis for suppression: "is this fact stale" is a question
+        about the whole graph, not about which neighbours happened to match
+        the query.
+
+        Breadth-first over a `seen` set rather than a single strand, because
+        a memory can be superseded by more than one successor (two people
+        correcting the same fact independently) and any of them makes it
+        stale.
+        """
+        if max_depth < 1:
+            raise ValueError("max_depth must be at least 1")
+        seen: set[str] = set()
+        frontier = [memory_id]
+        for _ in range(max_depth):
+            if not frontier:
+                break
+            nxt: list[str] = []
+            for current in frontier:
+                edges = await self.list_relations(
+                    org_id,
+                    space_id,
+                    current,
+                    direction="in",
+                    type=RelationType.SUPERSEDES,
+                )
+                for edge in edges:
+                    if edge.source_id not in seen and edge.source_id != memory_id:
+                        seen.add(edge.source_id)
+                        nxt.append(edge.source_id)
+            frontier = nxt
+        return seen
+
+    # -- bitemporal history --------------------------------------------------
+
+    @abc.abstractmethod
+    async def get_memory_as_of(
+        self, org_id: str, space_id: str, memory_id: str, as_of: datetime
+    ) -> Memory | None:
+        """The memory's field values as our database understood them at `as_of`
+        (system time). Returns None if the memory did not exist yet at that
+        time. Chunks are not versioned — see `MemoryVersion`."""
+
+    @abc.abstractmethod
+    async def list_memory_versions(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> list[MemoryVersion]:
+        """Every version of a memory, oldest first."""
 
     # -- retrieval ---------------------------------------------------------
 

@@ -24,6 +24,8 @@ from supermemory.domain.models import (
     Memory,
     MemoryStatus,
     Organization,
+    RelationEdge,
+    RelationType,
     Scope,
     Space,
 )
@@ -423,3 +425,265 @@ async def test_revoked_key_reports_inactive(tenant) -> None:
 async def test_ping(tenant) -> None:
     store, _, _ = tenant
     assert await store.ping() is True
+
+
+# -- relations: the typed graph ------------------------------------------------
+
+
+async def _edge(store, org, space, source, target, type_=RelationType.SUPERSEDES):
+    return await store.create_relation(
+        RelationEdge(
+            org_id=org.id,
+            space_id=space.id,
+            source_id=source.id,
+            target_id=target.id,
+            type=type_,
+        )
+    )
+
+
+async def test_relation_round_trip(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer")
+    b = await _add(store, org, space, "older")
+    edge = await _edge(store, org, space, a, b)
+
+    out = await store.list_relations(org.id, space.id, a.id, direction="out")
+    assert [e.id for e in out] == [edge.id]
+    assert out[0].source_id == a.id and out[0].target_id == b.id
+
+
+async def test_relation_reverse_lookup(tenant) -> None:
+    """The index that makes "what supersedes this" cheap."""
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer")
+    b = await _add(store, org, space, "older")
+    await _edge(store, org, space, a, b)
+
+    incoming = await store.list_relations(org.id, space.id, b.id, direction="in")
+    assert [e.source_id for e in incoming] == [a.id]
+    assert await store.list_relations(org.id, space.id, b.id, direction="out") == []
+
+
+async def test_relation_creation_is_idempotent(tenant) -> None:
+    """A retried request must not create a parallel edge."""
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer")
+    b = await _add(store, org, space, "older")
+    first = await _edge(store, org, space, a, b)
+    second = await _edge(store, org, space, a, b)
+    assert first.id == second.id
+    assert len(await store.list_relations(org.id, space.id, a.id)) == 1
+
+
+async def test_relations_filter_by_type(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "one")
+    b = await _add(store, org, space, "two")
+    await _edge(store, org, space, a, b, RelationType.SUPERSEDES)
+    await _edge(store, org, space, a, b, RelationType.CONTRADICTS)
+
+    assert len(await store.list_relations(org.id, space.id, a.id)) == 2
+    only = await store.list_relations(org.id, space.id, a.id, type=RelationType.CONTRADICTS)
+    assert [e.type for e in only] == [RelationType.CONTRADICTS]
+
+
+async def test_relations_do_not_cross_tenants(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer")
+    b = await _add(store, org, space, "older")
+    await _edge(store, org, space, a, b)
+    other = await store.create_organization(Organization(name="Intruder"))
+    assert await store.list_relations(other.id, space.id, a.id) == []
+
+
+async def test_get_relations_between_is_the_induced_subgraph(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "a")
+    b = await _add(store, org, space, "b")
+    c = await _add(store, org, space, "c")
+    await _edge(store, org, space, a, b)
+    await _edge(store, org, space, b, c)
+
+    both = await store.get_relations_between(org.id, space.id, [a.id, b.id, c.id])
+    assert len(both) == 2
+    # Only A and C: neither edge has both endpoints in the set.
+    assert await store.get_relations_between(org.id, space.id, [a.id, c.id]) == []
+    assert await store.get_relations_between(org.id, space.id, []) == []
+
+
+async def test_reachable_superseders_is_transitive(tenant) -> None:
+    """The property one-hop suppression got wrong: A->B->C must reach A from C."""
+    store, org, space = tenant
+    a = await _add(store, org, space, "newest")
+    b = await _add(store, org, space, "middle")
+    c = await _add(store, org, space, "oldest")
+    await _edge(store, org, space, b, c)
+    await _edge(store, org, space, a, b)
+
+    assert await store.reachable_superseders(org.id, space.id, c.id) == {a.id, b.id}
+    assert await store.reachable_superseders(org.id, space.id, b.id) == {a.id}
+    assert await store.reachable_superseders(org.id, space.id, a.id) == set()
+
+
+async def test_reachable_superseders_handles_fan_in(tenant) -> None:
+    """Two people independently correcting the same fact both make it stale."""
+    store, org, space = tenant
+    x = await _add(store, org, space, "original")
+    y1 = await _add(store, org, space, "correction one")
+    y2 = await _add(store, org, space, "correction two")
+    await _edge(store, org, space, y1, x)
+    await _edge(store, org, space, y2, x)
+    assert await store.reachable_superseders(org.id, space.id, x.id) == {y1.id, y2.id}
+
+
+async def test_graph_walks_terminate_on_a_cycle(tenant) -> None:
+    """Malformed data must not hang a request."""
+    store, org, space = tenant
+    a = await _add(store, org, space, "a")
+    b = await _add(store, org, space, "b")
+    await _edge(store, org, space, a, b)
+    await _edge(store, org, space, b, a)
+
+    assert await store.reachable_superseders(org.id, space.id, a.id) == {b.id}
+    chain = await store.walk_supersession_chain(org.id, space.id, a.id)
+    assert len(chain) <= 2
+
+
+async def test_deleting_a_memory_removes_its_edges(tenant) -> None:
+    """A dangling edge is worse than no edge: it points at nothing."""
+    store, org, space = tenant
+    a = await _add(store, org, space, "newer")
+    b = await _add(store, org, space, "older")
+    await _edge(store, org, space, a, b)
+    await store.delete_memory(org.id, space.id, b.id)
+    assert await store.list_relations(org.id, space.id, a.id, direction="out") == []
+
+
+async def test_walk_supersession_chain_both_directions(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "newest")
+    b = await _add(store, org, space, "middle")
+    c = await _add(store, org, space, "oldest")
+    await _edge(store, org, space, b, c)
+    await _edge(store, org, space, a, b)
+
+    backward = await store.walk_supersession_chain(org.id, space.id, a.id)
+    assert [e.target_id for e in backward] == [b.id, c.id]
+    forward = await store.walk_supersession_chain(org.id, space.id, c.id, direction="forward")
+    assert [e.source_id for e in forward] == [b.id, a.id]
+
+
+async def test_walk_rejects_a_zero_depth(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "a")
+    with pytest.raises(ValueError, match="max_depth"):
+        await store.walk_supersession_chain(org.id, space.id, a.id, max_depth=0)
+
+
+async def test_invalid_direction_rejected(tenant) -> None:
+    store, org, space = tenant
+    a = await _add(store, org, space, "a")
+    with pytest.raises(ValueError, match="direction"):
+        await store.list_relations(org.id, space.id, a.id, direction="sideways")
+
+
+# -- bitemporal history --------------------------------------------------------
+
+
+async def test_every_write_records_a_version(tenant) -> None:
+    store, org, space = tenant
+    memory = await _add(store, org, space, "v1")
+    versions = await store.list_memory_versions(org.id, space.id, memory.id)
+    assert len(versions) == 1
+    assert versions[0].content == "v1"
+    assert versions[0].valid_to is None
+
+
+async def test_version_bump_opens_a_new_snapshot_and_closes_the_old(tenant) -> None:
+    store, org, space = tenant
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    t1 = t0 + timedelta(hours=1)
+    memory = Memory(org_id=org.id, space_id=space.id, content="v1")
+    await store.upsert_memory(memory, now=t0)
+    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+
+    versions = await store.list_memory_versions(org.id, space.id, memory.id)
+    assert [v.content for v in versions] == ["v1", "v2"]
+    assert versions[0].valid_to == t1
+    assert versions[1].valid_to is None
+
+
+async def test_same_version_write_is_an_in_place_correction(tenant) -> None:
+    """Re-saving without bumping must not accumulate duplicate snapshots.
+
+    Postgres would also reject it outright on uq_versions_memory_version, so
+    the two backends have to agree on this or they diverge on a normal write.
+    """
+    store, org, space = tenant
+    memory = Memory(org_id=org.id, space_id=space.id, content="v1")
+    await store.upsert_memory(memory)
+    await store.upsert_memory(memory.model_copy(update={"content": "corrected"}))
+
+    versions = await store.list_memory_versions(org.id, space.id, memory.id)
+    assert len(versions) == 1
+    assert versions[0].content == "corrected"
+
+
+async def test_point_in_time_read(tenant) -> None:
+    store, org, space = tenant
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    t1 = t0 + timedelta(hours=2)
+    memory = Memory(org_id=org.id, space_id=space.id, content="v1")
+    await store.upsert_memory(memory, now=t0)
+    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+
+    mid = await store.get_memory_as_of(org.id, space.id, memory.id, t0 + timedelta(hours=1))
+    assert mid is not None and mid.content == "v1"
+    later = await store.get_memory_as_of(org.id, space.id, memory.id, t1 + timedelta(hours=1))
+    assert later is not None and later.content == "v2"
+
+
+async def test_point_in_time_boundary_is_half_open(tenant) -> None:
+    """At exactly valid_to the old snapshot is already gone."""
+    store, org, space = tenant
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    t1 = t0 + timedelta(hours=1)
+    memory = Memory(org_id=org.id, space_id=space.id, content="v1")
+    await store.upsert_memory(memory, now=t0)
+    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+    at_boundary = await store.get_memory_as_of(org.id, space.id, memory.id, t1)
+    assert at_boundary is not None and at_boundary.content == "v2"
+
+
+async def test_point_in_time_before_creation_is_none(tenant) -> None:
+    store, org, space = tenant
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    memory = Memory(org_id=org.id, space_id=space.id, content="v1")
+    await store.upsert_memory(memory, now=t0)
+    assert (
+        await store.get_memory_as_of(org.id, space.id, memory.id, t0 - timedelta(days=1))
+        is None
+    )
+
+
+async def test_history_does_not_cross_tenants(tenant) -> None:
+    store, org, space = tenant
+    memory = await _add(store, org, space, "secret")
+    other = await store.create_organization(Organization(name="Intruder"))
+    assert await store.list_memory_versions(other.id, space.id, memory.id) == []
+    assert await store.get_memory_as_of(other.id, space.id, memory.id, NOW) is None
+
+
+async def test_status_change_is_captured_in_history(tenant) -> None:
+    """Supersession is a status transition, and history must show it."""
+    store, org, space = tenant
+    memory = await _add(store, org, space, "fact")
+    await store.upsert_memory(
+        memory.model_copy(update={"status": MemoryStatus.SUPERSEDED, "version": 2})
+    )
+    versions = await store.list_memory_versions(org.id, space.id, memory.id)
+    assert [v.status for v in versions] == [
+        MemoryStatus.ACTIVE,
+        MemoryStatus.SUPERSEDED,
+    ]

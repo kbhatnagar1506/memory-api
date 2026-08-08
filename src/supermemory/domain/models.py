@@ -9,6 +9,19 @@ accumulate is wrong within a week of real use: people change their minds, plans
 get replaced, and two sources disagree. So memories form a small typed graph —
 `supersedes`, `contradicts`, `derived_from`, `references` — and retrieval uses
 it to suppress facts that have been overtaken. See domain/consolidation.py.
+
+`RelationEdge` is a first-class, independently identified entity rather than a
+list embedded on `Memory`. Two reasons: an embedded list has no reverse index,
+so "what supersedes X" is an O(n) scan of every memory's blob; and a typed graph
+that lives in one place has one history, not two copies that can drift.
+`MemoryStore.get_relations_between` and `walk_supersession_chain` are what a
+graph structure buys over a blob — see store/base.py.
+
+`MemoryVersion` makes the system bitemporal. Every mutation closes the
+previous version's `valid_to` and opens a new one, so "what did our database
+say as of time T" (system time) is answerable without disturbing "what
+happened as of time T" (`Memory.occurred_at`, event time) — they answer
+different questions and must not be conflated.
 """
 
 from __future__ import annotations
@@ -123,13 +136,43 @@ class Space(Base):
         return v
 
 
-class Relation(Base):
-    type: RelationType
+class RelationEdge(Base):
+    """A typed, directed edge between two memories. Immutable once written.
+
+    Edges are never updated and never hard-deleted in normal operation, which
+    is what makes `created_at` a free, correct history of the graph: "what
+    relations existed as of T" is just `WHERE created_at <= T`, no separate
+    versioning needed for this entity.
+
+    `SUPERSEDES` direction: `source_id` is the NEWER memory, `target_id` is the
+    one it replaces — i.e. "source supersedes target". `CONTRADICTS` is
+    symmetric and is written as a pair of edges, one in each direction, so the
+    answer does not depend on which memory you happened to look up first.
+    """
+
+    id: str = Field(default_factory=lambda: new_id("edge"))
+    org_id: str
+    space_id: str
+    source_id: str
     target_id: str
+    type: RelationType
     #: Free-text justification, e.g. the LLM's reason for judging a conflict.
     reason: str = ""
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     created_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator("id")
+    @classmethod
+    def _id_shape(cls, v: str) -> str:
+        if not is_valid(v, "edge"):
+            raise ValueError(f"invalid relation edge id: {v!r}")
+        return v
+
+    @model_validator(mode="after")
+    def _no_self_loop(self) -> Self:
+        if self.source_id == self.target_id:
+            raise ValueError("a memory cannot relate to itself")
+        return self
 
 
 class Chunk(Base):
@@ -172,10 +215,12 @@ class Memory(Base):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     content_sha256: str = ""
-    relations: list[Relation] = Field(default_factory=list)
     chunks: list[Chunk] = Field(default_factory=list)
-    #: Monotonic version, incremented on every mutation. Enables optimistic
-    #: concurrency control via If-Match.
+    #: Monotonic version, incremented on every mutation to this memory's own
+    #: fields. Enables optimistic concurrency control via If-Match, and is the
+    #: version number `MemoryVersion` snapshots correspond to. Attaching a
+    #: relation to a memory does NOT bump this: an edge is a fact about the
+    #: graph, not a change to the memory's own content.
     version: int = Field(default=1, ge=1)
 
     @field_validator("id")
@@ -210,9 +255,60 @@ class Memory(Base):
     def is_retrievable(self) -> bool:
         return self.status is MemoryStatus.ACTIVE
 
-    def superseded_by(self) -> list[str]:
-        """Ids of memories that supersede this one."""
-        return [r.target_id for r in self.relations if r.type is RelationType.SUPERSEDES]
+
+class MemoryVersion(Base):
+    """An immutable snapshot of a memory's own fields, one row per change.
+
+    `valid_from`/`valid_to` are SYSTEM time — when this snapshot was the
+    current row in our database — which is a different axis from `occurred_at`
+    (event time, carried inside the snapshot). `valid_to is None` means this
+    snapshot is the current one.
+
+    Chunks and embeddings are deliberately NOT versioned here: duplicating
+    vector blobs on every edit is expensive, and a historical snapshot is for
+    audit/point-in-time reads, not for making old text searchable again. If
+    that need arises later it is a clean, separate extension.
+    """
+
+    id: str = Field(default_factory=lambda: new_id("version"))
+    memory_id: str
+    org_id: str
+    space_id: str
+    version: int = Field(ge=1)
+    content: str
+    summary: str
+    metadata: dict[str, Any]
+    tags: list[str]
+    source: str
+    status: MemoryStatus
+    occurred_at: datetime
+    valid_from: datetime
+    valid_to: datetime | None = None
+
+    @field_validator("id")
+    @classmethod
+    def _id_shape(cls, v: str) -> str:
+        if not is_valid(v, "version"):
+            raise ValueError(f"invalid memory version id: {v!r}")
+        return v
+
+    @classmethod
+    def snapshot(cls, memory: Memory, *, valid_from: datetime) -> MemoryVersion:
+        """The version row that captures `memory`'s current field values."""
+        return cls(
+            memory_id=memory.id,
+            org_id=memory.org_id,
+            space_id=memory.space_id,
+            version=memory.version,
+            content=memory.content,
+            summary=memory.summary,
+            metadata=memory.metadata,
+            tags=memory.tags,
+            source=memory.source,
+            status=memory.status,
+            occurred_at=memory.occurred_at,
+            valid_from=valid_from,
+        )
 
 
 class ApiKey(Base):
@@ -266,9 +362,10 @@ __all__ = [
     "Chunk",
     "Memory",
     "MemoryStatus",
+    "MemoryVersion",
     "NonEmptyStr",
     "Organization",
-    "Relation",
+    "RelationEdge",
     "RelationType",
     "Scope",
     "ScoredMemory",

@@ -29,24 +29,39 @@ def upgrade() -> None:
         "organizations",
         sa.Column("id", sa.String(40), primary_key=True),
         sa.Column("name", sa.String(200), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
     )
 
     op.create_table(
         "spaces",
         sa.Column("id", sa.String(40), primary_key=True),
-        sa.Column("org_id", sa.String(40),
-                  sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "org_id",
+            sa.String(40),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("slug", sa.String(64), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=False, server_default=""),
-        sa.Column("meta", sa.dialects.postgresql.JSONB(), nullable=False,
-                  server_default="{}"),
-        sa.Column("created_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
+        sa.Column("meta", sa.dialects.postgresql.JSONB(), nullable=False, server_default="{}"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("org_id", "slug", name="uq_spaces_org_slug"),
     )
     op.create_index("ix_spaces_org", "spaces", ["org_id"])
@@ -54,14 +69,22 @@ def upgrade() -> None:
     op.create_table(
         "api_keys",
         sa.Column("id", sa.String(40), primary_key=True),
-        sa.Column("org_id", sa.String(40),
-                  sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "org_id",
+            sa.String(40),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("key_hash", sa.String(64), nullable=False),
         sa.Column("prefix", sa.String(16), nullable=False),
         sa.Column("scopes", sa.dialects.postgresql.ARRAY(sa.String()), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("last_used_at", sa.DateTime(timezone=True)),
         sa.Column("expires_at", sa.DateTime(timezone=True)),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
@@ -73,44 +96,68 @@ def upgrade() -> None:
         "memories",
         sa.Column("id", sa.String(40), primary_key=True),
         sa.Column("org_id", sa.String(40), nullable=False),
-        sa.Column("space_id", sa.String(40),
-                  sa.ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "space_id",
+            sa.String(40),
+            sa.ForeignKey("spaces.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("summary", sa.Text(), nullable=False, server_default=""),
-        sa.Column("meta", sa.dialects.postgresql.JSONB(), nullable=False,
-                  server_default="{}"),
-        sa.Column("tags", sa.dialects.postgresql.ARRAY(sa.String()), nullable=False,
-                  server_default="{}"),
+        sa.Column("meta", sa.dialects.postgresql.JSONB(), nullable=False, server_default="{}"),
+        sa.Column(
+            "tags",
+            sa.dialects.postgresql.ARRAY(sa.String()),
+            nullable=False,
+            server_default="{}",
+        ),
         sa.Column("source", sa.String(500), nullable=False, server_default=""),
         sa.Column("status", sa.String(20), nullable=False, server_default="active"),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("content_sha256", sa.String(64), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("relations", sa.dialects.postgresql.JSONB(), nullable=False,
-                  server_default="[]"),
+        sa.Column(
+            "relations", sa.dialects.postgresql.JSONB(), nullable=False, server_default="[]"
+        ),
         sa.CheckConstraint("version >= 1", name="ck_memories_version_positive"),
-        sa.CheckConstraint("status in ('active','superseded','archived')",
-                           name="ck_memories_status_valid"),
+        sa.CheckConstraint(
+            "status in ('active','superseded','archived')", name="ck_memories_status_valid"
+        ),
     )
     op.create_index("ix_memories_tenant", "memories", ["org_id", "space_id"])
-    op.create_index("ix_memories_tenant_status_id", "memories",
-                    ["org_id", "space_id", "status", "id"])
-    op.create_index("ix_memories_tenant_occurred", "memories",
-                    ["org_id", "space_id", "occurred_at"])
-    op.create_index("ix_memories_content_hash", "memories",
-                    ["org_id", "space_id", "content_sha256"])
+    op.create_index(
+        "ix_memories_tenant_status_id", "memories", ["org_id", "space_id", "status", "id"]
+    )
+    op.create_index(
+        "ix_memories_tenant_occurred", "memories", ["org_id", "space_id", "occurred_at"]
+    )
+    op.create_index(
+        "ix_memories_content_hash", "memories", ["org_id", "space_id", "content_sha256"]
+    )
     op.create_index("ix_memories_tags", "memories", ["tags"], postgresql_using="gin")
     op.create_index("ix_memories_metadata", "memories", ["meta"], postgresql_using="gin")
 
     op.create_table(
         "chunks",
         sa.Column("id", sa.String(40), primary_key=True),
-        sa.Column("memory_id", sa.String(40),
-                  sa.ForeignKey("memories.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "memory_id",
+            sa.String(40),
+            sa.ForeignKey("memories.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("org_id", sa.String(40), nullable=False),
         sa.Column("space_id", sa.String(40), nullable=False),
         sa.Column("ordinal", sa.Integer(), nullable=False),

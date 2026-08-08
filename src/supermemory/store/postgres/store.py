@@ -32,13 +32,25 @@ from ...domain.models import (
     Chunk,
     Memory,
     MemoryStatus,
+    MemoryVersion,
     Organization,
-    Relation,
+    RelationEdge,
+    RelationType,
     Scope,
     Space,
+    utcnow,
 )
 from ..base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
-from .models import ApiKeyRow, Base, ChunkRow, MemoryRow, OrganizationRow, SpaceRow
+from .models import (
+    ApiKeyRow,
+    Base,
+    ChunkRow,
+    MemoryRow,
+    MemoryVersionRow,
+    OrganizationRow,
+    RelationEdgeRow,
+    SpaceRow,
+)
 
 log = get_logger(__name__)
 
@@ -127,7 +139,6 @@ class PostgresStore(MemoryStore):
             updated_at=row.updated_at,
             content_sha256=row.content_sha256,
             version=row.version,
-            relations=[Relation(**r) for r in (row.relations or [])],
             chunks=[
                 Chunk(
                     id=c.id,
@@ -304,7 +315,8 @@ class PostgresStore(MemoryStore):
 
     # -- memories ------------------------------------------------------------
 
-    async def upsert_memory(self, memory: Memory) -> Memory:
+    async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
+        when = _require_aware(now or utcnow())
         async with self._session() as session, session.begin():
             row = await session.get(MemoryRow, memory.id)
             if row is None:
@@ -323,7 +335,51 @@ class PostgresStore(MemoryStore):
             row.updated_at = _require_aware(memory.updated_at)
             row.content_sha256 = memory.content_sha256
             row.version = memory.version
-            row.relations = [r.model_dump(mode="json") for r in memory.relations]
+
+            # Bitemporal history, in the same transaction as the row write so
+            # the live table and its audit trail cannot disagree.
+            #
+            # A write that does not bump `version` is an in-place correction,
+            # not a new state, so it overwrites the open snapshot rather than
+            # opening a second one. Otherwise a caller that re-saves without
+            # bumping would either violate uq_versions_memory_version here or
+            # accumulate duplicate snapshots — and the in-memory backend
+            # applies the same rule, which is what keeps the two in agreement.
+            open_version = await session.scalar(
+                select(MemoryVersionRow).where(
+                    MemoryVersionRow.memory_id == memory.id,
+                    MemoryVersionRow.valid_to.is_(None),
+                )
+            )
+            snapshot = MemoryVersion.snapshot(memory, valid_from=when)
+            if open_version is not None and open_version.version == memory.version:
+                open_version.content = snapshot.content
+                open_version.summary = snapshot.summary
+                open_version.meta = snapshot.metadata
+                open_version.tags = snapshot.tags
+                open_version.source = snapshot.source
+                open_version.status = snapshot.status.value
+                open_version.occurred_at = _require_aware(snapshot.occurred_at)
+            else:
+                if open_version is not None:
+                    open_version.valid_to = when
+                session.add(
+                    MemoryVersionRow(
+                        id=snapshot.id,
+                        memory_id=snapshot.memory_id,
+                        org_id=snapshot.org_id,
+                        space_id=snapshot.space_id,
+                        version=snapshot.version,
+                        content=snapshot.content,
+                        summary=snapshot.summary,
+                        meta=snapshot.metadata,
+                        tags=snapshot.tags,
+                        source=snapshot.source,
+                        status=snapshot.status.value,
+                        occurred_at=_require_aware(snapshot.occurred_at),
+                        valid_from=when,
+                    )
+                )
 
             # Chunks are replaced wholesale: a re-embedded memory has entirely
             # new vectors, and reconciling them individually is more code and
@@ -442,6 +498,168 @@ class PostgresStore(MemoryStore):
                 .limit(1)
             )
             return self._to_memory(row) if row else None
+
+    # -- relations: a typed, indexed graph ------------------------------------
+
+    @staticmethod
+    def _to_edge(row: RelationEdgeRow) -> RelationEdge:
+        return RelationEdge(
+            id=row.id,
+            org_id=row.org_id,
+            space_id=row.space_id,
+            source_id=row.source_id,
+            target_id=row.target_id,
+            type=RelationType(row.type),
+            reason=row.reason,
+            confidence=row.confidence,
+            created_at=row.created_at,
+        )
+
+    async def create_relation(self, edge: RelationEdge) -> RelationEdge:
+        async with self._session() as session, session.begin():
+            existing = await session.scalar(
+                select(RelationEdgeRow).where(
+                    RelationEdgeRow.space_id == edge.space_id,
+                    RelationEdgeRow.source_id == edge.source_id,
+                    RelationEdgeRow.target_id == edge.target_id,
+                    RelationEdgeRow.type == edge.type.value,
+                )
+            )
+            if existing is not None:
+                return self._to_edge(existing)
+            session.add(
+                RelationEdgeRow(
+                    id=edge.id,
+                    org_id=edge.org_id,
+                    space_id=edge.space_id,
+                    source_id=edge.source_id,
+                    target_id=edge.target_id,
+                    type=edge.type.value,
+                    reason=edge.reason,
+                    confidence=edge.confidence,
+                    created_at=_require_aware(edge.created_at),
+                )
+            )
+        return edge
+
+    async def list_relations(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        direction: str = "out",
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        if direction not in ("out", "in"):
+            raise ValueError(f"direction must be 'out' or 'in', got {direction!r}")
+        column = RelationEdgeRow.source_id if direction == "out" else RelationEdgeRow.target_id
+        async with self._session() as session:
+            stmt = select(RelationEdgeRow).where(
+                RelationEdgeRow.org_id == org_id,
+                RelationEdgeRow.space_id == space_id,
+                column == memory_id,
+            )
+            if type is not None:
+                stmt = stmt.where(RelationEdgeRow.type == type.value)
+            # Oldest first, matching the in-memory backend: the walker relies
+            # on this to follow the original supersession decision.
+            stmt = stmt.order_by(RelationEdgeRow.created_at, RelationEdgeRow.id)
+            return [self._to_edge(r) for r in await session.scalars(stmt)]
+
+    async def get_relations_between(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        type: RelationType | None = None,
+    ) -> list[RelationEdge]:
+        ids = list(memory_ids)
+        if not ids:
+            return []
+        async with self._session() as session:
+            stmt = select(RelationEdgeRow).where(
+                RelationEdgeRow.org_id == org_id,
+                RelationEdgeRow.space_id == space_id,
+                RelationEdgeRow.source_id.in_(ids),
+                RelationEdgeRow.target_id.in_(ids),
+            )
+            if type is not None:
+                stmt = stmt.where(RelationEdgeRow.type == type.value)
+            stmt = stmt.order_by(RelationEdgeRow.created_at, RelationEdgeRow.id)
+            return [self._to_edge(r) for r in await session.scalars(stmt)]
+
+    # -- bitemporal history ----------------------------------------------------
+
+    @staticmethod
+    def _to_version(row: MemoryVersionRow) -> MemoryVersion:
+        return MemoryVersion(
+            id=row.id,
+            memory_id=row.memory_id,
+            org_id=row.org_id,
+            space_id=row.space_id,
+            version=row.version,
+            content=row.content,
+            summary=row.summary,
+            metadata=dict(row.meta or {}),
+            tags=list(row.tags or []),
+            source=row.source,
+            status=MemoryStatus(row.status),
+            occurred_at=row.occurred_at,
+            valid_from=row.valid_from,
+            valid_to=row.valid_to,
+        )
+
+    async def get_memory_as_of(
+        self, org_id: str, space_id: str, memory_id: str, as_of: datetime
+    ) -> Memory | None:
+        moment = _require_aware(as_of)
+        async with self._session() as session:
+            row = await session.scalar(
+                select(MemoryVersionRow).where(
+                    MemoryVersionRow.org_id == org_id,
+                    MemoryVersionRow.space_id == space_id,
+                    MemoryVersionRow.memory_id == memory_id,
+                    MemoryVersionRow.valid_from <= moment,
+                    # Half-open interval [valid_from, valid_to): a snapshot
+                    # that closed exactly at `as_of` was already superseded.
+                    (MemoryVersionRow.valid_to.is_(None))
+                    | (MemoryVersionRow.valid_to > moment),
+                )
+            )
+            if row is None:
+                return None
+            version = self._to_version(row)
+            return Memory(
+                id=version.memory_id,
+                org_id=version.org_id,
+                space_id=version.space_id,
+                content=version.content,
+                summary=version.summary,
+                metadata=version.metadata,
+                tags=version.tags,
+                source=version.source,
+                status=version.status,
+                occurred_at=version.occurred_at,
+                version=version.version,
+                chunks=[],
+            )
+
+    async def list_memory_versions(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> list[MemoryVersion]:
+        async with self._session() as session:
+            stmt = (
+                select(MemoryVersionRow)
+                .where(
+                    MemoryVersionRow.org_id == org_id,
+                    MemoryVersionRow.space_id == space_id,
+                    MemoryVersionRow.memory_id == memory_id,
+                )
+                .order_by(MemoryVersionRow.valid_from, MemoryVersionRow.version)
+            )
+            return [self._to_version(r) for r in await session.scalars(stmt)]
 
     # -- retrieval ------------------------------------------------------------
 

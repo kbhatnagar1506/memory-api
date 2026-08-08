@@ -119,27 +119,50 @@ def test_supersession_skips_non_active_candidates() -> None:
     assert propose_supersessions(new, [1.0, 0.0], [(old, [0.85, 0.53])]) == []
 
 
-def test_apply_supersession_updates_both_sides() -> None:
+def test_apply_supersession_builds_an_edge_and_marks_the_old_memory() -> None:
     old = make("old", days_ago=10)
     new = make("new")
     proposals = propose_supersessions(new, [1.0, 0.0], [(old, [0.85, 0.53])])
-    updated_new, updated_old = apply_supersession(new, old, proposals[0])
+    edge, updated_old = apply_supersession(new, old, proposals[0])
+
     assert updated_old.status is MemoryStatus.SUPERSEDED
     assert updated_old.version == old.version + 1
-    assert any(
-        r.type is RelationType.SUPERSEDES and r.target_id == old.id
-        for r in updated_new.relations
-    )
+    # Direction matters: source is the NEWER memory.
+    assert edge.type is RelationType.SUPERSEDES
+    assert edge.source_id == new.id
+    assert edge.target_id == old.id
+    assert edge.confidence == proposals[0].confidence
 
 
-def test_apply_supersession_is_idempotent() -> None:
+def test_apply_supersession_does_not_bump_the_new_memory() -> None:
+    """An edge is a fact about the graph, not an edit to the memory.
+
+    Bumping the source's version here would fill its history with entries
+    whose content is byte-identical.
+    """
     old = make("old", days_ago=10)
     new = make("new")
     proposal = propose_supersessions(new, [1.0, 0.0], [(old, [0.85, 0.53])])[0]
-    once, _ = apply_supersession(new, old, proposal)
-    twice, _ = apply_supersession(once, old, proposal)
-    supersedes = [r for r in twice.relations if r.type is RelationType.SUPERSEDES]
-    assert len(supersedes) == 1
+    apply_supersession(new, old, proposal)
+    assert new.version == 1
+
+
+def test_apply_supersession_is_deterministic_in_its_edge() -> None:
+    """Called twice, it describes the same relation both times.
+
+    Deduplication itself is the store's job (create_relation is idempotent);
+    what matters here is that the endpoints and type never vary.
+    """
+    old = make("old", days_ago=10)
+    new = make("new")
+    proposal = propose_supersessions(new, [1.0, 0.0], [(old, [0.85, 0.53])])[0]
+    first, _ = apply_supersession(new, old, proposal)
+    second, _ = apply_supersession(new, old, proposal)
+    assert (first.source_id, first.target_id, first.type) == (
+        second.source_id,
+        second.target_id,
+        second.type,
+    )
 
 
 def test_a_memory_cannot_supersede_itself() -> None:

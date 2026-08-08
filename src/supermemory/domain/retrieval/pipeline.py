@@ -38,7 +38,7 @@ from datetime import datetime
 from ...core.logging import get_logger
 from ...store.base import MemoryFilter, MemoryStore
 from ..embeddings.base import EmbeddingProvider, Vector
-from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
+from ..models import Memory, MemoryStatus, ScoredMemory
 from .decay import apply_decay
 from .fusion import RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
@@ -271,7 +271,7 @@ class RetrievalPipeline:
 
         # -- stage 6: supersession suppression -----------------------------------
         if not request.include_superseded:
-            scored = self._suppress_superseded(scored)
+            scored = await self._suppress_superseded(scored, request)
 
         # -- stage 7: MMR diversification ----------------------------------------
         t0 = loop.time()
@@ -325,27 +325,37 @@ class RetrievalPipeline:
                 return chunk.embedding
         return None
 
-    @staticmethod
-    def _suppress_superseded(scored: list[ScoredMemory]) -> list[ScoredMemory]:
-        """Drop memories that a *present* result supersedes.
+    async def _suppress_superseded(
+        self, scored: list[ScoredMemory], request: SearchRequest
+    ) -> list[ScoredMemory]:
+        """Drop memories that a *present* result transitively supersedes.
 
         Only suppress when the replacement is in the same result set. If the
         newer memory did not match the query, hiding the older one would answer
         the question with silence, which is worse than answering with a fact
         that is merely stale.
+
+        "Transitively" is the part that needed a graph. The previous version
+        read a relations list off each memory and could only see one hop: given
+        A supersedes B supersedes C, with A and C both retrieved but B not, C
+        survived as a current fact even though A had long replaced it. Walking
+        incoming SUPERSEDES edges answers the real question — "is anything that
+        replaced this also in front of the user" — regardless of how many
+        intermediate revisions happened, and regardless of whether those
+        intermediates matched the query.
+
+        One store round-trip per candidate, each an indexed lookup, only for
+        results that survive to this stage.
         """
         present = {s.memory.id for s in scored}
-        superseded_here: set[str] = set()
-        for s in scored:
-            for relation in s.memory.relations:
-                if relation.type is RelationType.SUPERSEDES and relation.target_id in present:
-                    superseded_here.add(relation.target_id)
-
         out: list[ScoredMemory] = []
         for s in scored:
-            if s.memory.id in superseded_here:
-                continue
             if s.memory.status is MemoryStatus.SUPERSEDED:
+                continue
+            superseders = await self.store.reachable_superseders(
+                request.org_id, request.space_id, s.memory.id
+            )
+            if superseders & present:
                 continue
             out.append(s)
         return out

@@ -37,8 +37,9 @@ from .domain.models import (
     Chunk,
     Memory,
     MemoryStatus,
+    MemoryVersion,
     Organization,
-    Relation,
+    RelationEdge,
     RelationType,
     Space,
     utcnow,
@@ -243,11 +244,15 @@ class MemoryService:
                 chunks[0].embedding or [],
                 pairs,
             )
+            # The memory must exist before an edge can point at it: the edge
+            # has a foreign key to both endpoints.
+            memory = await self.store.upsert_memory(memory)
             for proposal in proposals:
                 old = await self.store.get_memory(org_id, space_id, proposal.old_id)
                 if old is None:
                     continue
-                memory, updated_old = apply_supersession(memory, old, proposal)
+                edge, updated_old = apply_supersession(memory, old, proposal)
+                await self.store.create_relation(edge)
                 await self.store.upsert_memory(updated_old)
                 superseded.append(proposal.old_id)
 
@@ -295,57 +300,108 @@ class MemoryService:
         target_id: str,
         relation: RelationType,
         reason: str = "",
-    ) -> Memory:
-        """Create a typed relation, applying its side effects."""
+    ) -> RelationEdge:
+        """Create a typed relation edge, applying its side effects.
+
+        Returns the edge, not the source memory: the source memory is
+        unchanged by this operation. Writing an edge is a statement about the
+        graph, and bumping the source's version for it would produce a version
+        history full of entries whose content is identical.
+        """
         if source_id == target_id:
             raise ValidationError("a memory cannot relate to itself", field="target_id")
-        source = await self.get_memory(org_id, space_id, source_id)
+        # Both endpoints must exist and be visible to this tenant. Checked
+        # before any write so a relation can never dangle.
+        await self.get_memory(org_id, space_id, source_id)
         target = await self.get_memory(org_id, space_id, target_id)
 
-        if any(r.type is relation and r.target_id == target_id for r in source.relations):
-            return source
-
-        updated = source.model_copy(
-            update={
-                "relations": [
-                    *source.relations,
-                    Relation(type=relation, target_id=target_id, reason=reason),
-                ],
-                "version": source.version + 1,
-                "updated_at": utcnow(),
-            }
+        edge = await self.store.create_relation(
+            RelationEdge(
+                org_id=org_id,
+                space_id=space_id,
+                source_id=source_id,
+                target_id=target_id,
+                type=relation,
+                reason=reason,
+            )
         )
-        await self.store.upsert_memory(updated)
 
         if relation is RelationType.SUPERSEDES:
-            await self.store.upsert_memory(
-                target.model_copy(
-                    update={
-                        "status": MemoryStatus.SUPERSEDED,
-                        "version": target.version + 1,
-                        "updated_at": utcnow(),
-                    }
-                )
-            )
-        elif relation.symmetric:
-            # `contradicts` is mutual; recording one direction only would make
-            # the answer depend on which memory you happened to look at.
-            already_mutual = any(
-                r.type is relation and r.target_id == source_id for r in target.relations
-            )
-            if not already_mutual:
+            if target.status is not MemoryStatus.SUPERSEDED:
                 await self.store.upsert_memory(
                     target.model_copy(
                         update={
-                            "relations": [
-                                *target.relations,
-                                Relation(type=relation, target_id=source_id, reason=reason),
-                            ],
+                            "status": MemoryStatus.SUPERSEDED,
                             "version": target.version + 1,
+                            "updated_at": utcnow(),
                         }
                     )
                 )
-        return updated
+        elif relation.symmetric:
+            # `contradicts` is mutual; recording one direction only would make
+            # the answer depend on which memory you happened to look at.
+            # create_relation is idempotent, so the reverse edge is safe to
+            # write unconditionally.
+            await self.store.create_relation(
+                RelationEdge(
+                    org_id=org_id,
+                    space_id=space_id,
+                    source_id=target_id,
+                    target_id=source_id,
+                    type=relation,
+                    reason=reason,
+                )
+            )
+        return edge
+
+    async def list_relations(
+        self, org_id: str, space_id: str, memory_id: str, *, direction: str = "out"
+    ) -> list[RelationEdge]:
+        await self.get_memory(org_id, space_id, memory_id)
+        return await self.store.list_relations(org_id, space_id, memory_id, direction=direction)
+
+    async def get_lineage(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> dict[str, object]:
+        """The supersession lineage around a memory, in both directions.
+
+        `ancestors` is what this memory replaced, oldest last. `successors` is
+        what replaced it — non-empty means this memory is stale, and the last
+        entry is the current head of truth.
+        """
+        await self.get_memory(org_id, space_id, memory_id)
+        backward = await self.store.walk_supersession_chain(
+            org_id, space_id, memory_id, direction="backward"
+        )
+        forward = await self.store.walk_supersession_chain(
+            org_id, space_id, memory_id, direction="forward"
+        )
+        return {
+            "memory_id": memory_id,
+            "ancestors": [e.target_id for e in backward],
+            "successors": [e.source_id for e in forward],
+            "is_current": not forward,
+            "head": forward[-1].source_id if forward else memory_id,
+        }
+
+    async def get_memory_as_of(
+        self, org_id: str, space_id: str, memory_id: str, as_of: datetime
+    ) -> Memory:
+        memory = await self.store.get_memory_as_of(org_id, space_id, memory_id, as_of)
+        if memory is None:
+            raise NotFoundError(
+                f"memory {memory_id} did not exist at {as_of.isoformat()}",
+                field="as_of",
+            )
+        return memory
+
+    async def list_memory_versions(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> list[MemoryVersion]:
+        versions = await self.store.list_memory_versions(org_id, space_id, memory_id)
+        if not versions:
+            raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
+        return versions
 
     # -- search ------------------------------------------------------------
 

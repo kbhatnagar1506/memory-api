@@ -80,15 +80,44 @@ fusion → rerank → decay → supersession → MMR
 
 ## 4. Belief revision, and why it is opt-in
 
-Memories form a small typed graph. `supersedes` is directional and has a side
-effect: the target's status becomes `superseded`. `contradicts` is symmetric and
-is written to both memories, because recording one direction only would make the
-answer depend on which memory you happened to look at.
+Memories form a small typed graph. Edges are **first-class rows in
+`relation_edges`**, not a list embedded on each memory. That distinction is the
+difference between a graph and a blob:
 
-At retrieval time a memory is suppressed **only if** the memory that supersedes
-it is present in the same result set. If the newer fact did not match the query,
-the older one is still returned — answering with a stale fact beats answering
-with silence.
+- **Reverse lookups are indexed.** "What supersedes this memory" is asked of
+  every search result. Against a JSONB list it was a scan of every row's array;
+  against `ix_edges_target` it is an index seek.
+- **One history, not two copies.** A symmetric `contradicts` written into two
+  memories' lists can drift. One edge cannot.
+- **Edges do not bump memory versions.** Attaching a relation is a fact about
+  the graph, not an edit to the memory's content — otherwise version history
+  fills with entries whose content is byte-identical.
+
+`supersedes` is directional (`source` is the newer memory) and has one side
+effect: the target's status becomes `superseded`. `contradicts` is symmetric and
+written as a pair of edges, because recording one direction only would make the
+answer depend on which memory you happened to look up first.
+
+### Suppression is transitive, and that took a graph
+
+At retrieval time a memory is suppressed **only if** something that transitively
+supersedes it is present in the same result set. If the newer fact did not match
+the query, the older one is still returned — answering with a stale fact beats
+answering with silence.
+
+"Transitively" is load-bearing and was previously wrong. Reading a relations
+list off each memory could only see one hop: given A supersedes B supersedes C,
+with A and C both retrieved but B not, **C survived as though it were current**.
+The induced subgraph does not fix this either — neither edge has both endpoints
+in `{A, C}`. Correctness requires walking incoming `SUPERSEDES` edges per
+candidate (`MemoryStore.reachable_superseders`), breadth-first over a `seen`
+set, depth-bounded and cycle-guarded. Breadth-first rather than a single strand
+because two people can independently correct the same fact, and either makes it
+stale.
+
+Cost is one indexed lookup per hop per surviving result, paid only at the
+suppression stage. `test_multi_hop_supersession_hides_every_stale_revision`
+pins the behaviour.
 
 Automatic supersession (`auto_supersede`) is **off by default**. The detector is
 a heuristic over embedding similarity, event ordering, and revision language
@@ -101,6 +130,46 @@ decides — per request or per space.
 **Rejected:** LLM-judged contradiction detection on every write. Better recall,
 but it puts a model call and its failure modes in the write path of every
 ingest, and the cost scales with corpus size rather than query volume.
+
+---
+
+## 4b. Bitemporal history
+
+Every write records a `MemoryVersion` snapshot in the same transaction as the
+row write, so the live table and its audit trail cannot disagree.
+
+Two time axes, deliberately not conflated:
+
+| axis | field | question it answers |
+|---|---|---|
+| event time | `occurred_at` | when did the thing happen |
+| system time | `valid_from` / `valid_to` | when did *we believe* it |
+
+Recency decay uses event time, so backfilled history ages correctly.
+`GET /memories/{id}?as_of=…` uses system time, so "what did we know on the 3rd
+about what happened in January" is answerable. An in-place-overwrite table
+cannot answer that at all.
+
+Three decisions worth stating:
+
+- **A write that does not bump `version` is an in-place correction**, not a new
+  state: it overwrites the open snapshot rather than opening a second one.
+  Without this rule Postgres rejects the write on
+  `uq_versions_memory_version` while the in-memory backend silently appends —
+  a backend divergence on an ordinary write. Both implement the rule; the
+  conformance suite pins it.
+- **Intervals are half-open** `[valid_from, valid_to)`. A snapshot that closed
+  exactly at `as_of` was already superseded at that instant.
+- **`memory_versions` has no foreign key to `memories`.** The audit trail must
+  outlive the row it describes, so deleting a memory does not erase the history
+  of what it said. Edges *are* cascaded, because a dangling edge points at
+  nothing and would break a lineage walk.
+
+**Not versioned: chunks and embeddings.** Duplicating vector blobs on every
+edit is expensive, and a historical snapshot is for audit and point-in-time
+reads, not for making old text searchable again. A historical read therefore
+returns `chunk_count: 0`. If re-searchable history is ever needed it is a clean,
+separate extension rather than something this design blocks.
 
 ---
 

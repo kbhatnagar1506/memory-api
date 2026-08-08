@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from .embeddings.base import Vector, cosine_similarity
-from .models import Memory, MemoryStatus, Relation, RelationType, content_hash
+from .models import Memory, MemoryStatus, RelationEdge, RelationType, content_hash
 
 
 class DuplicateKind(StrEnum):
@@ -205,32 +205,26 @@ def apply_supersession(
     new_memory: Memory,
     old_memory: Memory,
     proposal: SupersessionProposal,
-) -> tuple[Memory, Memory]:
-    """Record the relation on both sides and mark the old memory superseded.
+) -> tuple[RelationEdge, Memory]:
+    """Build the supersession edge and the updated (superseded) old memory.
 
-    Returns updated copies; nothing is mutated in place, so a caller that fails
-    to persist one side has not corrupted the other.
+    Returns the edge to persist and an updated copy of the old memory; nothing
+    is mutated in place, so a caller that fails to persist one side has not
+    corrupted the other. The NEW memory is not returned because it no longer
+    changes: the relation lives on the edge, and attaching an edge is a fact
+    about the graph, not an edit to the memory's own content.
     """
     if new_memory.id == old_memory.id:
         raise ValueError("a memory cannot supersede itself")
 
-    already = any(
-        r.type is RelationType.SUPERSEDES and r.target_id == old_memory.id
-        for r in new_memory.relations
-    )
-    new_relations = list(new_memory.relations)
-    if not already:
-        new_relations.append(
-            Relation(
-                type=RelationType.SUPERSEDES,
-                target_id=old_memory.id,
-                reason=proposal.reason,
-                confidence=proposal.confidence,
-            )
-        )
-
-    updated_new = new_memory.model_copy(
-        update={"relations": new_relations, "version": new_memory.version + 1}
+    edge = RelationEdge(
+        org_id=new_memory.org_id,
+        space_id=new_memory.space_id,
+        source_id=new_memory.id,
+        target_id=old_memory.id,
+        type=RelationType.SUPERSEDES,
+        reason=proposal.reason,
+        confidence=proposal.confidence,
     )
     updated_old = old_memory.model_copy(
         update={
@@ -239,7 +233,7 @@ def apply_supersession(
             "updated_at": new_memory.updated_at,
         }
     )
-    return updated_new, updated_old
+    return edge, updated_old
 
 
 def merge_duplicate(existing: Memory, incoming: Memory) -> Memory:

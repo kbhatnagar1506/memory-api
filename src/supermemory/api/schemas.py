@@ -15,7 +15,15 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
-from ..domain.models import Memory, MemoryStatus, RelationType, Scope, ScoredMemory
+from ..domain.models import (
+    Memory,
+    MemoryStatus,
+    MemoryVersion,
+    RelationEdge,
+    RelationType,
+    Scope,
+    ScoredMemory,
+)
 
 Slug = Annotated[
     str, StringConstraints(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
@@ -93,10 +101,82 @@ class BulkCreateMemoryRequest(Request):
 
 
 class RelationResponse(Response):
-    type: RelationType
+    id: str
+    source_id: str
     target_id: str
+    type: RelationType
     reason: str
     confidence: float
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, edge: RelationEdge) -> RelationResponse:
+        return cls(
+            id=edge.id,
+            source_id=edge.source_id,
+            target_id=edge.target_id,
+            type=edge.type,
+            reason=edge.reason,
+            confidence=edge.confidence,
+            created_at=edge.created_at,
+        )
+
+
+class RelationListResponse(Response):
+    items: list[RelationResponse]
+
+
+class LineageResponse(Response):
+    """Where a memory sits in its supersession chain.
+
+    `is_current` is the field most callers want: false means this memory has
+    been replaced and `head` is the id of the fact that replaced it.
+    """
+
+    memory_id: str
+    #: What this memory replaced, transitively. Most recent first.
+    ancestors: list[str]
+    #: What replaced this memory, transitively. Most recent last.
+    successors: list[str]
+    is_current: bool
+    head: str
+
+
+class MemoryVersionResponse(Response):
+    """One historical state. `valid_to = null` marks the current version."""
+
+    version: int
+    content: str
+    summary: str
+    metadata: dict[str, Any]
+    tags: list[str]
+    source: str
+    status: MemoryStatus
+    #: Event time: when the thing happened.
+    occurred_at: datetime
+    #: System time: when our database believed this.
+    valid_from: datetime
+    valid_to: datetime | None
+
+    @classmethod
+    def from_domain(cls, version: MemoryVersion) -> MemoryVersionResponse:
+        return cls(
+            version=version.version,
+            content=version.content,
+            summary=version.summary,
+            metadata=version.metadata,
+            tags=version.tags,
+            source=version.source,
+            status=version.status,
+            occurred_at=version.occurred_at,
+            valid_from=version.valid_from,
+            valid_to=version.valid_to,
+        )
+
+
+class MemoryVersionListResponse(Response):
+    memory_id: str
+    items: list[MemoryVersionResponse]
 
 
 class MemoryResponse(Response):
@@ -113,7 +193,6 @@ class MemoryResponse(Response):
     updated_at: datetime
     version: int
     chunk_count: int
-    relations: list[RelationResponse]
 
     @classmethod
     def from_domain(cls, memory: Memory) -> MemoryResponse:
@@ -131,15 +210,6 @@ class MemoryResponse(Response):
             updated_at=memory.updated_at,
             version=memory.version,
             chunk_count=len(memory.chunks),
-            relations=[
-                RelationResponse(
-                    type=r.type,
-                    target_id=r.target_id,
-                    reason=r.reason,
-                    confidence=r.confidence,
-                )
-                for r in memory.relations
-            ],
         )
 
 
@@ -293,9 +363,13 @@ __all__ = [
     "CreateMemoryResponse",
     "CreateSpaceRequest",
     "HealthResponse",
+    "LineageResponse",
     "LinkRequest",
     "MemoryListResponse",
     "MemoryResponse",
+    "MemoryVersionListResponse",
+    "MemoryVersionResponse",
+    "RelationListResponse",
     "RelationResponse",
     "SearchHit",
     "SearchRequestBody",

@@ -1,0 +1,217 @@
+"""Application settings.
+
+Everything is environment-driven with safe defaults, so the service boots with
+zero configuration for local development and demands explicit values for the
+things that must never be defaulted in production (signing secrets, database
+URLs). `Settings.validate_production()` is the gate that enforces that
+difference rather than trusting an operator to remember.
+"""
+
+from __future__ import annotations
+
+import os
+from enum import StrEnum
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Environment(StrEnum):
+    LOCAL = "local"
+    TEST = "test"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+
+class StoreBackend(StrEnum):
+    #: Reference implementation. Real algorithms, no external dependency; used
+    #: for tests, CI and zero-infrastructure demos.
+    MEMORY = "memory"
+    #: Production backend: PostgreSQL + pgvector.
+    POSTGRES = "postgres"
+
+
+class EmbeddingBackend(StrEnum):
+    #: Deterministic, offline, no credentials. Keeps CI green and tests fast.
+    DETERMINISTIC = "deterministic"
+    GEMINI = "gemini"
+    OPENAI = "openai"
+
+
+class RerankBackend(StrEnum):
+    NONE = "none"
+    #: Lexical-overlap cross-encoder approximation. Cheap, offline, decent.
+    HEURISTIC = "heuristic"
+    #: True LLM listwise reranking.
+    LLM = "llm"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SUPERMEMORY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+    )
+
+    # -- service ----------------------------------------------------------
+    environment: Environment = Environment.LOCAL
+    service_name: str = "supermemory"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_json: bool = False
+    debug_errors: bool = Field(
+        default=False,
+        description="Include exception detail in HTTP responses. Never in production.",
+    )
+
+    # -- storage ----------------------------------------------------------
+    store_backend: StoreBackend = StoreBackend.MEMORY
+    database_url: str | None = Field(
+        default=None,
+        description="postgresql+asyncpg://user:pass@host:5432/db",
+    )
+    db_pool_size: int = Field(default=10, ge=1, le=200)
+    db_max_overflow: int = Field(default=10, ge=0, le=200)
+    db_statement_timeout_ms: int = Field(default=15_000, ge=100)
+
+    # -- embeddings -------------------------------------------------------
+    embedding_backend: EmbeddingBackend = EmbeddingBackend.DETERMINISTIC
+    embedding_model: str = "text-embedding-004"
+    embedding_dimensions: int = Field(default=768, ge=8, le=4096)
+    embedding_batch_size: int = Field(default=32, ge=1, le=512)
+    embedding_timeout_s: float = Field(default=20.0, gt=0)
+    embedding_cache_size: int = Field(default=4096, ge=0)
+
+    # -- reranking --------------------------------------------------------
+    rerank_backend: RerankBackend = RerankBackend.HEURISTIC
+    rerank_model: str = "gemini-2.5-flash"
+    rerank_candidates: int = Field(default=32, ge=1, le=256)
+    rerank_timeout_s: float = Field(default=12.0, gt=0)
+
+    # -- retrieval defaults ----------------------------------------------
+    default_limit: int = Field(default=10, ge=1, le=200)
+    max_limit: int = Field(default=100, ge=1, le=1000)
+    candidate_multiplier: int = Field(
+        default=6, ge=1, le=50,
+        description="Candidates fetched per requested result before fusion.",
+    )
+    rrf_k: int = Field(default=60, ge=1, description="Reciprocal Rank Fusion damping.")
+    mmr_lambda: float = Field(default=0.7, ge=0.0, le=1.0)
+    half_life_days: float = Field(
+        default=180.0, gt=0,
+        description="Recency half-life. Older memories decay toward this schedule.",
+    )
+
+    # -- ingestion --------------------------------------------------------
+    max_content_bytes: int = Field(default=1_000_000, ge=1)
+    chunk_target_tokens: int = Field(default=320, ge=16, le=4096)
+    chunk_overlap_tokens: int = Field(default=48, ge=0, le=1024)
+    dedupe_threshold: float = Field(
+        default=0.97, ge=0.0, le=1.0,
+        description="Cosine similarity at or above which a write is a duplicate.",
+    )
+
+    # -- providers --------------------------------------------------------
+    google_cloud_project: str | None = None
+    google_cloud_location: str = "global"
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+
+    # -- security ---------------------------------------------------------
+    api_key_pepper: str = Field(
+        default="dev-insecure-pepper",
+        description="Server-side pepper mixed into API key hashes.",
+    )
+    bootstrap_admin_key: str | None = Field(
+        default=None,
+        description="If set, an admin key with this literal value is seeded at boot.",
+    )
+    rate_limit_per_minute: int = Field(default=600, ge=1)
+    rate_limit_burst: int = Field(default=120, ge=1)
+    redis_url: str | None = None
+
+    # -- request handling --------------------------------------------------
+    max_request_bytes: int = Field(default=8_000_000, ge=1024)
+    request_timeout_s: float = Field(default=30.0, gt=0)
+
+    @field_validator("chunk_overlap_tokens")
+    @classmethod
+    def _overlap_fits(cls, v: int, info) -> int:
+        target = info.data.get("chunk_target_tokens", 320)
+        if v >= target:
+            raise ValueError(
+                f"chunk_overlap_tokens ({v}) must be < chunk_target_tokens ({target}); "
+                "equal or larger overlap makes chunking non-terminating"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Settings:
+        if self.max_limit < self.default_limit:
+            raise ValueError("max_limit must be >= default_limit")
+        if self.store_backend is StoreBackend.POSTGRES and not self.database_url:
+            raise ValueError("store_backend=postgres requires database_url")
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment is Environment.PRODUCTION
+
+    def validate_production(self) -> list[str]:
+        """Configuration that is acceptable locally but not in production.
+
+        Returned rather than raised so the caller decides whether to refuse to
+        boot or merely warn, and so every problem is reported at once instead of
+        one per restart.
+        """
+        problems: list[str] = []
+        if not self.is_production:
+            return problems
+        if self.api_key_pepper == "dev-insecure-pepper":
+            problems.append("api_key_pepper is still the development default")
+        if self.debug_errors:
+            problems.append("debug_errors leaks exception detail to clients")
+        if self.store_backend is not StoreBackend.POSTGRES:
+            problems.append("store_backend must be postgres in production")
+        if self.embedding_backend is EmbeddingBackend.DETERMINISTIC:
+            problems.append(
+                "embedding_backend=deterministic produces non-semantic vectors"
+            )
+        if self.bootstrap_admin_key:
+            problems.append("bootstrap_admin_key must not be set in production")
+        if not self.redis_url:
+            problems.append(
+                "redis_url is unset: rate limiting would be per-process only"
+            )
+        return problems
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+def reset_settings_cache() -> None:
+    """Tests mutate the environment; the cache must not outlive that."""
+    get_settings.cache_clear()
+
+
+def settings_from_env(**overrides: object) -> Settings:
+    """Build settings ignoring the process cache. Used by tests and the CLI."""
+    return Settings(**overrides)  # type: ignore[arg-type]
+
+
+__all__ = [
+    "EmbeddingBackend",
+    "Environment",
+    "RerankBackend",
+    "Settings",
+    "StoreBackend",
+    "get_settings",
+    "reset_settings_cache",
+    "settings_from_env",
+    "os",
+]

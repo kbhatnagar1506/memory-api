@@ -1,2 +1,0 @@
-[console_scripts]
-mapi-ablation = mapi_ablation.cli:app

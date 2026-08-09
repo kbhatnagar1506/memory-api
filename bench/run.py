@@ -213,6 +213,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             HeuristicReranker() if winner.get("use_rerank") else NoopReranker(),
             k=args.answer_k,
             max_per_source=args.max_per_source,
+            route_by_kind=args.route_by_kind,
             config=winner,
             answer_model=args.answer_model,
             judge_model=args.judge_model,
@@ -498,6 +499,16 @@ async def main() -> int:
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--route-by-kind",
+        action="store_true",
+        help=(
+            "split the answer window between episodes and claims by question "
+            "shape. Extraction moved six capabilities and the sign matched the "
+            "kind each needs, six for six: semantic +5.1/+3.3/+1.8, episodic "
+            "-5.7/-7.5/-9.0."
+        ),
+    )
     parser.add_argument(
         "--max-per-source",
         type=int,

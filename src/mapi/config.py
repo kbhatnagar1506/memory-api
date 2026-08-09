@@ -154,6 +154,16 @@ class Settings(BaseSettings):
             "rising to 0.987, i.e. sharper retrieval and worse coverage."
         ),
     )
+    route_by_kind: bool = Field(
+        default=False,
+        description=(
+            "Split the retrieval window between EPISODIC and DERIVED memories by "
+            "question shape. Off by default and inert without derived memories. "
+            "Measured need: write-time extraction moved six capabilities and the "
+            "sign matched the memory kind each needs, six for six -- claims answer "
+            "'what is true', episodes answer 'what happened'."
+        ),
+    )
     half_life_days: float = Field(
         default=180.0,
         gt=0,

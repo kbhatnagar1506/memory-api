@@ -47,6 +47,7 @@ from .expansion import NoopExpander, QueryExpander
 from .fusion import FusedItem, RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
 from .rerank import RerankCandidate, Reranker
+from .routing import allocate, apply_allocation
 
 log = get_logger(__name__)
 
@@ -145,6 +146,17 @@ class SearchRequest:
     #: different while being the same source. The constraint that matters here
     #: is provenance, not semantic distance.
     max_per_source: int = 0
+    #: Split the window between EPISODIC and DERIVED memories by question
+    #: shape. Off by default: it is inert on a corpus with no derived
+    #: memories, but turning it on silently would change ranking for anyone
+    #: already running the derive path.
+    #:
+    #: Measured need: extraction moved six capabilities and the sign was the
+    #: same as the memory kind each one needs, six for six. Claims answer
+    #: "what is true"; episodes answer "what happened". A single ranked list
+    #: cannot serve both, and the `only` arm proved it -- better retrieval
+    #: (0.950 vs 0.948) and worse answers (0.762 vs 0.781).
+    route_by_kind: bool = False
     #: Return memories that a newer memory has superseded.
     include_superseded: bool = False
     candidate_multiplier: int = 6
@@ -517,6 +529,14 @@ class RetrievalPipeline:
         # -- stage 6b: per-source cap --------------------------------------------
         if request.max_per_source > 0:
             scored = _cap_per_source(scored, request.max_per_source)
+
+        # -- stage 6c: kind routing ----------------------------------------------
+        # After capping, before MMR: capping decides how much any one SOURCE
+        # may contribute, routing decides how the surviving window splits
+        # between episodes and claims. Both shape membership; MMR then orders.
+        if request.route_by_kind:
+            allocation = allocate(request.query, request.limit)
+            scored = apply_allocation(scored, allocation, request.limit)
 
         # -- stage 7: MMR diversification ----------------------------------------
         t0 = loop.time()

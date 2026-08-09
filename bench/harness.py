@@ -983,6 +983,7 @@ async def evaluate_end_to_end(
     # possible way to lose a question.
     max_session_chars: int = 20_000,
     max_per_source: int = 0,
+    route_by_kind: bool = False,
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,
@@ -1022,6 +1023,7 @@ async def evaluate_end_to_end(
                         limit=per_question_k,
                         known_speakers=ingested.speakers,
                         max_per_source=max_per_source,
+                        route_by_kind=route_by_kind,
                         **config,
                     )
                 )

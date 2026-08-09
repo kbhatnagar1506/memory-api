@@ -101,6 +101,10 @@ class IngestResult:
     #: Memories this write is judged to CONTRADICT. Recorded as edges and
     #: reported; never suppressed, because either side may be the true one.
     contradicts: list[str] = field(default_factory=list)
+    #: Supersessions proposed but NOT applied, because confidence fell below
+    #: `supersede_min_confidence`. Reported so the decision is auditable
+    #: rather than a silent drop -- these memories are still active.
+    supersede_declined: list[str] = field(default_factory=list)
     chunk_count: int = 0
 
 
@@ -291,6 +295,7 @@ class MemoryService:
         # bet of this whole system. Enable it per request or per space.
         superseded: list[str] = []
         conflicts: list[str] = []
+        declined: list[str] = []
         if chunks and (auto_supersede or detect_conflicts):
             page = await self.store.list_memories(
                 org_id, space_id, filters=MemoryFilter(), limit=256, cursor=None
@@ -300,11 +305,31 @@ class MemoryService:
                 for m in page.items
                 if m.chunks and m.chunks[0].embedding is not None
             ]
-            proposals = (
+            all_proposals = (
                 propose_supersessions(memory, chunks[0].embedding or [], pairs)
                 if auto_supersede
                 else []
             )
+            # `propose_supersessions` ranks candidates and documents that the
+            # caller decides what to do with them. Applying every one is the
+            # wrong decision: at the proposer's floor, "same subject" means
+            # cosine 0.72, and two chat turns about the same hobby clear that
+            # easily without either replacing the other. Applying it flips the
+            # older memory to SUPERSEDED, which default retrieval hides, so a
+            # topical coincidence silently deletes a true memory from every
+            # answer. Declining costs far less -- both stay visible.
+            floor = self.settings.supersede_min_confidence
+            proposals = [p for p in all_proposals if p.confidence >= floor]
+            declined = [p.old_id for p in all_proposals if p.confidence < floor]
+            if declined:
+                # Reported, never silent: a caller that wanted those merges
+                # needs to see that the system saw them and held back.
+                log.info(
+                    "supersession_declined",
+                    memory_id=memory.id,
+                    count=len(declined),
+                    floor=floor,
+                )
             conflict_proposals = (
                 propose_contradictions(memory, chunks[0].embedding or [], pairs)
                 if detect_conflicts
@@ -359,6 +384,7 @@ class MemoryService:
             created=True,
             superseded=superseded,
             contradicts=conflicts,
+            supersede_declined=declined,
             chunk_count=len(chunks),
         )
 

@@ -141,6 +141,19 @@ class Settings(BaseSettings):
         le=1.0,
         description="Cosine similarity at or above which a write is a duplicate.",
     )
+    supersede_min_confidence: float = Field(
+        default=0.60,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Confidence a supersession proposal must reach before `auto_supersede` "
+            "applies it. The two errors are not symmetric: a false supersession "
+            "flips a true memory to SUPERSEDED and default retrieval then hides it, "
+            "so the information is gone from every answer with no error anywhere. A "
+            "missed supersession leaves both memories visible and rankable, where "
+            "recency still favours the newer one. Cheap mistake, expensive mistake."
+        ),
+    )
 
     # -- providers --------------------------------------------------------
     google_cloud_project: str | None = None

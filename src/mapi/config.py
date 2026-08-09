@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core.core_schema import ValidationInfo
@@ -227,6 +227,42 @@ class Settings(BaseSettings):
                 "equal or larger overlap makes chunking non-terminating"
             )
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _platform_env(cls, values: Any) -> Any:
+        """Adopt the host platform's connection strings when ours are unset.
+
+        Heroku attaches addons by setting DATABASE_URL and REDIS_URL; it has
+        no idea about our MAPI_ prefix, and requiring an operator to copy them
+        across by hand is a step that gets forgotten exactly once, in
+        production, where the app then refuses to boot.
+
+        The scheme rewrite is not cosmetic. Heroku still issues `postgres://`,
+        which SQLAlchemy dropped support for, and asyncpg needs naming
+        explicitly -- so the platform's own URL is unusable verbatim and the
+        failure surfaces as an opaque dialect error at first connection.
+
+        Runs BEFORE validation rather than after: a top-level after-validator
+        cannot return a rebuilt model when the object is constructed through
+        `__init__`, which is exactly how settings are loaded, and pydantic
+        warns rather than raising -- so the adoption silently did nothing.
+        """
+        if not isinstance(values, dict):
+            return values
+        if not values.get("database_url"):
+            raw = os.getenv("DATABASE_URL", "")
+            if raw:
+                for prefix in ("postgres://", "postgresql://"):
+                    if raw.startswith(prefix):
+                        raw = "postgresql+asyncpg://" + raw[len(prefix) :]
+                        break
+                values["database_url"] = raw
+        if not values.get("redis_url"):
+            managed = os.getenv("REDIS_URL", "")
+            if managed:
+                values["redis_url"] = managed
+        return values
 
     @model_validator(mode="after")
     def _coherent(self) -> Settings:

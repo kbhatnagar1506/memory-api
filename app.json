@@ -1,0 +1,57 @@
+{
+  "name": "mapi",
+  "description": "A memory API for AI agents: hybrid retrieval, belief revision, and a graph of what the system believes and why.",
+  "repository": "https://github.com/krishnabhatnagar/mapi",
+  "keywords": [
+    "memory",
+    "agents",
+    "retrieval",
+    "pgvector",
+    "fastapi"
+  ],
+  "stack": "heroku-24",
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    },
+    {
+      "plan": "heroku-redis:mini",
+      "as": "REDIS"
+    }
+  ],
+  "env": {
+    "MAPI_ENVIRONMENT": {
+      "value": "production"
+    },
+    "MAPI_STORE_BACKEND": {
+      "value": "postgres"
+    },
+    "MAPI_LOG_JSON": {
+      "value": "true"
+    },
+    "MAPI_API_KEY_PEPPER": {
+      "description": "Secret used to hash API keys. Rotating it invalidates every existing key.",
+      "generator": "secret"
+    },
+    "MAPI_SESSION_SECRET": {
+      "description": "Signs the browser session cookie for the dashboard.",
+      "generator": "secret"
+    },
+    "MAPI_GOOGLE_CLIENT_ID": {
+      "description": "OAuth client id from Google Cloud console.",
+      "required": false
+    },
+    "MAPI_GOOGLE_CLIENT_SECRET": {
+      "description": "OAuth client secret. Set with `heroku config:set`, never committed.",
+      "required": false
+    },
+    "MAPI_EMBEDDING_BACKEND": {
+      "value": "gemini"
+    },
+    "MAPI_GEMINI_API_KEY": {
+      "description": "Google AI Studio key. Used instead of Vertex+ADC because a dyno has no gcloud credentials; the provider takes either.",
+      "required": true
+    }
+  }
+}

@@ -138,6 +138,19 @@ function layout() {
   }
 }
 
+function fit() {
+  // Frame whatever the layout produced. Without this the picture depends on
+  // the canvas size at load: a narrow pane pushes nodes off the left edge,
+  // and a graph you have to hunt for is a graph nobody reads.
+  if (!nodes.length) return;
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const W = svg.clientWidth, H = svg.clientHeight, pad = 60;
+  const k = Math.min((W - pad*2) / (x1-x0 || 1), (H - pad*2) / (y1-y0 || 1), 1.6);
+  view = { k, x: W/2 - k*(x0+x1)/2, y: H/2 - k*(y0+y1)/2 };
+}
+
 function draw() {
   const g = [`<g transform="translate(${view.x},${view.y}) scale(${view.k})">`];
   for (const e of edges) {
@@ -180,7 +193,10 @@ async function show(id) {
     const ctx = await api(`/v1/spaces/${SPACE}/memories/${id}/context`);
     document.getElementById('content').textContent = ctx.memory.content;
     const groups = [
-      ['replaced by (this is stale)', ctx.current_head],
+      // "current version", not "stale" -- stale is a distinct status in this
+      // system (a derivation whose evidence moved) and reusing the word here
+      // would contradict the legend directly above.
+      ['current version', ctx.current_head],
       ['replaced', ctx.replaced],
       ['derived from', ctx.derived_from],
       ['derivatives', ctx.derivatives],
@@ -221,18 +237,28 @@ async function show(id) {
     ['derived facts', c.by_kind.derived], ['stale', c.by_status.stale],
     ['superseded', c.by_status.superseded], ['contradictions', c.by_edge.contradicts],
   ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
-  layout(); draw();
+  layout(); fit(); draw();
 })();
+
+addEventListener('resize', () => { if (nodes.length) { fit(); draw(); } });
 
 // pan and zoom
 let drag = null;
 svg.addEventListener('mousedown', e => {
-  drag = { x:e.clientX, y:e.clientY, xv:view.x, yv:view.y };
+  // Never start a pan on a node. Otherwise the few pixels of jitter in an
+  // ordinary click drag the graph out from under the cursor, and the click
+  // lands on the background instead of the memory you aimed at.
+  if (e.target.tagName === 'circle') return;
+  drag = { x:e.clientX, y:e.clientY, xv:view.x, yv:view.y, live:false };
 });
 addEventListener('mouseup', () => drag = null);
 addEventListener('mousemove', e => {
   if (!drag) return;
-  view = { ...view, x: drag.xv + (e.clientX - drag.x), y: drag.yv + (e.clientY - drag.y) };
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  // A 4px threshold, so a shaky click on empty canvas is still a click.
+  if (!drag.live && Math.hypot(dx, dy) < 4) return;
+  drag.live = true;
+  view = { ...view, x: drag.xv + dx, y: drag.yv + dy };
   draw();
 });
 svg.addEventListener('wheel', e => {

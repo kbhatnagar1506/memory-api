@@ -14,3 +14,4 @@ build/
 bench/data/
 bench/data/*.json
 bench/data/cache/
+scripts/.demo_url

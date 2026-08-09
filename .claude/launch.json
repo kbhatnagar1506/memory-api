@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mapi-graph",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "scripts.demo_server"],
+      "port": 8077
+    }
+  ]
+}

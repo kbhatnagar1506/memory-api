@@ -1277,3 +1277,11 @@ run lme-v19-extract-add-cap2
     [175/500] 295876 chunks, 345s elapsed, ~641s left
     [200/500] 338115 chunks, 361s elapsed, ~542s left
     [225/500] 380661 chunks, 552s elapsed, ~674s left
+    [250/500] 422562 chunks, 790s elapsed, ~790s left
+    [275/500] 465359 chunks, 809s elapsed, ~662s left
+    [300/500] 507781 chunks, 825s elapsed, ~550s left
+    [325/500] 550248 chunks, 1127s elapsed, ~607s left
+    [350/500] 592985 chunks, 1143s elapsed, ~490s left
+    [375/500] 635125 chunks, 1536s elapsed, ~512s left
+    [400/500] 677741 chunks, 1549s elapsed, ~387s left
+    [425/500] 720459 chunks, 1566s elapsed, ~276s left

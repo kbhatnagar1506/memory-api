@@ -48,10 +48,45 @@ PAGE = """<!doctype html>
          -webkit-font-smoothing:antialiased }
   code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace }
   #wrap { display:flex; height:100vh }
+  /* left rail */
+  #rail { width:210px; flex:none; border-right:1px solid var(--line); background:var(--panel);
+          padding:18px 12px; display:flex; flex-direction:column; gap:4px }
+  .brand { font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.02em;
+           padding:4px 10px 16px; color:var(--text) }
+  .nav { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px;
+         border:0; border-radius:8px; background:transparent; color:var(--dim);
+         font:inherit; font-weight:500; cursor:pointer; text-align:left }
+  .nav:hover { background:var(--hair); color:var(--text) }
+  .nav.on { background:var(--hair); color:var(--text); font-weight:600 }
+  .ico { font-size:14px; width:16px; text-align:center }
+  .railfoot { margin-top:auto }
+  .sub { color:var(--dim); margin:0 0 14px }
+  /* tags */
+  #tags { display:flex; flex-wrap:wrap; gap:6px }
+  .tag { padding:3px 9px; border:1px solid var(--line); border-radius:20px; cursor:pointer;
+         font-size:12px; color:var(--dim); background:var(--panel);
+         font-family:ui-monospace,Menlo,monospace }
+  .tag:hover { border-color:#cdc9c2; color:var(--text) }
+  .tag.on { background:var(--accent); border-color:var(--accent); color:#fff }
+  /* replay scrubber */
+  #scrub { position:absolute; left:24px; right:24px; bottom:44px; background:var(--panel);
+           border:1px solid var(--line); border-radius:11px; padding:13px 16px;
+           box-shadow:var(--shadow) }
+  .scrubhead { display:flex; justify-content:space-between; align-items:baseline;
+               margin-bottom:8px }
+  .scrubhead b { font-size:15px; font-family:ui-monospace,Menlo,monospace }
+  .scrubhead span { color:var(--dim) }
+  #time { width:100%; accent-color:var(--accent) }
+  .scrubfoot { display:flex; justify-content:space-between; color:var(--dim);
+               font-size:11px; margin-top:4px }
+  .view[hidden] { display:none }
+  .ev { padding:8px 0; border-bottom:1px solid var(--hair); cursor:pointer; font-size:12.5px }
+  .ev:hover { color:var(--accent) }
+  .ev small { color:var(--dim); font-family:ui-monospace,Menlo,monospace }
   #stage { flex:1; position:relative; min-width:0 }
   svg { width:100%; height:100%; cursor:grab; display:block }
   svg:active { cursor:grabbing }
-  #side { width:390px; flex:none; border-left:1px solid var(--line); background:var(--panel);
+  #side { width:370px; flex:none; border-left:1px solid var(--line); background:var(--panel);
           padding:20px; overflow-y:auto }
   h1 { font-size:11px; letter-spacing:.12em; text-transform:uppercase;
        color:var(--dim); margin:0 0 12px; font-weight:600 }
@@ -115,7 +150,7 @@ PAGE = """<!doctype html>
   /* -- colour-by toggle ------------------------------------------------ */
   .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;
          margin-bottom:12px }
-  .seg button { flex:1; padding:7px 0; border:0; background:var(--panel); color:var(--dim);
+  .seg button { flex:1; padding:7px 4px; font-size:12px; border:0; background:var(--panel); color:var(--dim);
                 font:inherit; font-weight:600; cursor:pointer }
   .seg button.on { background:var(--hair); color:var(--text) }
 
@@ -137,24 +172,50 @@ PAGE = """<!doctype html>
   #hint { position:absolute; left:18px; bottom:16px; color:var(--dim); font-size:12px }
 </style>
 <div id="wrap">
-  <div id="stage"><svg id="svg"></svg><div id="hint">drag to pan · scroll to zoom · click a memory</div></div>
-  <div id="side">
-    <h1>Memory graph</h1>
-    <button id="picker"><span class="who">loading…</span><span class="caret">▾</span></button>
-    <div id="ask" hidden></div>
-    <h1 class="sec">Colour by</h1>
-    <div class="seg">
-      <button id="by-status" class="on">status</button>
-      <button id="by-session">session</button>
+  <nav id="rail">
+    <div class="brand">mapi</div>
+    <button class="nav on" data-view="graph"><span class="ico">◍</span>Memory graph</button>
+    <button class="nav" data-view="replay"><span class="ico">◷</span>Memory replay</button>
+    <div class="railfoot"><button id="picker"><span class="who">loading…</span><span class="caret">▾</span></button></div>
+  </nav>
+
+  <div id="stage">
+    <svg id="svg"></svg>
+    <div id="hint">drag to pan · scroll to zoom · click a memory</div>
+    <div id="scrub" hidden>
+      <div class="scrubhead"><b id="scrubdate">—</b><span id="scrubcount"></span></div>
+      <input id="time" type="range" min="0" max="100" value="100">
+      <div class="scrubfoot"><span id="t0"></span><span>event time — when it happened, not when we learned it</span><span id="t1"></span></div>
     </div>
-    <div id="legend"></div>
-    <h1 class="sec">Counts</h1>
-    <div id="stats"></div>
-    <h1 class="sec">Relations</h1>
-    <div class="stat"><span><i class="ln" style="background:var(--supersedes)"></i>supersedes</span></div>
-    <div class="stat"><span><i class="ln" style="background:var(--contradicts)"></i>contradicts</span></div>
-    <div class="stat"><span><i class="ln" style="background:var(--derived)"></i>derived from</span></div>
-    <div class="stat"><span><i class="ln" style="background:var(--references)"></i>references</span></div>
+  </div>
+
+  <div id="side">
+    <div id="ask" hidden></div>
+
+    <div class="view" data-view="graph">
+      <h1>Colour by</h1>
+      <div class="seg">
+        <button id="by-status" class="on">status</button>
+        <button id="by-session">session</button>
+      </div>
+      <div id="legend"></div>
+      <h1 class="sec">Show</h1>
+      <div class="seg">
+        <button class="kind on" data-kind="all">all</button>
+        <button class="kind" data-kind="episodic">what happened</button>
+        <button class="kind" data-kind="derived">what's true</button>
+      </div>
+      <div id="tags"></div>
+      <h1 class="sec">Counts</h1>
+      <div id="stats"></div>
+    </div>
+
+    <div class="view" data-view="replay" hidden>
+      <h1>What entered memory</h1>
+      <p class="sub">Scrub the timeline to see the graph as of a moment. Newest first.</p>
+      <div id="feed"></div>
+    </div>
+
     <div id="detail">
       <h1>Memory</h1>
       <div id="meta"></div>
@@ -194,7 +255,11 @@ const SESSION_HUES = [204,28,140,320,52,264,176,4,96,236,320,68];
 const svg = document.getElementById('svg');
 let nodes = [], edges = [], byId = {}, sel = null, spaces = [], pending = null;
 let colourBy = 'status', sessions = [];
-let view = { x:0, y:0, k:1 };
+let allNodes = [], allEdges = [];          // unfiltered, as loaded
+let activeTags = new Set(), cutoff = null; // tag filter and replay cutoff
+let kindFilter = 'all';                    // episodic | derived | all
+let view = 'graph';
+let camera = { x:0, y:0, k:1 };
 
 const esc = s => (s||'').replace(/[&<>"]/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -263,11 +328,11 @@ function fit() {
   const y0 = Math.min(...ys), y1 = Math.max(...ys);
   const W = svg.clientWidth, H = svg.clientHeight, pad = 60;
   const k = Math.min((W - pad*2) / (x1-x0 || 1), (H - pad*2) / (y1-y0 || 1), 1.6);
-  view = { k, x: W/2 - k*(x0+x1)/2, y: H/2 - k*(y0+y1)/2 };
+  camera = { k, x: W/2 - k*(x0+x1)/2, y: H/2 - k*(y0+y1)/2 };
 }
 
 function draw() {
-  const g = [`<g transform="translate(${view.x},${view.y}) scale(${view.k})">`];
+  const g = [`<g transform="translate(${camera.x},${camera.y}) scale(${camera.k})">`];
   for (const e of edges) {
     const a = byId[e.source], b = byId[e.target];
     if (!a || !b) continue;
@@ -306,6 +371,99 @@ function legend() {
     }).join('') || '<p class="empty">No session tags on these memories.</p>';
   }
 }
+
+// -- filtering ---------------------------------------------------------
+// One place decides what is on screen, so the tag filter and the replay
+// scrubber cannot disagree about it. Edges survive only when BOTH endpoints
+// do -- an edge to a hidden memory is a line to nowhere, and in a graph whose
+// whole claim is "these edges are the point", a dangling one is a lie.
+function applyFilters() {
+  const keep = allNodes.filter(n => {
+    if (cutoff && new Date(n.occurred_at) > cutoff) return false;
+    if (kindFilter !== 'all' && n.kind !== kindFilter) return false;
+    if (activeTags.size && !(n.tags || []).some(t => activeTags.has(t))) return false;
+    return true;
+  });
+  const live = new Set(keep.map(n => n.id));
+  nodes = keep;
+  edges = allEdges.filter(e => live.has(e.source) && live.has(e.target));
+  byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  if (sel && !live.has(sel)) { sel = null; document.getElementById('detail').classList.remove('on'); }
+  layout(); fit(); draw();
+}
+
+function renderTags() {
+  // Session tags are the session colouring's job; showing 12 of them here
+  // would bury the tags a person actually chose.
+  const counts = {};
+  for (const n of allNodes)
+    for (const t of n.tags || [])
+      if (!t.startsWith('session:')) counts[t] = (counts[t] || 0) + 1;
+  const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 24);
+  const el = document.getElementById('tags');
+  // Rendered only when tags a PERSON chose exist. Session ids are already the
+  // session colouring, and an always-empty panel is worse than no panel.
+  el.innerHTML = names.length
+    ? '<h1 class="sec">Tags</h1>' + names.map(t =>
+        `<span class="tag ${activeTags.has(t) ? 'on' : ''}" data-tag="${esc(t)}">${
+          esc(t)} ${counts[t]}</span>`).join('')
+    : '';
+  el.querySelectorAll('[data-tag]').forEach(chip => chip.onclick = () => {
+    const t = chip.dataset.tag;
+    activeTags.has(t) ? activeTags.delete(t) : activeTags.add(t);
+    renderTags(); applyFilters();
+  });
+}
+
+document.querySelectorAll('.kind').forEach(btn => btn.onclick = () => {
+  kindFilter = btn.dataset.kind;
+  document.querySelectorAll('.kind').forEach(b => b.classList.toggle('on', b === btn));
+  applyFilters();
+});
+
+// -- replay ------------------------------------------------------------
+function replayBounds() {
+  const times = allNodes.map(n => new Date(n.occurred_at)).sort((a, b) => a - b);
+  return times.length ? [times[0], times[times.length - 1]] : [null, null];
+}
+
+function renderReplay(fraction) {
+  const [lo, hi] = replayBounds();
+  if (!lo) return;
+  const at = new Date(lo.getTime() + (hi - lo) * fraction);
+  cutoff = at;
+  document.getElementById('scrubdate').textContent = at.toISOString().slice(0, 10);
+  document.getElementById('t0').textContent = lo.toISOString().slice(0, 10);
+  document.getElementById('t1').textContent = hi.toISOString().slice(0, 10);
+  applyFilters();
+  document.getElementById('scrubcount').textContent =
+    `${nodes.length} of ${allNodes.length} memories · ${edges.length} relations`;
+
+  const recent = [...nodes].sort(
+    (a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)).slice(0, 40);
+  document.getElementById('feed').innerHTML = recent.map(n =>
+    `<div class="ev" data-go="${n.id}">${esc(n.content.slice(0, 110))}<br>
+     <small>${n.occurred_at.slice(0, 10)} · ${n.kind} · ${n.status}</small></div>`).join('')
+    || '<p class="empty">Nothing had happened yet.</p>';
+  document.getElementById('feed').querySelectorAll('[data-go]').forEach(
+    el => el.onclick = () => show(el.dataset.go));
+}
+
+document.getElementById('time').oninput = e => renderReplay(e.target.value / 100);
+
+// -- view switching ----------------------------------------------------
+document.querySelectorAll('.nav').forEach(btn => btn.onclick = () => {
+  view = btn.dataset.view;
+  document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== view);
+  document.getElementById('scrub').hidden = view !== 'replay';
+  document.getElementById('hint').hidden = view === 'replay';
+  if (view === 'replay') {
+    renderReplay(document.getElementById('time').value / 100);
+  } else {
+    cutoff = null; applyFilters();
+  }
+});
 
 // -- detail ------------------------------------------------------------
 async function show(id) {
@@ -417,9 +575,12 @@ async function loadSpace() {
   } else ask.hidden = true;
 
   const g = await api(`/v1/spaces/${SPACE}/graph?limit=400`);
-  nodes = g.nodes; edges = g.edges; sel = null;
+  allNodes = g.nodes; allEdges = g.edges; sel = null;
+  nodes = allNodes; edges = allEdges;
   byId = Object.fromEntries(nodes.map(n => [n.id, n]));
   sessions = [...new Set(nodes.map(sessionOf).filter(Boolean))].sort();
+  activeTags.clear(); cutoff = null;
+  renderTags();
   document.getElementById('detail').classList.remove('on');
 
   const c = g.counts;
@@ -431,6 +592,7 @@ async function loadSpace() {
   ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
 
   legend(); layout(); fit(); draw();
+  if (view === 'replay') renderReplay(document.getElementById('time').value / 100);
 }
 
 (async function () {
@@ -459,7 +621,7 @@ svg.addEventListener('mousedown', e => {
   // ordinary click drag the graph out from under the cursor, and the click
   // lands on the background instead of the memory you aimed at.
   if (e.target.tagName === 'circle') return;
-  drag = { x:e.clientX, y:e.clientY, xv:view.x, yv:view.y, live:false };
+  drag = { x:e.clientX, y:e.clientY, xv:camera.x, yv:camera.y, live:false };
 });
 addEventListener('mouseup', () => drag = null);
 addEventListener('mousemove', e => {
@@ -468,14 +630,14 @@ addEventListener('mousemove', e => {
   // A 4px threshold, so a shaky click on empty canvas is still a click.
   if (!drag.live && Math.hypot(dx, dy) < 4) return;
   drag.live = true;
-  view = { ...view, x: drag.xv + dx, y: drag.yv + dy };
+  camera = { ...camera, x: drag.xv + dx, y: drag.yv + dy };
   draw();
 });
 svg.addEventListener('wheel', e => {
   e.preventDefault();
   const f = e.deltaY < 0 ? 1.1 : 0.9;
-  view = { x: e.offsetX - (e.offsetX-view.x)*f, y: e.offsetY - (e.offsetY-view.y)*f,
-           k: view.k*f };
+  camera = { x: e.offsetX - (e.offsetX-camera.x)*f, y: e.offsetY - (e.offsetY-camera.y)*f,
+             k: camera.k*f };
   draw();
 }, { passive:false });
 </script>

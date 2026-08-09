@@ -492,6 +492,7 @@ class InMemoryStore(MemoryStore):
                     metadata=version.metadata,
                     tags=version.tags,
                     source=version.source,
+                    kind=version.kind,
                     status=version.status,
                     occurred_at=version.occurred_at,
                     version=version.version,

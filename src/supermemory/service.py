@@ -273,6 +273,13 @@ class MemoryService:
                 await self.store.create_relation(edge)
                 await self.store.upsert_memory(updated_old)
                 superseded.append(proposal.old_id)
+                # A superseded source invalidates what was computed from it:
+                # the derivation may now describe a replaced state of the world.
+                await self._mark_derivations_stale(
+                    org_id,
+                    space_id,
+                    await self._direct_derivatives(org_id, space_id, proposal.old_id),
+                )
 
         stored = await self.store.upsert_memory(memory)
         INGESTED.labels(outcome="created").inc()
@@ -291,9 +298,71 @@ class MemoryService:
             raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
         return memory
 
+    async def _mark_derivations_stale(
+        self, org_id: str, space_id: str, source_ids: Sequence[str]
+    ) -> list[str]:
+        """Transitively mark every derivation of `source_ids` STALE.
+
+        The invariant this enforces: a derivation must never outlive the
+        evidence it was computed from. Erase a source episode and "you own 3
+        bikes" derived from it is no longer known — serving it anyway would be
+        a lie with provenance attached. STALE (not deletion) is the right
+        response because the derivation is *recomputable* from the surviving
+        sources, and its `derived_from` edges say exactly how.
+
+        Transitive because derivations stack (a profile fact derived from a
+        timeline derived from episodes): BFS over incoming DERIVED_FROM edges
+        with a visited set, so diamond-shaped provenance terminates. Edges to
+        the *removed* memory die with it in both backends, so callers collect
+        the first hop BEFORE removal and pass it in; hops beyond the first are
+        walked here, where the edges still exist.
+
+        Only ACTIVE rows transition — a SUPERSEDED derivation stays superseded
+        (its replacement is the current truth; do not resurrect it as merely
+        stale). Returns the ids actually transitioned, for attestations.
+        """
+        staled: list[str] = []
+        queue = list(dict.fromkeys(source_ids))
+        visited: set[str] = set()
+        while queue:
+            derived_id = queue.pop(0)
+            if derived_id in visited:
+                continue
+            visited.add(derived_id)
+            derived = await self.store.get_memory(org_id, space_id, derived_id)
+            if derived is None:
+                continue
+            if derived.status is MemoryStatus.ACTIVE:
+                await self.store.upsert_memory(
+                    derived.model_copy(
+                        update={
+                            "status": MemoryStatus.STALE,
+                            "version": derived.version + 1,
+                            "updated_at": utcnow(),
+                        }
+                    )
+                )
+                staled.append(derived_id)
+            incoming = await self.store.list_relations(
+                org_id, space_id, derived_id, direction="in"
+            )
+            queue.extend(e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM)
+        return staled
+
+    async def _direct_derivatives(
+        self, org_id: str, space_id: str, memory_id: str
+    ) -> list[str]:
+        """First-hop derivations of a memory, collected while its edges exist."""
+        incoming = await self.store.list_relations(org_id, space_id, memory_id, direction="in")
+        return sorted({e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM})
+
     async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> None:
+        # Collect BEFORE the delete: the edges naming the derivations die with
+        # the memory (FK cascade on postgres, edge sweep in-memory).
+        derivatives = await self._direct_derivatives(org_id, space_id, memory_id)
         if not await self.store.delete_memory(org_id, space_id, memory_id):
             raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
+        await self._mark_derivations_stale(org_id, space_id, derivatives)
 
     async def list_memories(
         self,
@@ -354,6 +423,11 @@ class MemoryService:
                             "updated_at": utcnow(),
                         }
                     )
+                )
+                await self._mark_derivations_stale(
+                    org_id,
+                    space_id,
+                    await self._direct_derivatives(org_id, space_id, target_id),
                 )
         elif relation.symmetric:
             # `contradicts` is mutual; recording one direction only would make
@@ -505,14 +579,13 @@ class MemoryService:
 
         derivatives: list[str] = []
         if memory is not None:
-            incoming = await self.store.list_relations(
-                org_id, space_id, memory_id, direction="in"
-            )
-            derivatives = sorted(
-                {e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM}
-            )
+            derivatives = await self._direct_derivatives(org_id, space_id, memory_id)
 
         report = await self.store.erase_memory(org_id, space_id, memory_id)
+        # The derivations named in the attestation are not merely "affected":
+        # they are marked STALE, transitively, so nothing computed from the
+        # erased content is ever served as current truth again.
+        await self._mark_derivations_stale(org_id, space_id, derivatives)
         INGESTED.labels(outcome="erased").inc()
         log.info(
             "memory_erased",

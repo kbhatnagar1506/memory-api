@@ -22,6 +22,7 @@ from supermemory.domain.models import (
     ApiKey,
     Chunk,
     Memory,
+    MemoryKind,
     MemoryStatus,
     Organization,
     RelationEdge,
@@ -910,3 +911,52 @@ async def test_erasing_an_endpoint_bridges_nothing(tenant) -> None:
     assert report.edges_bridged == 0
     report = await store.erase_memory(org.id, space.id, oldest.id)
     assert report.edges_bridged == 0
+
+
+# -- memory kind and the derived lifecycle -------------------------------------
+
+
+async def test_kind_round_trips_and_defaults_to_episodic(tenant) -> None:
+    store, org, space = tenant
+    episode = await _add(store, org, space, "plain episode")
+    assert episode.kind is MemoryKind.EPISODIC
+    derived = await _add(store, org, space, "you own 3 bikes", kind=MemoryKind.DERIVED)
+    fetched = await store.get_memory(org.id, space.id, derived.id)
+    assert fetched is not None and fetched.kind is MemoryKind.DERIVED
+
+
+async def test_stale_memories_are_excluded_from_default_search(tenant) -> None:
+    """STALE is a hard status: a derivation whose sources changed must vanish
+    from results, not rank lower. Serving it is a lie with provenance."""
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    fresh = await _add(store, org, space, "kafka current fact", embedder=embedder)
+    stale = await _add(
+        store, org, space, "kafka derived count", embedder=embedder, kind=MemoryKind.DERIVED
+    )
+    await store.upsert_memory(
+        stale.model_copy(update={"status": MemoryStatus.STALE, "version": 2})
+    )
+    query = await embedder.embed_one("kafka")
+    vector_hits = await store.vector_search(
+        org.id, space.id, query, limit=10, filters=MemoryFilter()
+    )
+    lexical_hits = await store.lexical_search(
+        org.id, space.id, "kafka", limit=10, filters=MemoryFilter()
+    )
+    found = {h.memory_id for h in vector_hits} | {h.memory_id for h in lexical_hits}
+    assert fresh.id in found
+    assert stale.id not in found
+
+
+async def test_kind_survives_point_in_time_reads(tenant) -> None:
+    """`?as_of=` reconstruction must not silently relabel a derived fact as an
+    episode — provenance class is part of what the past looked like."""
+    store, org, space = tenant
+    derived = await _add(store, org, space, "derived timeline", kind=MemoryKind.DERIVED)
+    versions = await store.list_memory_versions(org.id, space.id, derived.id)
+    assert versions and versions[-1].kind is MemoryKind.DERIVED
+    historical = await store.get_memory_as_of(
+        org.id, space.id, derived.id, versions[-1].valid_from
+    )
+    assert historical is not None and historical.kind is MemoryKind.DERIVED

@@ -126,8 +126,12 @@ class MemoryRow(Base):
         Index("ix_memories_metadata", "meta", postgresql_using="gin"),
         CheckConstraint("version >= 1", name="ck_memories_version_positive"),
         CheckConstraint(
-            "status in ('active','superseded','archived')",
+            "status in ('active','superseded','archived','stale')",
             name="ck_memories_status_valid",
+        ),
+        CheckConstraint(
+            "kind in ('episodic','derived')",
+            name="ck_memories_kind_valid",
         ),
     )
 
@@ -138,6 +142,7 @@ class MemoryRow(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), default="episodic", nullable=False)
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB().with_variant(JSON, "sqlite"), default=dict, nullable=False
     )
@@ -277,6 +282,7 @@ class MemoryVersionRow(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), default="episodic", nullable=False)
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB().with_variant(JSON, "sqlite"), default=dict, nullable=False
     )

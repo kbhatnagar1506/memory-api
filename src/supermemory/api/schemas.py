@@ -17,6 +17,7 @@ from pydantic_core.core_schema import ValidationInfo
 
 from ..domain.models import (
     Memory,
+    MemoryKind,
     MemoryStatus,
     MemoryVersion,
     RelationEdge,
@@ -230,6 +231,7 @@ class MemoryResponse(Response):
     metadata: dict[str, Any]
     tags: list[str]
     source: str
+    kind: MemoryKind
     status: MemoryStatus
     occurred_at: datetime
     created_at: datetime
@@ -247,6 +249,7 @@ class MemoryResponse(Response):
             metadata=memory.metadata,
             tags=memory.tags,
             source=memory.source,
+            kind=memory.kind,
             status=memory.status,
             occurred_at=memory.occurred_at,
             created_at=memory.created_at,

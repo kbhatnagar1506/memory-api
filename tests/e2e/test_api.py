@@ -892,3 +892,92 @@ async def test_context_assembles_the_entire_neighborhood(client, space_id) -> No
         await client.get(f"/v1/spaces/{space_id}/memories/{derived['id']}/context")
     ).json()
     assert {m["id"] for m in context["derived_from"]} == {source_a["id"]}
+
+
+# -- derived-memory lifecycle --------------------------------------------------
+
+
+async def _mk(client, space_id: str, content: str) -> dict:
+    response = await client.post(f"/v1/spaces/{space_id}/memories", json={"content": content})
+    return response.json()["memory"]
+
+
+async def _rel(client, space_id: str, source: dict, target: dict, relation: str) -> None:
+    response = await client.post(
+        f"/v1/spaces/{space_id}/memories/{source['id']}/relations",
+        json={"target_id": target["id"], "relation": relation},
+    )
+    assert response.status_code == 201
+
+
+async def _status_of(client, space_id: str, memory: dict) -> str:
+    return (await client.get(f"/v1/spaces/{space_id}/memories/{memory['id']}")).json()["status"]
+
+
+async def test_erasing_a_source_marks_its_derivation_stale(client, space_id) -> None:
+    """The invariant: a derivation must never outlive its evidence. Erase a
+    source episode and the fact computed from it stops being served as truth —
+    stale, not deleted, because it is recomputable from the survivors."""
+    source_a = await _mk(client, space_id, "Bought a road bike in March")
+    source_b = await _mk(client, space_id, "Bought an e-bike in May")
+    derived = await _mk(client, space_id, "Owns two bikes")
+    await _rel(client, space_id, derived, source_a, "derived_from")
+    await _rel(client, space_id, derived, source_b, "derived_from")
+
+    erased = await client.post(f"/v1/spaces/{space_id}/memories/{source_a['id']}/erase")
+    assert erased.status_code == 200
+    assert derived["id"] in erased.json()["derived_memories_affected"]
+    assert await _status_of(client, space_id, derived) == "stale"
+
+
+async def test_superseding_a_source_marks_its_derivation_stale(client, space_id) -> None:
+    """Supersession invalidates too: the derivation may describe a replaced
+    state of the world."""
+    old = await _mk(client, space_id, "Lives in Portland")
+    derived = await _mk(client, space_id, "Commute is 20 minutes, from Portland")
+    await _rel(client, space_id, derived, old, "derived_from")
+    new = await _mk(client, space_id, "Moved to Seattle")
+    await _rel(client, space_id, new, old, "supersedes")
+    assert await _status_of(client, space_id, derived) == "stale"
+
+
+async def test_staleness_propagates_through_derivation_chains(client, space_id) -> None:
+    """Profile fact derived from a timeline derived from an episode: erasing
+    the episode must reach the profile fact, two hops away."""
+    episode = await _mk(client, space_id, "Gym session on Tuesday")
+    timeline = await _mk(client, space_id, "Timeline: one gym visit this week")
+    profile = await _mk(client, space_id, "User exercises regularly")
+    await _rel(client, space_id, timeline, episode, "derived_from")
+    await _rel(client, space_id, profile, timeline, "derived_from")
+
+    await client.post(f"/v1/spaces/{space_id}/memories/{episode['id']}/erase")
+    assert await _status_of(client, space_id, timeline) == "stale"
+    assert await _status_of(client, space_id, profile) == "stale"
+
+
+async def test_stale_derivations_leave_search_results(client, space_id) -> None:
+    source = await _mk(client, space_id, "Cycling log: bought a gravel bike")
+    derived = await _mk(client, space_id, "Owns one gravel bike total")
+    await _rel(client, space_id, derived, source, "derived_from")
+
+    results = (
+        await client.post(f"/v1/spaces/{space_id}/search", json={"query": "gravel bike"})
+    ).json()["results"]
+    assert any(r["memory"]["id"] == derived["id"] for r in results)
+
+    await client.post(f"/v1/spaces/{space_id}/memories/{source['id']}/erase")
+    results = (
+        await client.post(f"/v1/spaces/{space_id}/search", json={"query": "gravel bike"})
+    ).json()["results"]
+    assert not any(r["memory"]["id"] == derived["id"] for r in results)
+
+
+async def test_deleting_a_source_also_invalidates(client, space_id) -> None:
+    """Plain delete severs edges (FK cascade / edge sweep), so the derivative
+    set is collected before the delete — the invalidation must still land."""
+    source = await _mk(client, space_id, "Subscription: Netflix at 15 dollars")
+    derived = await _mk(client, space_id, "Total subscriptions: one")
+    await _rel(client, space_id, derived, source, "derived_from")
+    response = await client.delete(f"/v1/spaces/{space_id}/memories/{source['id']}")
+    assert response.status_code == 204
+    assert await _status_of(client, space_id, derived) == "stale"

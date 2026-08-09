@@ -32,6 +32,7 @@ from ...domain.models import (
     ApiKey,
     Chunk,
     Memory,
+    MemoryKind,
     MemoryStatus,
     MemoryVersion,
     Organization,
@@ -138,6 +139,7 @@ class PostgresStore(MemoryStore):
             metadata=dict(row.meta or {}),
             tags=list(row.tags or []),
             source=row.source,
+            kind=MemoryKind(row.kind),
             status=MemoryStatus(row.status),
             occurred_at=row.occurred_at,
             created_at=row.created_at,
@@ -369,6 +371,7 @@ class PostgresStore(MemoryStore):
             row.meta = memory.metadata
             row.tags = memory.tags
             row.source = memory.source
+            row.kind = memory.kind.value
             row.status = memory.status.value
             row.occurred_at = _require_aware(memory.occurred_at)
             row.created_at = _require_aware(memory.created_at)
@@ -415,6 +418,7 @@ class PostgresStore(MemoryStore):
                         meta=snapshot.metadata,
                         tags=snapshot.tags,
                         source=snapshot.source,
+                        kind=snapshot.kind.value,
                         status=snapshot.status.value,
                         occurred_at=_require_aware(snapshot.occurred_at),
                         valid_from=when,
@@ -776,6 +780,7 @@ class PostgresStore(MemoryStore):
             metadata=dict(row.meta or {}),
             tags=list(row.tags or []),
             source=row.source,
+            kind=MemoryKind(row.kind),
             status=MemoryStatus(row.status),
             occurred_at=row.occurred_at,
             valid_from=row.valid_from,
@@ -811,6 +816,7 @@ class PostgresStore(MemoryStore):
                 metadata=version.metadata,
                 tags=version.tags,
                 source=version.source,
+                kind=version.kind,
                 status=version.status,
                 occurred_at=version.occurred_at,
                 version=version.version,

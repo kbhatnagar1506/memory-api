@@ -65,6 +65,25 @@ class MemoryStatus(StrEnum):
     SUPERSEDED = "superseded"
     #: Soft-deleted. Never returned by search.
     ARCHIVED = "archived"
+    #: A derived memory whose sources changed after it was computed. A stale
+    #: derivation served as truth is a lie with provenance, so staleness is a
+    #: hard status (excluded from default search like every non-ACTIVE state),
+    #: not a score penalty. Distinct from SUPERSEDED because nothing replaced
+    #: it — re-deriving from the surviving sources is the recovery, and the
+    #: `derived_from` edges say exactly what to re-derive from.
+    STALE = "stale"
+
+
+class MemoryKind(StrEnum):
+    #: Ground truth: something that happened, stored losslessly. Episodes are
+    #: never invalidated by other memories — only corrected (versioning) or
+    #: replaced (supersession) by the caller.
+    EPISODIC = "episodic"
+    #: Computed from episodes at read time (a count, a timeline, a profile
+    #: fact). Carries `derived_from` edges to every source; goes STALE when
+    #: any source is erased, deleted, or superseded, because a derivation
+    #: must never outlive the evidence it was computed from.
+    DERIVED = "derived"
 
 
 class RelationType(StrEnum):
@@ -208,6 +227,7 @@ class Memory(Base):
     metadata: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     source: str = ""
+    kind: MemoryKind = MemoryKind.EPISODIC
     status: MemoryStatus = MemoryStatus.ACTIVE
     #: Caller-supplied event time. Defaults to ingestion time. Recency decay
     #: uses this, not created_at, so backfilled history ages correctly.
@@ -280,6 +300,7 @@ class MemoryVersion(Base):
     metadata: dict[str, Any]
     tags: list[str]
     source: str
+    kind: MemoryKind = MemoryKind.EPISODIC
     status: MemoryStatus
     occurred_at: datetime
     valid_from: datetime
@@ -305,6 +326,7 @@ class MemoryVersion(Base):
             metadata=memory.metadata,
             tags=memory.tags,
             source=memory.source,
+            kind=memory.kind,
             status=memory.status,
             occurred_at=memory.occurred_at,
             valid_from=valid_from,
@@ -361,6 +383,7 @@ __all__ = [
     "Base",
     "Chunk",
     "Memory",
+    "MemoryKind",
     "MemoryStatus",
     "MemoryVersion",
     "NonEmptyStr",

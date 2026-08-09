@@ -32,10 +32,11 @@ from mapi.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
 from mapi.domain.retrieval.rerank import Reranker
 from mapi.domain.synthesis import QuestionKind, classify
 from mapi.domain.synthesis.derive import SourceDoc, derive_answer
+from mapi.domain.synthesis.extract import extract_claims
 from mapi.store.memory import InMemoryStore
 
-from .cache import DiskVectorCache, cache_key
-from .datasets.base import Corpus, Question
+from .cache import DiskClaimCache, DiskVectorCache, cache_key
+from .datasets.base import Corpus, Document, Question
 from .metrics import full_recall_at_k, hit_at_k, mrr, ndcg_at_k, recall_at_k, wilson
 
 
@@ -54,7 +55,10 @@ class Ingested:
     speakers: tuple[str, ...] = ()
     documents: int = 0
     chunks: int = 0
+    #: Stored units that are extracted claims rather than source documents.
+    claims: int = 0
     embed_seconds: float = 0.0
+    extract_seconds: float = 0.0
 
 
 def _token_batches(texts: list[str], *, max_items: int, max_tokens: int) -> list[list[int]]:
@@ -81,6 +85,87 @@ def _token_batches(texts: list[str], *, max_items: int, max_tokens: int) -> list
     return batches
 
 
+async def extract_corpora(
+    corpora: list[Corpus],
+    extractor: Any,
+    *,
+    concurrency: int = 24,
+    cache: DiskClaimCache | None = None,
+    model: str = "",
+    progress_every: int = 200,
+) -> tuple[dict[str, list[tuple[str, str]]], float]:
+    """Decompose every document into atomic claims, before any ingestion.
+
+    A separate PASS rather than a step inside `ingest`, for one reason:
+    extraction depends on nothing but the document it reads, so all of it can
+    be in flight at once, while ingestion cannot be reordered freely. Run
+    serially inside ingest, a 25,000-session corpus is a day of round-trips;
+    run here it is bounded by `concurrency`.
+
+    Deduplicated by document TEXT, not by id. LongMemEval reuses the same
+    filler sessions across many corpora, so the same passage appears in
+    dozens of haystacks and extracting it once is worth more than any
+    batching.
+    """
+    unique: dict[str, None] = {}
+    for corpus in corpora:
+        for document in corpus.documents:
+            unique.setdefault(document.text, None)
+    texts = list(unique)
+
+    out: dict[str, list[tuple[str, str]]] = {}
+    pending = texts
+    if cache is not None:
+        keys = [DiskClaimCache.key(model, t) for t in texts]
+        found = cache.get_many(keys)
+        pending = []
+        for text, key in zip(texts, keys, strict=True):
+            hit = found.get(key)
+            if hit is None:
+                pending.append(text)
+            else:
+                out[text] = hit
+        print(
+            f"    claim cache: {len(out)} hits, {len(pending)} to extract",
+            flush=True,
+        )
+
+    started = time.perf_counter()
+    if pending:
+        gate = asyncio.Semaphore(concurrency)
+        done = 0
+
+        async def one(text: str) -> tuple[str, list[tuple[str, str]]]:
+            nonlocal done
+            async with gate:
+                claims = await extract_claims(text, extractor)
+            done += 1
+            if progress_every and done % progress_every == 0:
+                rate = done / max(time.perf_counter() - started, 1e-9)
+                print(
+                    f"    extracted {done}/{len(pending)} docs "
+                    f"(~{(len(pending) - done) / max(rate, 1e-9):.0f}s left)",
+                    flush=True,
+                )
+            return text, [(c.fact, c.quote) for c in claims]
+
+        results = await asyncio.gather(*(one(t) for t in pending))
+        out.update(dict(results))
+        if cache is not None:
+            cache.put_many(
+                (DiskClaimCache.key(model, text), claims) for text, claims in results
+            )
+
+    total = sum(len(v) for v in out.values())
+    empty = sum(1 for v in out.values() if not v)
+    print(
+        f"    {total} claims from {len(texts)} documents "
+        f"({empty} yielded none) in {time.perf_counter() - started:.0f}s",
+        flush=True,
+    )
+    return out, time.perf_counter() - started
+
+
 async def ingest(
     corpora: list[Corpus],
     embedder: EmbeddingProvider,
@@ -92,6 +177,8 @@ async def ingest(
     max_request_tokens: int = 15_000,
     progress_every: int = 25,
     cache: DiskVectorCache | None = None,
+    claims_by_doc: dict[str, list[tuple[str, str]]] | None = None,
+    extract_mode: str = "off",
 ) -> Ingested:
     """Bulk-load documents, chunked and embedded in token-bounded batches.
 
@@ -149,19 +236,34 @@ async def ingest(
         }
         speakers.update(d.speaker for d in corpus.documents if d.speaker)
 
+        # What actually gets stored, in order. Normally one unit per document;
+        # with extraction on, also one per claim, each still owned by the
+        # document it came from so evidence keeps mapping at the granularity
+        # the benchmark labels.
+        units: list[tuple[str, Document]] = []
+        for document in corpus.documents:
+            found = (claims_by_doc or {}).get(document.text) or []
+            if extract_mode != "only" or not found:
+                # "only" still stores the original when extraction returned
+                # nothing: dropping the document would delete evidence the
+                # benchmark is about to score against.
+                units.append((document.text, document))
+            for fact, _quote in found:
+                units.append((fact, document))
+
         # Chunk first, then batch by token budget across the flattened chunks.
         pieces: list[str] = []
         owner: list[int] = []
-        for position, document in enumerate(corpus.documents):
+        for position, (text_to_store, _document) in enumerate(units):
             parts = (
                 chunk_text(
-                    document.text,
+                    text_to_store,
                     target_tokens=chunk_target_tokens,
                     overlap_tokens=chunk_overlap_tokens,
                 )
                 or []
             )
-            texts_for_doc = [p.text for p in parts] or [document.text[:2000]]
+            texts_for_doc = [p.text for p in parts] or [text_to_store[:2000]]
             for text in texts_for_doc:
                 pieces.append(text)
                 owner.append(position)
@@ -212,16 +314,21 @@ async def ingest(
         for piece, position, vector in zip(pieces, owner, vectors, strict=True):
             chunks_by_doc[position].append((piece, vector))
 
-        for position, document in enumerate(corpus.documents):
+        for position, (text_to_store, document) in enumerate(units):
             parts = chunks_by_doc.get(position, [])
             if not parts:
                 continue
             memory = Memory(
                 org_id=org.id,
                 space_id=space.id,
-                content=document.text,
+                content=text_to_store,
                 source=document.speaker,
                 occurred_at=document.occurred_at,
+                # `doc_id` is the SOURCE document even for a claim. A claim is
+                # a statement that document made, so retrieving it is
+                # retrieving that session -- which is the granularity
+                # LongMemEval labels evidence at. Anything else would score a
+                # correct hit as a miss.
                 metadata={"doc_id": document.id, **document.metadata},
             )
             memory = memory.model_copy(
@@ -241,6 +348,8 @@ async def ingest(
             out.doc_by_memory[memory.id] = document.id
             out.documents += 1
             out.chunks += len(parts)
+            if text_to_store != document.text:
+                out.claims += 1
 
     out.speakers = tuple(sorted(speakers))
     return out

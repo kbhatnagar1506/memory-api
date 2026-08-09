@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import array
 import hashlib
+import json
 import sqlite3
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -94,4 +95,72 @@ class DiskVectorCache:
         self._conn.close()
 
 
-__all__ = ["DiskVectorCache", "cache_key"]
+class DiskClaimCache:
+    """Write-time extraction results, keyed by document content.
+
+    Same reasoning as the vector cache and a stronger case for it: extraction
+    is one model round-trip per document, and a LongMemEval ingest is tens of
+    thousands of documents. Without this, every re-run of the ANSWER path —
+    which is where the experiments actually are — would re-extract the entire
+    corpus. Keyed by content plus model, so changing the extraction model
+    correctly misses rather than silently reusing another model's decomposition.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self.path)
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS claims (  key TEXT PRIMARY KEY,  payload TEXT NOT NULL)"
+        )
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=OFF")
+        self._conn.commit()
+        self.hits = 0
+        self.misses = 0
+
+    @staticmethod
+    def key(model: str, text: str) -> str:
+        digest = hashlib.blake2b(text.encode("utf-8"), digest_size=16).hexdigest()
+        return f"{model}|{digest}"
+
+    def get_many(self, keys: Sequence[str]) -> dict[str, list[tuple[str, str]]]:
+        out: dict[str, list[tuple[str, str]]] = {}
+        if not keys:
+            return out
+        for start in range(0, len(keys), 900):
+            window = keys[start : start + 900]
+            placeholders = ",".join("?" * len(window))
+            rows = self._conn.execute(
+                f"SELECT key, payload FROM claims WHERE key IN ({placeholders})", window
+            ).fetchall()
+            for key, payload in rows:
+                try:
+                    out[key] = [(r["fact"], r["quote"]) for r in json.loads(payload)]
+                except (ValueError, TypeError, KeyError):
+                    continue  # corrupt row; treat as a miss
+        self.hits += len(out)
+        self.misses += len(keys) - len(out)
+        return out
+
+    def put_many(self, items: Iterable[tuple[str, list[tuple[str, str]]]]) -> None:
+        payload = [
+            (key, json.dumps([{"fact": f, "quote": q} for f, q in claims]))
+            for key, claims in items
+        ]
+        if not payload:
+            return
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO claims (key, payload) VALUES (?, ?)", payload
+        )
+        self._conn.commit()
+
+    def stats(self) -> dict[str, int]:
+        total = self._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+        return {"rows": total, "hits": self.hits, "misses": self.misses}
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+__all__ = ["DiskClaimCache", "DiskVectorCache", "cache_key"]

@@ -22,16 +22,23 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from mapi.config import EmbeddingBackend, RerankBackend, Settings, StoreBackend
+from mapi.config import (
+    EmbeddingBackend,
+    RerankBackend,
+    Settings,
+    StoreBackend,
+    SynthesisBackend,
+)
 from mapi.core.logging import configure_logging
 from mapi.domain.embeddings import build_embedder
 from mapi.domain.retrieval.rerank import HeuristicReranker, NoopReranker
+from mapi.domain.synthesis.completer import build_extractor
 
-from .cache import DiskVectorCache
+from .cache import DiskClaimCache, DiskVectorCache
 from .datasets.base import Dataset
 from .datasets.locomo import LoCoMo
 from .datasets.longmemeval import LongMemEval
-from .harness import evaluate_end_to_end, evaluate_retrieval, ingest
+from .harness import evaluate_end_to_end, evaluate_retrieval, extract_corpora, ingest
 
 REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "bench" / "results"
@@ -99,16 +106,51 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
 
     started = time.perf_counter()
     cache = DiskVectorCache(REPO / "bench" / "data" / "cache" / "vectors.sqlite")
+
+    # -- write-time extraction, before anything is stored -------------------
+    #
+    # Decompose each document into the atomic claims it makes, so the unit
+    # retrieval matches is a single fact rather than a session averaging a
+    # dozen of them. Runs as its own pass because it parallelises freely and
+    # ingestion does not; cached to disk because a re-run that changes only
+    # the ANSWER path must not re-extract the corpus.
+    claims_by_doc: dict[str, list[tuple[str, str]]] = {}
+    claim_cache = None
+    if args.extract != "off":
+        settings = settings.model_copy(
+            update={
+                "synthesis_backend": SynthesisBackend.GEMINI,
+                "google_cloud_project": os.getenv("GOOGLE_CLOUD_PROJECT"),
+                "extraction_model": args.extraction_model,
+            }
+        )
+        extractor = build_extractor(settings)
+        if extractor is None:
+            raise SystemExit("--extract needs GOOGLE_CLOUD_PROJECT and a synthesis backend")
+        print(f"  extracting with {args.extraction_model} ...", flush=True)
+        claim_cache = DiskClaimCache(REPO / "bench" / "data" / "cache" / "claims.sqlite")
+        claims_by_doc, _extract_seconds = await extract_corpora(
+            corpora,
+            extractor,
+            concurrency=args.extract_concurrency,
+            cache=claim_cache,
+            model=args.extraction_model,
+        )
+        print(f"  claim cache: {claim_cache.stats()}", flush=True)
+
     ingested = await ingest(
         corpora,
         embedder,
         batch_size=args.batch_size,
         concurrency=args.concurrency,
         cache=cache,
+        claims_by_doc=claims_by_doc,
+        extract_mode=args.extract,
     )
     print(f"  embedding cache: {cache.stats()}", flush=True)
     print(
-        f"  ingested {ingested.documents} docs / {ingested.chunks} chunks in "
+        f"  ingested {ingested.documents} units "
+        f"({ingested.claims} of them extracted claims) / {ingested.chunks} chunks in "
         f"{time.perf_counter() - started:.0f}s ({ingested.embed_seconds:.0f}s embedding)",
         flush=True,
     )
@@ -359,9 +401,9 @@ async def main() -> int:
         help=(
             "sessions retrieved AND passed to the answerer. This is the "
             "delivery budget, and it was the bottleneck: at 4, complete "
-            "evidence reached the answerer for only 87.0% of questions while "
+            "evidence reached the answerer for only 87.0%% of questions while "
             "the ablation reported full_recall@10 = 0.968 -- two different "
-            "arms. Accuracy is 87.5% when evidence is complete and 26.2% when "
+            "arms. Accuracy is 87.5%% when evidence is complete and 26.2%% when "
             "it is not. The old default of 4 was justified by 'MRR 0.939 means "
             "the right session is ranked first', which is a hit@k argument "
             "applied to a CONJUNCTIVE metric: 324 of 500 questions need two or "
@@ -376,7 +418,7 @@ async def main() -> int:
             "size the evidence budget per question from its SHAPE instead of "
             "using one k for everything. Measured: gold-session need varies 6x "
             "by shape (advice max 1, multi-session up to 5), so a fixed k "
-            "always starves someone or drowns someone. 43% of questions are "
+            "always starves someone or drowns someone. 43%% of questions are "
             "single-evidence shapes currently receiving ten sessions."
         ),
     )
@@ -424,6 +466,20 @@ async def main() -> int:
         "official per-question-type prompts. Not comparable to published "
         "numbers; kept for ablation.",
     )
+    parser.add_argument(
+        "--extract",
+        choices=("off", "add", "only"),
+        default="off",
+        help=(
+            "Write-time decomposition into atomic claims. 'add' stores claims "
+            "ALONGSIDE the source document, so a missed claim costs nothing; "
+            "'only' replaces the document with its claims, which tests whether "
+            "claims are a sufficient retrieval unit and risks losing whatever "
+            "extraction did not capture."
+        ),
+    )
+    parser.add_argument("--extraction-model", default="gemini-2.5-flash")
+    parser.add_argument("--extract-concurrency", type=int, default=24)
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 

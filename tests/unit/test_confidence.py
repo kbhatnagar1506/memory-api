@@ -9,7 +9,7 @@ measures its tone rather than the data.
 
 from __future__ import annotations
 
-from supermemory.domain.retrieval.confidence import (
+from mapi.domain.retrieval.confidence import (
     ConfidenceLevel,
     RefusalReason,
     assess,

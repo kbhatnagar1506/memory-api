@@ -22,10 +22,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from supermemory.config import EmbeddingBackend, RerankBackend, Settings, StoreBackend
-from supermemory.core.logging import configure_logging
-from supermemory.domain.embeddings import build_embedder
-from supermemory.domain.retrieval.rerank import HeuristicReranker, NoopReranker
+from mapi.config import EmbeddingBackend, RerankBackend, Settings, StoreBackend
+from mapi.core.logging import configure_logging
+from mapi.domain.embeddings import build_embedder
+from mapi.domain.retrieval.rerank import HeuristicReranker, NoopReranker
 
 from .cache import DiskVectorCache
 from .datasets.base import Dataset

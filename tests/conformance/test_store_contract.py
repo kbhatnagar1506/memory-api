@@ -1,7 +1,7 @@
 """Storage conformance.
 
 One suite, parametrized over every backend. The in-memory backend always runs;
-Postgres runs when SUPERMEMORY_TEST_DATABASE_URL is set (CI sets it).
+Postgres runs when MAPI_TEST_DATABASE_URL is set (CI sets it).
 
 This is the file that makes two implementations safe to have. Without it, the
 backends drift — a filter that means one thing in Python and another in SQL,
@@ -16,9 +16,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from supermemory.core.errors import BadRequestError, ConflictError
-from supermemory.domain.embeddings import DeterministicEmbedder
-from supermemory.domain.models import (
+from mapi.core.errors import BadRequestError, ConflictError
+from mapi.domain.embeddings import DeterministicEmbedder
+from mapi.domain.models import (
     ApiKey,
     Chunk,
     Memory,
@@ -30,8 +30,8 @@ from supermemory.domain.models import (
     Scope,
     Space,
 )
-from supermemory.store.base import MemoryFilter
-from supermemory.store.memory import InMemoryStore
+from mapi.store.base import MemoryFilter
+from mapi.store.memory import InMemoryStore
 
 DIMENSIONS = 128
 NOW = datetime.now(UTC)
@@ -40,10 +40,10 @@ NOW = datetime.now(UTC)
 async def _make_store(kind: str):
     if kind == "memory":
         return InMemoryStore(), None
-    url = os.getenv("SUPERMEMORY_TEST_DATABASE_URL")
+    url = os.getenv("MAPI_TEST_DATABASE_URL")
     if not url:
-        pytest.skip("SUPERMEMORY_TEST_DATABASE_URL is not set")
-    from supermemory.store.postgres.store import PostgresStore
+        pytest.skip("MAPI_TEST_DATABASE_URL is not set")
+    from mapi.store.postgres.store import PostgresStore
 
     store = PostgresStore(url, dimensions=DIMENSIONS)
     await store.initialize()

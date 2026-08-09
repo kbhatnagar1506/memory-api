@@ -40,7 +40,7 @@ from .domain.retrieval.rerank import (
 from .service import MemoryService
 from .store import build_store
 
-log = get_logger("supermemory")
+log = get_logger("mapi")
 
 DESCRIPTION = """\
 A memory API for AI agents.
@@ -178,7 +178,7 @@ def _problem(request: Request, exc: SupermemoryError) -> JSONResponse:
     if exc.status_code == 429:
         headers["retry-after"] = str(int(max(getattr(exc, "retry_after", 1.0), 1)))
     if exc.status_code == 401:
-        headers["www-authenticate"] = 'Bearer realm="supermemory"'
+        headers["www-authenticate"] = 'Bearer realm="mapi"'
     if not settings.debug_errors and exc.status_code >= 500:
         payload["detail"] = exc.title
     return JSONResponse(
@@ -237,14 +237,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(resolved.log_level, resolved.log_json)
 
     app = FastAPI(
-        title="Supermemory",
+        title="Mapi",
         description=DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
-        contact={"name": "Supermemory"},
+        contact={"name": "Mapi"},
         license_info={"name": "MIT"},
     )
     app.state.settings = resolved
@@ -265,7 +265,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, Any]:
         return {
-            "name": "supermemory",
+            "name": "mapi",
             "version": __version__,
             "docs": "/docs",
             "health": "/health",
@@ -274,6 +274,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-app = create_app  # uvicorn --factory supermemory.main:app
+app = create_app  # uvicorn --factory mapi.main:app
 
 __all__ = ["build_reranker", "create_app", "lifespan", "register_error_handlers"]

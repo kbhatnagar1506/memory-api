@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from supermemory.config import Settings
-from supermemory.core.errors import (
+from mapi.config import Settings
+from mapi.core.errors import (
     NotFoundError,
     RateLimitedError,
     SupermemoryError,
     ValidationError,
 )
-from supermemory.core.ids import PREFIXES, is_valid, kind_of, new_id
-from supermemory.core.ratelimit import InMemoryRateLimiter
-from supermemory.core.security import (
+from mapi.core.ids import PREFIXES, is_valid, kind_of, new_id
+from mapi.core.ratelimit import InMemoryRateLimiter
+from mapi.core.security import (
     build_api_key,
     generate_key,
     hash_key,
@@ -21,7 +21,7 @@ from supermemory.core.security import (
     parse_authorization,
     verify_key,
 )
-from supermemory.domain.models import Scope
+from mapi.domain.models import Scope
 
 # -- ids -----------------------------------------------------------------------
 
@@ -127,7 +127,7 @@ def test_admin_scope_implies_every_other_scope() -> None:
 
 
 def test_revoked_key_is_inactive() -> None:
-    from supermemory.domain.models import utcnow
+    from mapi.domain.models import utcnow
 
     record, _ = build_api_key(org_id="o", name="k", pepper="p")
     assert not record.model_copy(update={"revoked_at": utcnow()}).is_active()
@@ -136,7 +136,7 @@ def test_revoked_key_is_inactive() -> None:
 def test_expired_key_is_inactive() -> None:
     from datetime import timedelta
 
-    from supermemory.domain.models import utcnow
+    from mapi.domain.models import utcnow
 
     record, _ = build_api_key(org_id="o", name="k", pepper="p")
     expired = record.model_copy(update={"expires_at": utcnow() - timedelta(seconds=1)})

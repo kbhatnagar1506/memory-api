@@ -90,7 +90,7 @@ def configure_logging(level: str = "INFO", json_output: bool = False) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def get_logger(name: str = "supermemory") -> structlog.stdlib.BoundLogger:
+def get_logger(name: str = "mapi") -> structlog.stdlib.BoundLogger:
     return structlog.get_logger(name)  # type: ignore[no-any-return]
 
 

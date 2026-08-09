@@ -20,13 +20,13 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 
 # Run as a non-root user: a container that does not need root should not have it.
-RUN useradd --create-home --uid 10001 supermemory
+RUN useradd --create-home --uid 10001 mapi
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
-USER supermemory
+USER mapi
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=2).status==200 else 1)"
 
-CMD ["uvicorn", "supermemory.main:app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "mapi.main:app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

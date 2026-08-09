@@ -12,7 +12,7 @@ test: ## Run the full test suite
 	$(PY) -m pytest
 
 cov: ## Run tests with a coverage report
-	$(PY) -m pytest --cov=supermemory --cov-report=term-missing
+	$(PY) -m pytest --cov=mapi --cov-report=term-missing
 
 lint: ## Lint and format check
 	$(PY) -m ruff check src tests && $(PY) -m ruff format --check src tests
@@ -26,10 +26,10 @@ types: ## Type check
 check: lint types test ## Everything CI runs
 
 run: ## Serve locally with reload
-	$(PY) -m supermemory.cli serve --reload
+	$(PY) -m mapi.cli serve --reload
 
 demo: ## Seed a corpus and run one query, no infrastructure
-	$(PY) -m supermemory.cli demo
+	$(PY) -m mapi.cli demo
 
 up: ## Start Postgres, Redis and the API in Docker
 	docker compose up --build

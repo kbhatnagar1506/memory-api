@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from supermemory.domain.retrieval.entities import (
+from mapi.domain.retrieval.entities import (
     coverage,
     extract_entities,
     salient_entities,

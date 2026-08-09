@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 CONTENT_TYPE = "application/problem+json"
-_DOC_BASE = "https://docs.supermemory.dev/errors"
+_DOC_BASE = "https://docs.mapi.dev/errors"
 
 
 class SupermemoryError(Exception):

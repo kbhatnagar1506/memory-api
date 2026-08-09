@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from supermemory.domain.consolidation import (
+from mapi.domain.consolidation import (
     DuplicateKind,
     apply_supersession,
     detect_exact_duplicate,
@@ -15,7 +15,7 @@ from supermemory.domain.consolidation import (
     propose_contradictions,
     propose_supersessions,
 )
-from supermemory.domain.models import Memory, MemoryStatus, RelationType
+from mapi.domain.models import Memory, MemoryStatus, RelationType
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 

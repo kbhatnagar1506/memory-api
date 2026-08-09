@@ -1,9 +1,9 @@
-# Supermemory
+# Mapi
 
 A production-grade memory API for AI agents. Hybrid retrieval, belief revision,
 and LLM reranking behind a typed, multi-tenant HTTP service.
 
-[![ci](https://github.com/krishnabhatnagar/supermemory/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![ci](https://github.com/krishnabhatnagar/mapi/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 
 ```bash
 make install && make demo     # no Docker, no database, no API keys
@@ -79,7 +79,7 @@ query
 ```
 
 Stage order is deliberate and documented in
-[`pipeline.py`](src/supermemory/domain/retrieval/pipeline.py). Two examples:
+[`pipeline.py`](src/mapi/domain/retrieval/pipeline.py). Two examples:
 fusion runs *before* reranking so the reranker sees candidates either strategy
 liked; reranking runs *before* decay because a reranker judges topical
 relevance and has no idea how old anything is.
@@ -110,7 +110,7 @@ relevance and has no idea how old anything is.
 ## Architecture
 
 ```
-src/supermemory/
+src/mapi/
   api/            HTTP: schemas, dependencies, middleware, v1 routes
   core/           ids, errors, logging, metrics, security, rate limiting
   domain/         entities, chunking, text analysis, embeddings, retrieval,
@@ -160,8 +160,8 @@ environment:
 ```bash
 gcloud auth application-default login
 export GOOGLE_CLOUD_PROJECT=your-project
-export SUPERMEMORY_EMBEDDING_BACKEND=gemini
-export SUPERMEMORY_RERANK_BACKEND=llm
+export MAPI_EMBEDDING_BACKEND=gemini
+export MAPI_RERANK_BACKEND=llm
 ```
 
 Or `GEMINI_API_KEY` / `OPENAI_API_KEY` for the key-based APIs.

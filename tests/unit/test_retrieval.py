@@ -6,20 +6,20 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from supermemory.domain.retrieval.decay import (
+from mapi.domain.retrieval.decay import (
     MAX_ACCESS_BOOST,
     access_factor,
     age_days,
     apply_decay,
     recency_factor,
 )
-from supermemory.domain.retrieval.fusion import (
+from mapi.domain.retrieval.fusion import (
     RankedList,
     reciprocal_rank_fusion,
     weighted_score_fusion,
 )
-from supermemory.domain.retrieval.mmr import MMRCandidate, maximal_marginal_relevance
-from supermemory.domain.retrieval.rerank import (
+from mapi.domain.retrieval.mmr import MMRCandidate, maximal_marginal_relevance
+from mapi.domain.retrieval.rerank import (
     HeuristicReranker,
     LLMReranker,
     NoopReranker,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from supermemory.domain.chunking import (
+from mapi.domain.chunking import (
     chunk_text,
     estimate_tokens,
     normalize,

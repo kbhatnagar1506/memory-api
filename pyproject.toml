@@ -1,5 +1,5 @@
 [project]
-name = "supermemory"
+name = "mapi"
 version = "0.1.0"
 description = "A production-grade memory API for AI agents: hybrid retrieval, belief revision, and LLM reranking."
 readme = "README.md"
@@ -39,14 +39,14 @@ dev = [
 ]
 
 [project.scripts]
-supermemory = "supermemory.cli:main"
+mapi = "mapi.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/supermemory"]
+packages = ["src/mapi"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -56,7 +56,7 @@ markers = [
     "postgres: requires a live PostgreSQL with pgvector (skipped when absent)",
     "live_llm: calls a real embedding/LLM provider (skipped without credentials)",
 ]
-filterwarnings = ["error::DeprecationWarning:supermemory.*"]
+filterwarnings = ["error::DeprecationWarning:mapi.*"]
 
 [tool.ruff]
 line-length = 96
@@ -69,7 +69,7 @@ ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 
 [tool.mypy]
 python_version = "3.12"
-packages = ["supermemory"]
+packages = ["mapi"]
 mypy_path = "src"
 strict = true
 warn_unreachable = true
@@ -81,7 +81,7 @@ module = ["pgvector.*", "google.*", "redis.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["src/supermemory"]
+source = ["src/mapi"]
 branch = true
 
 [tool.coverage.report]

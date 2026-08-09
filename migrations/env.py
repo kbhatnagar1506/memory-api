@@ -13,8 +13,8 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from supermemory.config import get_settings
-from supermemory.store.postgres.models import Base
+from mapi.config import get_settings
+from mapi.store.postgres.models import Base
 
 config = context.config
 if config.config_file_name:
@@ -26,7 +26,7 @@ target_metadata = Base.metadata
 def _url() -> str:
     settings = get_settings()
     if not settings.database_url:
-        raise RuntimeError("SUPERMEMORY_DATABASE_URL is required to run migrations")
+        raise RuntimeError("MAPI_DATABASE_URL is required to run migrations")
     return settings.database_url
 
 

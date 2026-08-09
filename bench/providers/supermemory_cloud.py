@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-BASE_URL = "https://api.supermemory.ai"
+BASE_URL = "https://api.mapi.ai"
 
 
 @dataclass
@@ -56,9 +56,9 @@ class SupermemoryClient:
     `to_thread` pattern deadlocked a 500-corpus run in this project once."""
 
     def __init__(self, api_key: str | None = None, *, concurrency: int = 8) -> None:
-        key = api_key or os.getenv("SUPERMEMORY_API_KEY")
+        key = api_key or os.getenv("MAPI_API_KEY")
         if not key:
-            raise RuntimeError("SUPERMEMORY_API_KEY is required")
+            raise RuntimeError("MAPI_API_KEY is required")
         self._client = httpx.AsyncClient(
             base_url=BASE_URL,
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},

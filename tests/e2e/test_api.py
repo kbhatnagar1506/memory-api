@@ -12,8 +12,8 @@ import asyncio
 import httpx
 import pytest
 
-from supermemory.core.security import build_api_key
-from supermemory.domain.models import Organization, Scope, Space
+from mapi.core.security import build_api_key
+from mapi.domain.models import Organization, Scope, Space
 
 # -- operations ----------------------------------------------------------------
 
@@ -33,12 +33,12 @@ async def test_readiness_reports_store_health(client: httpx.AsyncClient) -> None
 async def test_metrics_are_exposed(client: httpx.AsyncClient) -> None:
     response = await client.get("/metrics")
     assert response.status_code == 200
-    assert "supermemory_http_requests_total" in response.text
+    assert "mapi_http_requests_total" in response.text
 
 
 async def test_openapi_document_is_valid(client: httpx.AsyncClient) -> None:
     schema = (await client.get("/openapi.json")).json()
-    assert schema["info"]["title"] == "Supermemory"
+    assert schema["info"]["title"] == "Mapi"
     assert "/v1/spaces/{space_id}/search" in schema["paths"]
 
 

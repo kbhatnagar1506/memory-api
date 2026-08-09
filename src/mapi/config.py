@@ -63,7 +63,7 @@ class SynthesisBackend(StrEnum):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="SUPERMEMORY_",
+        env_prefix="MAPI_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     # -- service ----------------------------------------------------------
     environment: Environment = Environment.LOCAL
-    service_name: str = "supermemory"
+    service_name: str = "mapi"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = False
     debug_errors: bool = Field(

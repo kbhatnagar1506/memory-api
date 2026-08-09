@@ -25,14 +25,14 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from supermemory.domain.chunking import chunk_text, estimate_tokens
-from supermemory.domain.embeddings.base import EmbeddingProvider
-from supermemory.domain.models import Chunk, Memory, Organization, Space
-from supermemory.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
-from supermemory.domain.retrieval.rerank import Reranker
-from supermemory.domain.synthesis import QuestionKind, classify
-from supermemory.domain.synthesis.derive import SourceDoc, derive_answer
-from supermemory.store.memory import InMemoryStore
+from mapi.domain.chunking import chunk_text, estimate_tokens
+from mapi.domain.embeddings.base import EmbeddingProvider
+from mapi.domain.models import Chunk, Memory, Organization, Space
+from mapi.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
+from mapi.domain.retrieval.rerank import Reranker
+from mapi.domain.synthesis import QuestionKind, classify
+from mapi.domain.synthesis.derive import SourceDoc, derive_answer
+from mapi.store.memory import InMemoryStore
 
 from .cache import DiskVectorCache, cache_key
 from .datasets.base import Corpus, Question

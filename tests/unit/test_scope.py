@@ -12,7 +12,7 @@ from datetime import date
 
 import pytest
 
-from supermemory.domain.synthesis.scope import extract_scope
+from mapi.domain.synthesis.scope import extract_scope
 
 REF = date(2023, 4, 15)  # a Saturday, mid-month, mid-year
 

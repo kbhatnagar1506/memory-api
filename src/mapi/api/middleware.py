@@ -19,7 +19,7 @@ from ..core.errors import CONTENT_TYPE, PayloadTooLargeError
 from ..core.logging import get_logger, org_id_var, request_id_var
 from ..core.metrics import REQUEST_LATENCY, REQUESTS
 
-log = get_logger("supermemory.http")
+log = get_logger("mapi.http")
 
 REQUEST_ID_HEADER = "x-request-id"
 

@@ -1,4 +1,4 @@
-"""Supermemory: a memory API for AI agents."""
+"""Mapi: a memory API for AI agents."""
 
 __version__ = "0.1.0"
 

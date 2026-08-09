@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from supermemory.domain.text import STOPWORDS, analyze, stem, tokenize
+from mapi.domain.text import STOPWORDS, analyze, stem, tokenize
 
 
 @pytest.mark.parametrize(
@@ -55,7 +55,7 @@ def test_all_stopword_text_analyzes_to_nothing() -> None:
 
 
 def test_query_analysis_falls_back_rather_than_matching_nothing() -> None:
-    from supermemory.domain.text import analyze_query
+    from mapi.domain.text import analyze_query
 
     assert analyze_query("how do we") == ["how", "do", "we"]
     assert analyze_query("deploy") == ["deploy"]

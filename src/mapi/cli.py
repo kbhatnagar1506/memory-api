@@ -17,7 +17,7 @@ def _serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     uvicorn.run(
-        "supermemory.main:app",
+        "mapi.main:app",
         factory=True,
         host=args.host,
         port=args.port,
@@ -280,7 +280,7 @@ def _demo_replay(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="supermemory", description=__doc__)
+    parser = argparse.ArgumentParser(prog="mapi", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="run the HTTP API")

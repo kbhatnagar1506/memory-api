@@ -6,9 +6,9 @@ import math
 
 import pytest
 
-from supermemory.core.errors import ProviderError
-from supermemory.domain.embeddings import DeterministicEmbedder, cosine_similarity
-from supermemory.domain.embeddings.base import EmbeddingProvider, l2_normalize
+from mapi.core.errors import ProviderError
+from mapi.domain.embeddings import DeterministicEmbedder, cosine_similarity
+from mapi.domain.embeddings.base import EmbeddingProvider, l2_normalize
 
 
 async def test_vectors_are_unit_length(embedder: DeterministicEmbedder) -> None:

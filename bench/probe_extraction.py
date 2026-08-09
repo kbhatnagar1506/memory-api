@@ -27,8 +27,8 @@ from datetime import UTC, datetime
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "src"))
 
-from supermemory.domain.synthesis import QuestionKind
-from supermemory.domain.synthesis.derive import SourceDoc, derive_answer
+from mapi.domain.synthesis import QuestionKind
+from mapi.domain.synthesis.derive import SourceDoc, derive_answer
 
 from .harness import build_model_client
 

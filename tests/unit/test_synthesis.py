@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from supermemory.domain.synthesis import (
+from mapi.domain.synthesis import (
     DerivedAnswer,
     Extraction,
     QuestionKind,
@@ -23,7 +23,7 @@ from supermemory.domain.synthesis import (
     derive_answer,
     ground,
 )
-from supermemory.domain.synthesis.derive import (
+from mapi.domain.synthesis.derive import (
     SourceDoc,
     _dedupe,
     _reduce_in_code,

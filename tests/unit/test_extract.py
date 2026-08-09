@@ -269,3 +269,32 @@ async def test_a_claim_that_restates_its_parent_is_not_self_linked() -> None:
     graph = await service.get_graph(org.id, space.id, limit=20)
     assert [e for e in graph.edges if e.type is RelationType.DERIVED_FROM] == []
     assert len(graph.memories) == 1
+
+
+def test_truncated_array_still_yields_its_complete_objects() -> None:
+    """A completion cut at the token ceiling must not zero the document.
+
+    Whole-array parsing needs a closing bracket, so without salvage the
+    longest and densest passages -- the ones with the most to decompose --
+    silently produce nothing at all.
+    """
+    truncated = (
+        '[\n {"fact": "Owns a Nikon camera.", '
+        '"quote": "I\'ve had some experience with my Nikon camera"},\n'
+        ' {"fact": "Is interested in photographing birds in flight.", '
+        '"quote": "camera settings for capturing birds in flight"},\n'
+        ' {"fact": "Plans to ask about customized itin'
+    )
+    claims = parse_claims(truncated, PASSAGE)
+    assert [c.fact for c in claims] == [
+        "Owns a Nikon camera.",
+        "Is interested in photographing birds in flight.",
+    ]
+
+
+def test_salvage_handles_braces_inside_quoted_values() -> None:
+    """Depth counting must ignore braces inside strings, or one stray brace
+    in a fact realigns every object after it."""
+    text = PASSAGE + " I use {brackets} in my notes."
+    raw = '[{"fact": "Uses {brackets} in their notes.", "quote": "I use {brackets} in my notes."'
+    assert parse_claims(raw + "}", text)[0].fact == "Uses {brackets} in their notes."

@@ -46,6 +46,7 @@ prompt:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from collections.abc import Sequence
@@ -205,6 +206,44 @@ def _dedupe(claims: Sequence[Claim]) -> list[Claim]:
     return kept
 
 
+def _salvage_objects(text: str) -> list[object]:
+    """Every complete `{...}` in `text`, ignoring an incomplete trailing one.
+
+    Brace-depth scan rather than a regex, because a fact containing a brace
+    would break naive matching, and string-awareness so a brace inside a
+    quoted value does not change depth.
+    """
+    out: list[object] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and start >= 0:
+                with contextlib.suppress(ValueError, TypeError):
+                    out.append(json.loads(text[start : index + 1]))
+                start = -1
+            elif depth < 0:  # unbalanced; give up rather than guess
+                return out
+    return out
+
+
 def parse_claims(raw: str, source: str) -> list[Claim]:
     """Parse a completion into grounded claims. Never raises.
 
@@ -218,15 +257,23 @@ def parse_claims(raw: str, source: str) -> list[Claim]:
     # Models fence JSON even when told not to.
     if text.startswith("```"):
         text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text, flags=re.IGNORECASE)
-    start, end = text.find("["), text.rfind("]")
-    if start == -1 or end <= start:
+    start = text.find("[")
+    if start == -1:
         return []
-    try:
-        rows = json.loads(text[start : end + 1])
-    except (ValueError, TypeError):
-        return []
-    if not isinstance(rows, list):
-        return []
+    end = text.rfind("]")
+    rows: list[object] = []
+    if end > start:
+        try:
+            parsed = json.loads(text[start : end + 1])
+            rows = parsed if isinstance(parsed, list) else []
+        except (ValueError, TypeError):
+            rows = []
+    if not rows:
+        # A completion cut at the token ceiling has no closing bracket, and
+        # whole-array parsing throws away every complete object before the
+        # cut. That silently zeroes exactly the longest, densest documents --
+        # the ones with the most to decompose. Salvage what did arrive.
+        rows = _salvage_objects(text[start:])
 
     haystack = _normalize(source)
     claims: list[Claim] = []

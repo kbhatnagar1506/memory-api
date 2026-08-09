@@ -122,6 +122,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
                 "synthesis_backend": SynthesisBackend.GEMINI,
                 "google_cloud_project": os.getenv("GOOGLE_CLOUD_PROJECT"),
                 "extraction_model": args.extraction_model,
+                "extraction_max_output_tokens": args.extraction_max_tokens,
             }
         )
         extractor = build_extractor(settings)
@@ -134,7 +135,11 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             extractor,
             concurrency=args.extract_concurrency,
             cache=claim_cache,
-            model=args.extraction_model,
+            # The output budget is part of the identity of a result: a
+            # truncated completion yields fewer claims, and serving that from
+            # cache to a later run with a bigger budget would silently keep
+            # the truncated answer forever.
+            model=f"{args.extraction_model}/out{args.extraction_max_tokens}",
         )
         print(f"  claim cache: {claim_cache.stats()}", flush=True)
 
@@ -480,6 +485,7 @@ async def main() -> int:
     )
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=24)
+    parser.add_argument("--extraction-max-tokens", type=int, default=8192)
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 

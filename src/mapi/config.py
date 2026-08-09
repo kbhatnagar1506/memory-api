@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     #: it runs per DOCUMENT rather than per question -- hundreds of thousands
     #: of calls on a full ingest, where throughput is the binding constraint.
     extraction_model: str = "gemini-2.5-flash"
-    extraction_max_output_tokens: int = Field(default=4096, ge=256, le=65_536)
+    extraction_max_output_tokens: int = Field(default=8192, ge=256, le=65_536)
     #: Extraction is closer to transcription than reasoning; a large thinking
     #: budget spends latency on every write to restate a passage.
     extraction_thinking_budget: int = Field(default=0, ge=0, le=32_768)

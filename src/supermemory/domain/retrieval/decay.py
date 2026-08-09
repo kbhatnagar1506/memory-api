@@ -75,7 +75,42 @@ def apply_decay(
 __all__ = [
     "DEFAULT_FLOOR",
     "DEFAULT_HALF_LIFE_DAYS",
+    "access_factor",
     "age_days",
     "apply_decay",
     "recency_factor",
 ]
+
+
+#: How much a frequently-retrieved memory may be boosted, at most. Deliberately
+#: small: reconsolidation is a tie-breaker among comparable results, not a
+#: popularity contest that lets a much-read memory outrank a better match.
+MAX_ACCESS_BOOST = 0.10
+#: Accesses at which the boost is effectively saturated. Logarithmic, so the
+#: first few retrievals matter and the thousandth does not.
+ACCESS_SATURATION = 20.0
+
+
+def access_factor(access_count: int, *, max_boost: float = MAX_ACCESS_BOOST) -> float:
+    """Multiplier for how often a memory has actually been retrieved.
+
+    Biological memory strengthens traces that get replayed, and every competing
+    system implements that as *forgetting* — Supermemory's dream cycle prunes,
+    Mem0 expires by `forgetAfter`, the research literature calls it
+    interference-based decay. The one independent cost study (arXiv 2603.04814)
+    is why we do not: lossy consolidation measurably loses recall, and a memory
+    system that deletes on a heuristic fails invisibly.
+
+    So retrieval frequency is a RANKING signal and nothing else. It can move a
+    memory up a result list; it can never hide one, mark one stale, or delete
+    one. The bound is small and the growth logarithmic so that a much-retrieved
+    memory cannot outrank a genuinely better match — it only wins ties.
+
+    Returns a multiplier in [1.0, 1.0 + max_boost].
+    """
+    if access_count <= 0:
+        return 1.0
+    # log1p(n)/log1p(saturation) reaches 1.0 at the saturation point and grows
+    # slowly past it; clamped so an outlier cannot escape the bound.
+    strength = min(math.log1p(access_count) / math.log1p(ACCESS_SATURATION), 1.0)
+    return 1.0 + max_boost * strength

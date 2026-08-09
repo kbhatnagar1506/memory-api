@@ -6,7 +6,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from supermemory.domain.retrieval.decay import age_days, apply_decay, recency_factor
+from supermemory.domain.retrieval.decay import (
+    MAX_ACCESS_BOOST,
+    access_factor,
+    age_days,
+    apply_decay,
+    recency_factor,
+)
 from supermemory.domain.retrieval.fusion import (
     RankedList,
     reciprocal_rank_fusion,
@@ -273,3 +279,32 @@ def test_llm_sanitizer_truncates_long_documents() -> None:
     cleaned = reranker._sanitize("y" * 500)
     assert len(cleaned) < 100
     assert cleaned.endswith("...[truncated]")
+
+
+# -- reconsolidation: access as a RANKING signal, never a deletion policy ------
+
+
+def test_access_factor_is_neutral_for_never_retrieved_memories() -> None:
+    assert access_factor(0) == 1.0
+    assert access_factor(-5) == 1.0
+
+
+def test_access_factor_is_bounded() -> None:
+    """A much-retrieved memory must never outrank a genuinely better match.
+    The boost is a tie-breaker, not a popularity contest."""
+    assert access_factor(10_000) <= 1.0 + MAX_ACCESS_BOOST + 1e-9
+    assert access_factor(1) < access_factor(5) < access_factor(20)
+
+
+def test_access_factor_saturates_logarithmically() -> None:
+    """The first few retrievals carry information; the thousandth does not."""
+    early = access_factor(3) - access_factor(1)
+    late = access_factor(1000) - access_factor(998)
+    assert early > late
+
+
+def test_access_factor_never_reaches_zero() -> None:
+    """Nothing here can hide, stale, or delete a memory — it only reorders.
+    Every competitor implements replay-strengthening as forgetting; the
+    independent cost study (arXiv 2603.04814) is why we do not."""
+    assert all(access_factor(n) >= 1.0 for n in range(0, 200))

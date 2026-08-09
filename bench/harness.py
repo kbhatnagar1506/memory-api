@@ -754,7 +754,16 @@ async def evaluate_end_to_end(
                     return text
 
                 derived = await derive_answer(question.text, derive_kind, docs, complete_text)
-                if derived is not None and (declined or derived.computed):
+                # Derivation FILLS declines; it never overrides an answer.
+                # The previous policy preferred any code-computed value over a
+                # non-declined direct answer, reasoning that the direct model
+                # demonstrably miscounts with evidence in hand. Measured on 500
+                # questions that policy flipped 67 right answers wrong to gain
+                # 30 -- net -37 -- and dragged the headline from ~66% to 45%.
+                # A model that answers is evidence it found something;
+                # overriding it requires a derivation whose accuracy has been
+                # measured, and ours has not been (roadmap Phase 7).
+                if derived is not None and declined and derived.answer:
                     prediction = derived.answer
                     declined = False
                     derived_used = True

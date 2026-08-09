@@ -214,9 +214,86 @@ _DURATION = re.compile(
 )
 
 
+#: Cardinal words, because a quantity written out is still stated. Bounded at
+#: twenty plus round numbers: past that, prose uses digits.
+_NUMBER_WORDS = frozenset(
+    [
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety",
+        "hundred",
+        "thousand",
+        "dozen",
+    ]
+)
+#: A digit run that is plausibly a quantity. Years are excluded because an
+#: extracted fact routinely carries a date in its text ("in 2026 I caught
+#: bass"), and reading 2026 as a count is worse than reading nothing.
+_DIGITS = re.compile(r"\b(\d[\d,]*(?:\.\d+)?)\b")
+_YEARISH = re.compile(r"^(19|20)\d{2}$")
+
+
+def _states_quantity(fact: str) -> bool:
+    """True when the fact text itself carries the number being asked for.
+
+    THE distinction this whole reducer turns on. "How many bass did I catch"
+    is answered by one episode saying "I caught 12 bass" -- one table row
+    holding the quantity 12 -- not by counting rows. Measured cost of getting
+    this backwards, on 500 real questions: gold 12 answered "1", gold 17
+    answered "1", gold $800 answered "1". `len(table)` was computing how many
+    times the subject was MENTIONED, and presenting it as how many there ARE.
+    """
+    lowered = fact.casefold()
+    if any(word in lowered.split() for word in _NUMBER_WORDS):
+        return True
+    return any(not _YEARISH.match(m.replace(",", "")) for m in _DIGITS.findall(fact))
+
+
 def _reduce_in_code(kind: QuestionKind, table: list[Extraction]) -> str | None:
     """The arithmetic stage. Returns None when this kind needs the model."""
     if kind is QuestionKind.COUNT:
+        # 1. A stated quantity beats a row count, always. Return the whole
+        #    fact rather than the bare number: the official judge asks whether
+        #    the response CONTAINS the correct answer, so carrying the
+        #    surrounding words is strictly safer than extracting a scalar and
+        #    risking the wrong one ("12 bass and 3 trout").
+        stated = [row for row in table if _states_quantity(row.fact)]
+        if stated:
+            # Conflicting statements ("3 bikes" in March, "4 bikes" in May)
+            # resolve the same way the store resolves any revision: latest
+            # event time wins.
+            return max(stated, key=lambda row: row.date or date.min).fact
+        # 2. A single row with no stated quantity is unresolvable: "one
+        #    instance" and "the number was in the text and extraction missed
+        #    it" are indistinguishable, and answering "1" was wrong far more
+        #    often than right. Decline to compute; the model composes instead.
+        if len(table) < 2:
+            return None
+        # 3. Genuine instance counting: several distinct grounded rows.
         return str(len(table))
 
     if kind is QuestionKind.ORDER:
@@ -231,9 +308,13 @@ def _reduce_in_code(kind: QuestionKind, table: list[Extraction]) -> str | None:
 
     if kind is QuestionKind.DATE_ARITH:
         for row in table:
-            match = _DURATION.search(row.fact)
-            if match:
-                return f"{match.group(1)} {match.group(2)}"
+            if _DURATION.search(row.fact):
+                # The fact, not the regex match. Extracting "45 minutes" from
+                # "commute is 45 minutes each way" dropped the qualifier the
+                # gold answer required -- a correct answer narrowed into a
+                # wrong one. Under a contains-the-answer judge, more context
+                # can only help.
+                return row.fact
         dates = sorted(row.date for row in table if row.date is not None)
         if len(dates) >= 2:
             return f"{(dates[-1] - dates[0]).days} days"

@@ -47,7 +47,12 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
     (
         QuestionKind.COUNT,
         re.compile(
-            r"how many|how often|how much (money|did i spend)"
+            # "How much did I spend on a handbag" is a LOOKUP -- the amount is
+            # stated in one episode -- not an aggregation. Routing it to COUNT
+            # answered gold "$800" with "1". "How much" only aggregates when
+            # the question says so.
+            r"how many|how often"
+            r"|how much\b.{0,40}\b(in total|altogether|combined|overall)\b"
             r"|(the )?(total|combined) (number|amount|cost|spend)"
             r"|number of times",
             re.IGNORECASE,

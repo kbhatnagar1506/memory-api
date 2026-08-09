@@ -22,7 +22,11 @@ from supermemory.domain.synthesis import (
     derive_answer,
     ground,
 )
-from supermemory.domain.synthesis.derive import SourceDoc, _dedupe
+from supermemory.domain.synthesis.derive import (
+    SourceDoc,
+    _dedupe,
+    _reduce_in_code,
+)
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 8, tzinfo=UTC)
@@ -169,13 +173,15 @@ def test_count_is_computed_by_code_not_the_model() -> None:
 
 
 def test_fabricated_rows_cannot_reach_the_count() -> None:
-    """A hallucinated fourth bike with an invented quote is grounded away
-    before the arithmetic sees it."""
+    """A hallucinated tandem with an invented quote is grounded away before
+    the arithmetic sees it: two real bikes count as two, not three."""
 
     async def fake_complete(prompt: str) -> str:
         if "road bike" in prompt:
             return (
                 '[{"date": "2026-03-01", "fact": "owns a road bike", "quote": "road bike"},'
+                ' {"date": "2026-03-01", "fact": "owns a mountain bike",'
+                ' "quote": "mountain bike"},'
                 ' {"date": "2026-03-01", "fact": "owns a tandem", "quote": "tandem bike"}]'
             )
         return "[]"
@@ -184,7 +190,8 @@ def test_fabricated_rows_cannot_reach_the_count() -> None:
         derive_answer("How many bikes do I own?", QuestionKind.COUNT, _docs(), fake_complete)
     )
     assert result is not None
-    assert result.answer == "1"
+    assert result.answer == "2"
+    assert all("tandem" not in row.fact for row in result.table)
 
 
 def test_explicit_duration_beats_date_subtraction() -> None:
@@ -208,7 +215,9 @@ def test_explicit_duration_beats_date_subtraction() -> None:
         )
     )
     assert result is not None
-    assert result.answer == "4 hours"
+    # The whole fact, not the bare "4 hours": narrowing to the regex match is
+    # how "45 minutes each way" became "45 minutes" and lost the point.
+    assert result.answer == "assembly took 4 hours"
     assert result.computed is True
 
 
@@ -250,11 +259,108 @@ def test_json_survives_fences_and_prose() -> None:
         if "road bike" in prompt:
             return (
                 "Here you go:\n```json\n"
-                '[{"date": "2026-03-01", "fact": "owns a road bike", "quote": "road bike"}]'
+                '[{"date": "2026-03-01", "fact": "owns a road bike", "quote": "road bike"},'
+                ' {"date": "2026-03-01", "fact": "owns a mountain bike",'
+                ' "quote": "mountain bike"}]'
                 "\n```\nHope that helps!"
             )
         return "[]"
 
     result = asyncio.run(derive_answer("How many bikes?", QuestionKind.COUNT, _docs(), fenced))
     assert result is not None
-    assert result.answer == "1"
+    assert len(result.table) == 2  # both rows parsed out of the fenced block
+    assert result.answer == "2"
+
+
+# -- COUNT: stated quantity vs instance count ----------------------------------
+#
+# Every case below is a real question from the 500-corpus run where the old
+# reducer answered "1" because it counted table ROWS instead of reading the
+# quantity stated in the text. Net cost of that confusion: 67 right answers
+# flipped wrong, headline 66% -> 45%.
+
+
+@pytest.mark.parametrize(
+    "fact",
+    [
+        "caught 12 largemouth bass on the trip",
+        "found 17 skeins of worsted weight yarn in the stash",
+        "spent $800 on the designer handbag",
+        "packed seven shirts for the trip",
+        "owns a dozen mugs",
+    ],
+)
+def test_a_stated_quantity_beats_the_row_count(fact: str) -> None:
+    """One row holding "12 bass" answers 12, never 1."""
+    rows = [Extraction(date=D1.date(), fact=fact, quote="q", source_id="s1")]
+    assert _reduce_in_code(QuestionKind.COUNT, rows) == fact
+
+
+def test_a_lone_row_without_a_quantity_declines_to_compute() -> None:
+    """ "One instance" and "the number was in the text and extraction missed
+    it" are indistinguishable from a single row — and answering "1" was wrong
+    far more often than right. Returning None hands the question back to the
+    model instead of asserting a fabricated count."""
+    rows = [
+        Extraction(date=D1.date(), fact="went fishing at the lake", quote="q", source_id="s1")
+    ]
+    assert _reduce_in_code(QuestionKind.COUNT, rows) is None
+
+
+def test_genuine_instance_counting_still_counts() -> None:
+    """Several distinct grounded rows with no stated quantity is the case
+    len() was built for, and it must survive the fix."""
+    rows = [
+        Extraction(date=D1.date(), fact="owns a road bike", quote="a", source_id="s1"),
+        Extraction(date=D1.date(), fact="owns a mountain bike", quote="b", source_id="s1"),
+        Extraction(date=D2.date(), fact="owns an e-bike", quote="c", source_id="s2"),
+    ]
+    assert _reduce_in_code(QuestionKind.COUNT, rows) == "3"
+
+
+def test_conflicting_stated_quantities_resolve_by_event_time() -> None:
+    """ "3 bikes" in March and "4 bikes" in May is a revision, and revisions
+    resolve the way the store resolves every revision: latest wins."""
+    rows = [
+        Extraction(date=D1.date(), fact="owns 3 bikes", quote="a", source_id="s1"),
+        Extraction(date=D2.date(), fact="owns 4 bikes", quote="b", source_id="s2"),
+    ]
+    assert _reduce_in_code(QuestionKind.COUNT, rows) == "owns 4 bikes"
+
+
+def test_a_year_in_the_fact_is_not_read_as_a_quantity() -> None:
+    """Extracted facts routinely carry dates in their text; reading 2026 as a
+    count is worse than reading nothing."""
+    rows = [
+        Extraction(date=D1.date(), fact="joined the gym in 2026", quote="a", source_id="s1"),
+        Extraction(date=D2.date(), fact="joined the pool in 2026", quote="b", source_id="s2"),
+    ]
+    assert _reduce_in_code(QuestionKind.COUNT, rows) == "2"
+
+
+def test_duration_answers_keep_their_qualifier() -> None:
+    """Extracting "45 minutes" from "commute is 45 minutes each way" narrowed
+    a correct answer into a wrong one. Under a contains-the-answer judge,
+    returning the fact can only help."""
+    rows = [
+        Extraction(
+            date=D1.date(), fact="commute is 45 minutes each way", quote="q", source_id="s1"
+        )
+    ]
+    assert _reduce_in_code(QuestionKind.DATE_ARITH, rows) == "commute is 45 minutes each way"
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        # A single-item price is a lookup; the amount is stated in one episode.
+        ("How much did I spend on a designer handbag?", QuestionKind.DIRECT),
+        ("How much does my subscription cost?", QuestionKind.DIRECT),
+        # Aggregation only when the question actually asks for it.
+        ("How much did I spend on groceries in total?", QuestionKind.COUNT),
+        ("How much did I spend altogether on the trip?", QuestionKind.COUNT),
+        ("What was the total number of sessions?", QuestionKind.COUNT),
+    ],
+)
+def test_how_much_aggregates_only_when_asked_to(question: str, expected: QuestionKind) -> None:
+    assert classify(question) == expected

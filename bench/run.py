@@ -149,6 +149,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
         batch_size=args.batch_size,
         concurrency=args.concurrency,
         cache=cache,
+        corpus_concurrency=args.corpus_concurrency,
         claims_by_doc=claims_by_doc,
         extract_mode=args.extract,
     )
@@ -394,6 +395,16 @@ async def main() -> int:
     parser.add_argument("--dimensions", type=int, default=768)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--concurrency", type=int, default=8)
+    parser.add_argument(
+        "--corpus-concurrency",
+        type=int,
+        default=6,
+        help=(
+            "corpora ingested at once. Serially, a corpus produces only as many "
+            "embedding requests as it has batches, so it cannot fill --concurrency "
+            "on its own and the next corpus waits for it to drain."
+        ),
+    )
     parser.add_argument(
         "--end-to-end",
         action="store_true",

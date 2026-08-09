@@ -264,6 +264,7 @@ async def ingest(
     chunk_overlap_tokens: int = 48,
     max_request_tokens: int = 15_000,
     progress_every: int = 25,
+    corpus_concurrency: int = 6,
     cache: DiskVectorCache | None = None,
     claims_by_doc: dict[str, list[tuple[str, str]]] | None = None,
     extract_mode: str = "off",
@@ -293,151 +294,159 @@ async def ingest(
             return (await embedder.embed(batch)).vectors
 
     started_all = time.perf_counter()
-    for position, corpus in enumerate(corpora, start=1):
-        if not corpus.documents:
-            continue
-        # Progress is not cosmetic. A 500-corpus run once hung silently for two
-        # hours because ingestion printed nothing until it finished; a stalled
-        # run and a slow one looked identical.
-        if progress_every and (position == 1 or position % progress_every == 0):
+    # Corpora run CONCURRENTLY. Each is an independent space, and nothing
+    # in ingestion reaches across one. Serially, a corpus produced only as
+    # many embedding requests as it had batches -- 8 at batch_size 200 --
+    # so it could never fill 32 concurrency slots, and the next corpus did
+    # not start until this one drained. Measured: 75% of the embedding
+    # concurrency sat idle waiting on corpus boundaries.
+    corpus_gate = asyncio.Semaphore(corpus_concurrency)
+    done_count = 0
+
+    async def do_corpus(_position: int, corpus: Corpus) -> None:
+        nonlocal done_count
+        async with corpus_gate:
+            space = await store.create_space(
+                Space(
+                    org_id=org.id,
+                    slug=_slug(corpus.corpus_id, len(out.spaces)),
+                    name=corpus.corpus_id[:200],
+                )
+            )
+            out.spaces[corpus.corpus_id] = space.id
+            out.docs_by_corpus[corpus.corpus_id] = [
+                (d.occurred_at.date().isoformat(), d.text) for d in corpus.documents
+            ]
+            out.index_by_corpus[corpus.corpus_id] = {
+                d.id: i for i, d in enumerate(corpus.documents)
+            }
+            speakers.update(d.speaker for d in corpus.documents if d.speaker)
+
+            # What actually gets stored, in order. Normally one unit per document;
+            # with extraction on, also one per claim, each still owned by the
+            # document it came from so evidence keeps mapping at the granularity
+            # the benchmark labels.
+            units: list[tuple[str, Document]] = []
+            for document in corpus.documents:
+                found = (claims_by_doc or {}).get(document.text) or []
+                if extract_mode != "only" or not found:
+                    # "only" still stores the original when extraction returned
+                    # nothing: dropping the document would delete evidence the
+                    # benchmark is about to score against.
+                    units.append((document.text, document))
+                for fact, _quote in found:
+                    units.append((fact, document))
+
+            # Chunk first, then batch by token budget across the flattened chunks.
+            pieces: list[str] = []
+            owner: list[int] = []
+            for position, (text_to_store, _document) in enumerate(units):
+                parts = (
+                    chunk_text(
+                        text_to_store,
+                        target_tokens=chunk_target_tokens,
+                        overlap_tokens=chunk_overlap_tokens,
+                    )
+                    or []
+                )
+                texts_for_doc = [p.text for p in parts] or [text_to_store[:2000]]
+                for text in texts_for_doc:
+                    pieces.append(text)
+                    owner.append(position)
+
+            started = time.perf_counter()
+            vectors: list[list[float]] = [None] * len(pieces)  # type: ignore[list-item]
+
+            # Content-addressed cache first: re-running the same corpus with a
+            # changed ANSWER path should cost nothing on the embedding side.
+            pending = list(range(len(pieces)))
+            if cache is not None:
+                keys = [cache_key(embedder.model, embedder.dimensions, t) for t in pieces]
+                found = cache.get_many(keys)
+                pending = []
+                for index, key in enumerate(keys):
+                    hit = found.get(key)
+                    if hit is not None:
+                        vectors[index] = hit
+                    else:
+                        pending.append(index)
+
+            if pending:
+                batches = _token_batches(
+                    [pieces[i] for i in pending],
+                    max_items=batch_size,
+                    max_tokens=max_request_tokens,
+                )
+                results = await asyncio.gather(
+                    *(embed_batch([pieces[pending[i]] for i in batch]) for batch in batches)
+                )
+                fresh: list[tuple[str, list[float]]] = []
+                for batch, batch_vectors in zip(batches, results, strict=True):
+                    for local_index, vector in zip(batch, batch_vectors, strict=True):
+                        index = pending[local_index]
+                        vectors[index] = vector
+                        if cache is not None:
+                            key = cache_key(embedder.model, embedder.dimensions, pieces[index])
+                            fresh.append((key, vector))
+                if cache is not None and fresh:
+                    cache.put_many(fresh)
+            out.embed_seconds += time.perf_counter() - started
+
+            chunks_by_doc: dict[int, list[tuple[str, list[float]]]] = defaultdict(list)
+            for piece, position, vector in zip(pieces, owner, vectors, strict=True):
+                chunks_by_doc[position].append((piece, vector))
+
+            for position, (text_to_store, document) in enumerate(units):
+                parts = chunks_by_doc.get(position, [])
+                if not parts:
+                    continue
+                memory = Memory(
+                    org_id=org.id,
+                    space_id=space.id,
+                    content=text_to_store,
+                    source=document.speaker,
+                    occurred_at=document.occurred_at,
+                    # `doc_id` is the SOURCE document even for a claim. A claim is
+                    # a statement that document made, so retrieving it is
+                    # retrieving that session -- which is the granularity
+                    # LongMemEval labels evidence at. Anything else would score a
+                    # correct hit as a miss.
+                    metadata={"doc_id": document.id, **document.metadata},
+                )
+                memory = memory.model_copy(
+                    update={
+                        "chunks": [
+                            Chunk(
+                                memory_id=memory.id,
+                                ordinal=ordinal,
+                                text=text,
+                                embedding=vector,
+                            )
+                            for ordinal, (text, vector) in enumerate(parts)
+                        ]
+                    }
+                )
+                await store.upsert_memory(memory)
+                out.doc_by_memory[memory.id] = document.id
+                out.documents += 1
+                out.chunks += len(parts)
+                if text_to_store != document.text:
+                    out.claims += 1
+
+        done_count += 1
+        if progress_every and (done_count == 1 or done_count % progress_every == 0):
             elapsed = time.perf_counter() - started_all
-            rate = position / elapsed if elapsed > 0 else 0
-            eta = (len(corpora) - position) / rate if rate > 0 else 0
+            rate = done_count / elapsed if elapsed > 0 else 0
+            eta = (len(corpora) - done_count) / rate if rate > 0 else 0
             print(
-                f"    [{position}/{len(corpora)}] {out.chunks} chunks, "
+                f"    [{done_count}/{len(corpora)}] {out.chunks} chunks, "
                 f"{elapsed:.0f}s elapsed, ~{eta:.0f}s left",
                 flush=True,
             )
-        space = await store.create_space(
-            Space(
-                org_id=org.id,
-                slug=_slug(corpus.corpus_id, len(out.spaces)),
-                name=corpus.corpus_id[:200],
-            )
-        )
-        out.spaces[corpus.corpus_id] = space.id
-        out.docs_by_corpus[corpus.corpus_id] = [
-            (d.occurred_at.date().isoformat(), d.text) for d in corpus.documents
-        ]
-        out.index_by_corpus[corpus.corpus_id] = {
-            d.id: i for i, d in enumerate(corpus.documents)
-        }
-        speakers.update(d.speaker for d in corpus.documents if d.speaker)
 
-        # What actually gets stored, in order. Normally one unit per document;
-        # with extraction on, also one per claim, each still owned by the
-        # document it came from so evidence keeps mapping at the granularity
-        # the benchmark labels.
-        units: list[tuple[str, Document]] = []
-        for document in corpus.documents:
-            found = (claims_by_doc or {}).get(document.text) or []
-            if extract_mode != "only" or not found:
-                # "only" still stores the original when extraction returned
-                # nothing: dropping the document would delete evidence the
-                # benchmark is about to score against.
-                units.append((document.text, document))
-            for fact, _quote in found:
-                units.append((fact, document))
-
-        # Chunk first, then batch by token budget across the flattened chunks.
-        pieces: list[str] = []
-        owner: list[int] = []
-        for position, (text_to_store, _document) in enumerate(units):
-            parts = (
-                chunk_text(
-                    text_to_store,
-                    target_tokens=chunk_target_tokens,
-                    overlap_tokens=chunk_overlap_tokens,
-                )
-                or []
-            )
-            texts_for_doc = [p.text for p in parts] or [text_to_store[:2000]]
-            for text in texts_for_doc:
-                pieces.append(text)
-                owner.append(position)
-
-        started = time.perf_counter()
-        vectors: list[list[float]] = [None] * len(pieces)  # type: ignore[list-item]
-
-        # Content-addressed cache first: re-running the same corpus with a
-        # changed ANSWER path should cost nothing on the embedding side.
-        pending = list(range(len(pieces)))
-        if cache is not None:
-            keys = [cache_key(embedder.model, embedder.dimensions, t) for t in pieces]
-            found = cache.get_many(keys)
-            pending = []
-            for index, key in enumerate(keys):
-                hit = found.get(key)
-                if hit is not None:
-                    vectors[index] = hit
-                else:
-                    pending.append(index)
-
-        if pending:
-            batches = _token_batches(
-                [pieces[i] for i in pending],
-                max_items=batch_size,
-                max_tokens=max_request_tokens,
-            )
-            results = await asyncio.gather(
-                *(embed_batch([pieces[pending[i]] for i in batch]) for batch in batches)
-            )
-            fresh: list[tuple[str, list[float]]] = []
-            for batch, batch_vectors in zip(batches, results, strict=True):
-                for local_index, vector in zip(batch, batch_vectors, strict=True):
-                    index = pending[local_index]
-                    vectors[index] = vector
-                    if cache is not None:
-                        fresh.append(
-                            (
-                                cache_key(embedder.model, embedder.dimensions, pieces[index]),
-                                vector,
-                            )
-                        )
-            if cache is not None and fresh:
-                cache.put_many(fresh)
-        out.embed_seconds += time.perf_counter() - started
-
-        chunks_by_doc: dict[int, list[tuple[str, list[float]]]] = defaultdict(list)
-        for piece, position, vector in zip(pieces, owner, vectors, strict=True):
-            chunks_by_doc[position].append((piece, vector))
-
-        for position, (text_to_store, document) in enumerate(units):
-            parts = chunks_by_doc.get(position, [])
-            if not parts:
-                continue
-            memory = Memory(
-                org_id=org.id,
-                space_id=space.id,
-                content=text_to_store,
-                source=document.speaker,
-                occurred_at=document.occurred_at,
-                # `doc_id` is the SOURCE document even for a claim. A claim is
-                # a statement that document made, so retrieving it is
-                # retrieving that session -- which is the granularity
-                # LongMemEval labels evidence at. Anything else would score a
-                # correct hit as a miss.
-                metadata={"doc_id": document.id, **document.metadata},
-            )
-            memory = memory.model_copy(
-                update={
-                    "chunks": [
-                        Chunk(
-                            memory_id=memory.id,
-                            ordinal=ordinal,
-                            text=text,
-                            embedding=vector,
-                        )
-                        for ordinal, (text, vector) in enumerate(parts)
-                    ]
-                }
-            )
-            await store.upsert_memory(memory)
-            out.doc_by_memory[memory.id] = document.id
-            out.documents += 1
-            out.chunks += len(parts)
-            if text_to_store != document.text:
-                out.claims += 1
+    await asyncio.gather(
+        *(do_corpus(i, c) for i, c in enumerate(corpora, start=1) if c.documents)
+    )
 
     out.speakers = tuple(sorted(speakers))
     return out

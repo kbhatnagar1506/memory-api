@@ -827,7 +827,32 @@ async def evaluate_end_to_end(
                 # A model that answers is evidence it found something;
                 # overriding it requires a derivation whose accuracy has been
                 # measured, and ours has not been (roadmap Phase 7).
-                if derived is not None and declined and derived.answer:
+                # A decline is the model's judgement that the evidence is
+                # absent, made with the FULL sessions in view. Overriding it
+                # requires evidence stronger than the model already had -- and
+                # the compose path is strictly weaker: the same model, looking
+                # at a table instead of the sessions.
+                #
+                # Measured on 500 questions: decline-filling fired 16 times,
+                # gained 1 answerable question (and that one by luck -- it
+                # answered "crystal chandelier" to a question about jewellery
+                # and the judge accepted it on "aunt"), and lost 6 correct
+                # abstentions. "How many years of formal education" became
+                # "4979 days"; "how many fish in my 30-gallon tank" became
+                # "the user's tank is a 20-gallon tank". Net -5.
+                #
+                # So the override is narrowed to the one reduce whose semantics
+                # are unambiguous: a COUNT computed in code over at least two
+                # independently grounded rows. Prose composed from a thin table
+                # produced every one of the bad answers above, and a date span
+                # between unrelated events produced the rest.
+                safe_to_override = (
+                    derived is not None
+                    and derived.computed
+                    and derived.kind is QuestionKind.COUNT
+                    and len(derived.table) >= 2
+                )
+                if safe_to_override and derived is not None and declined and derived.answer:
                     prediction = derived.answer
                     declined = False
                     derived_used = True

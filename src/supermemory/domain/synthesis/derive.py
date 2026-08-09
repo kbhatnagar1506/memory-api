@@ -73,6 +73,13 @@ class DerivedAnswer:
     #: silently dropped: "8 found, 3 in March" is a different claim from
     #: "3 found", and an agent may want to say so.
     filtered_out: int = 0
+    #: Rows dropped because they carried NO DATE while the question bounded
+    #: itself in time. Split out from `filtered_out` because the two mean
+    #: different things: out-of-window is the filter working, undated is a
+    #: DATA QUALITY problem that silently undercounts. On a corpus where many
+    #: memories lack dates, every windowed aggregate is low and nothing says
+    #: so -- this is the field that says so.
+    undated_dropped: int = 0
     #: Rows the extractor produced whose quote was NOT in its source -- i.e.
     #: fabricated, and discarded by grounding. A free, continuously measured
     #: hallucination rate on real traffic: the number every vendor in this
@@ -83,6 +90,22 @@ class DerivedAnswer:
     @property
     def empty(self) -> bool:
         return not self.table
+
+    @property
+    def verified(self) -> bool:
+        """Whether this answer was COMPUTED in code from multiple grounded rows.
+
+        Provenance is persuasive, and that is a hazard: a wrong count wrapped
+        in a grounded table with source ids reads as MORE trustworthy than a
+        plain wrong answer, not less. Measured extraction is exactly right on
+        only 60% of cases, so a caller needs to know which answers earned the
+        table and which merely have one.
+
+        True means: code did the arithmetic over at least two independently
+        grounded rows. False means a model composed it, or a single row
+        carried it -- treat as advisory.
+        """
+        return self.computed and len(self.table) >= 2
 
     @property
     def fabrication_rate(self) -> float:
@@ -414,8 +437,10 @@ async def derive_answer(
     # signature of a missing filter rather than a missing fact.
     scope = extract_scope(question, asked_at) if asked_at else None
     filtered_out = 0
+    undated_dropped = 0
     if scope is not None:
         in_scope = [row for row in table if scope.contains(row.date)]
+        undated_dropped = sum(1 for row in table if row.date is None)
         filtered_out = len(table) - len(in_scope)
         # An empty window is more likely a dating failure than a true zero, so
         # decline rather than assert "0" -- the model still sees the excerpts.
@@ -450,6 +475,7 @@ async def derive_answer(
         computed=was_computed,
         scope=scope,
         filtered_out=filtered_out,
+        undated_dropped=undated_dropped,
         rejected=rejected,
     )
 

@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from supermemory.domain.synthesis import (
+    DerivedAnswer,
     Extraction,
     QuestionKind,
     classify,
@@ -494,3 +495,57 @@ def test_no_scope_means_no_filtering() -> None:
     assert result.answer == "2"
     assert result.scope is None
     assert result.filtered_out == 0
+
+
+# -- production safety signals -------------------------------------------------
+
+
+def test_verified_requires_code_arithmetic_over_multiple_rows() -> None:
+    """Provenance is persuasive, and that is the hazard: a wrong count wrapped
+    in a grounded table with source ids reads as MORE trustworthy, not less.
+    Extraction is exactly right on 60% of cases, so callers need to know which
+    answers earned their table."""
+    row = Extraction(date=D1.date(), fact="owns a road bike", quote="q", source_id="s1")
+    computed_multi = DerivedAnswer(
+        answer="2", kind=QuestionKind.COUNT, table=(row, row), source_ids=("s1",), computed=True
+    )
+    computed_single = DerivedAnswer(
+        answer="1", kind=QuestionKind.COUNT, table=(row,), source_ids=("s1",), computed=True
+    )
+    composed = DerivedAnswer(
+        answer="a lot",
+        kind=QuestionKind.COMPARE,
+        table=(row, row),
+        source_ids=("s1",),
+        computed=False,
+    )
+    assert computed_multi.verified is True
+    assert computed_single.verified is False  # one row cannot corroborate itself
+    assert composed.verified is False  # the model wrote it, code did not
+
+
+def test_undated_rows_are_reported_not_silently_dropped() -> None:
+    """On a corpus where memories lack dates, every windowed aggregate
+    undercounts and nothing says so. This is the field that says so."""
+
+    async def fake(prompt: str) -> str:
+        if "road bike" in prompt:
+            return (
+                '[{"date": "2026-03-05", "fact": "attended a wedding", "quote": "road bike"},'
+                ' {"date": null, "fact": "attended another wedding",'
+                ' "quote": "mountain bike"}]'
+            )
+        return "[]"
+
+    result = asyncio.run(
+        derive_answer(
+            "How many weddings have I attended this year?",
+            QuestionKind.COUNT,
+            _docs(),
+            fake,
+            asked_at=date(2026, 4, 1),
+        )
+    )
+    assert result is not None
+    assert result.undated_dropped == 1
+    assert result.filtered_out == 1

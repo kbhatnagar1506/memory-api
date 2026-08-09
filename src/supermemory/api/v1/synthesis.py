@@ -55,6 +55,8 @@ async def derive(
         answer=derived.answer,
         kind=str(derived.kind),
         computed=derived.computed,
+        verified=derived.verified,
+        undated_dropped=derived.undated_dropped,
         table=[
             DerivedRowResponse(
                 date=row.date.isoformat() if row.date else None,

@@ -205,6 +205,16 @@ class DeriveResponse(Response):
     answer: str
     kind: str
     computed: bool
+    #: True only when code did the arithmetic over >= 2 independently grounded
+    #: rows. Provenance is persuasive and that is a hazard -- a wrong count
+    #: wrapped in a table with source ids reads as more trustworthy, not less.
+    #: Measured extraction is exactly right on 60% of cases, so an unverified
+    #: answer is advisory even though it ships with a table.
+    verified: bool = False
+    #: Rows dropped for having no date while the question bounded itself in
+    #: time. Non-zero means the aggregate may be undercounting because the
+    #: SOURCE DATA lacks dates, not because the window excluded things.
+    undated_dropped: int = 0
     table: list[DerivedRowResponse]
     source_ids: list[str]
     memory: MemoryResponse | None

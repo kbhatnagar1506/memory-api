@@ -75,6 +75,44 @@ def _mean_unit_vector(vectors: list[Vector]) -> Vector:
     return [x / norm for x in summed]
 
 
+def source_of(memory: Memory) -> str:
+    """The document a memory came from, or itself if it is one.
+
+    `extracted_from` is set by the service's write-time extraction; `doc_id`
+    is what the benchmark harness records when it stores a corpus document.
+    Falling back to the memory's own id means an ordinary write is its own
+    source and is never grouped with anything else -- so capping is a no-op
+    on a corpus that has not been decomposed.
+    """
+    meta = memory.metadata or {}
+    for key in ("extracted_from", "doc_id"):
+        value = meta.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return memory.id
+
+
+def _cap_per_source(scored: list[ScoredMemory], cap: int) -> list[ScoredMemory]:
+    """Keep at most `cap` results per source document, best first.
+
+    Order is preserved, so each source still contributes its highest-scoring
+    units -- this trades a source's 3rd-best claim for another source's best,
+    which is exactly the trade `full_recall@k` rewards and raw score does not.
+    """
+    seen: dict[str, int] = {}
+    kept: list[ScoredMemory] = []
+    for s in scored:
+        key = source_of(s.memory)
+        count = seen.get(key, 0)
+        if count >= cap:
+            continue
+        seen[key] = count + 1
+        if count:
+            s.explain.append(f"source {key} contributed {count + 1}/{cap}")
+        kept.append(s)
+    return kept
+
+
 @dataclass(slots=True)
 class SearchRequest:
     query: str
@@ -93,6 +131,20 @@ class SearchRequest:
     #: right tool for corpora that genuinely accumulate restatements; it is not
     #: free enough to be a default.
     use_mmr: bool = False
+    #: Most results any single SOURCE document may contribute. 0 disables it.
+    #:
+    #: Write-time extraction turns one document into ~13 retrievable units, and
+    #: a top-k chosen purely by score then lets two or three documents eat the
+    #: whole window. Measured on LongMemEval: full_recall@k fell 0.968 -> 0.948
+    #: while MRR ROSE 0.939 -> 0.987 -- retrieval got sharper and coverage got
+    #: worse, and the answer arm lost 21 questions, 17 of them in the two
+    #: capabilities that need several distinct sessions at once.
+    #:
+    #: MMR does not solve this. It diversifies in EMBEDDING space, where two
+    #: claims from one session about a camera and about a tour look maximally
+    #: different while being the same source. The constraint that matters here
+    #: is provenance, not semantic distance.
+    max_per_source: int = 0
     #: Return memories that a newer memory has superseded.
     include_superseded: bool = False
     candidate_multiplier: int = 6
@@ -461,6 +513,10 @@ class RetrievalPipeline:
         # -- stage 6: supersession suppression -----------------------------------
         if not request.include_superseded:
             scored = await self._suppress_superseded(scored, request)
+
+        # -- stage 6b: per-source cap --------------------------------------------
+        if request.max_per_source > 0:
+            scored = _cap_per_source(scored, request.max_per_source)
 
         # -- stage 7: MMR diversification ----------------------------------------
         t0 = loop.time()

@@ -982,6 +982,7 @@ async def evaluate_end_to_end(
     # chars). Truncating the sentence that holds the answer is the cheapest
     # possible way to lose a question.
     max_session_chars: int = 20_000,
+    max_per_source: int = 0,
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,
@@ -1020,6 +1021,7 @@ async def evaluate_end_to_end(
                         space_id=space_id,
                         limit=per_question_k,
                         known_speakers=ingested.speakers,
+                        max_per_source=max_per_source,
                         **config,
                     )
                 )

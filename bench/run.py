@@ -212,6 +212,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             embedder,
             HeuristicReranker() if winner.get("use_rerank") else NoopReranker(),
             k=args.answer_k,
+            max_per_source=args.max_per_source,
             config=winner,
             answer_model=args.answer_model,
             judge_model=args.judge_model,
@@ -497,6 +498,18 @@ async def main() -> int:
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--max-per-source",
+        type=int,
+        default=0,
+        help=(
+            "cap on results one source document may contribute to the answer "
+            "window. 0 is off. Extraction turns a document into ~13 units, and "
+            "without a cap a few documents eat the whole window: measured "
+            "full_recall@k 0.968 -> 0.948 while MRR ROSE to 0.987, costing 21 "
+            "questions, 17 of them in temporal-reasoning and multi-session."
+        ),
+    )
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 

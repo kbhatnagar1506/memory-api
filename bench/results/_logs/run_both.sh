@@ -1,16 +1,15 @@
 #!/bin/bash
-# Both arms, back to back, in a script on disk so no shell teardown can orphan
-# the second one -- which is exactly what happened the first time these were
-# chained from an inline `nohup bash -c`.
+# Both arms back to back, in a script on disk so no shell teardown orphans the
+# second one.
 #
-# --concurrency 32 --batch-size 200: embedding is network-bound, and the token
-# batcher already caps requests at 15,000 tokens, so a big item count only
-# affects the SHORT texts. Claims are ~15 tokens each, where a 32-item cap was
-# paying one round trip per 480 tokens against a 15,000 budget.
+# Flag shape matters: batch_size 32 gives ~52 embedding requests per corpus,
+# which is enough to fill --concurrency; batch_size 200 gave 8 and left 75% of
+# the slots idle. --corpus-concurrency then keeps them filled across corpus
+# boundaries instead of draining at each one.
 export GOOGLE_CLOUD_PROJECT=patchguard-reakon
 cd /Users/krishnabhatnagar/mapi
 LOG=bench/results/_logs/extract-full.log
-FLAGS="--benchmark longmemeval --end-to-end --concurrency 32 --batch-size 200"
+FLAGS="--benchmark longmemeval --end-to-end --concurrency 32 --batch-size 32 --corpus-concurrency 8"
 
 echo "=== ADD started $(date +%H:%M:%S) ===" >> $LOG
 stdbuf -oL -eL .venv/bin/python -u -m bench.run $FLAGS \

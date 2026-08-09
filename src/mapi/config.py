@@ -143,6 +143,17 @@ class Settings(BaseSettings):
     )
     rrf_k: int = Field(default=60, ge=1, description="Reciprocal Rank Fusion damping.")
     mmr_lambda: float = Field(default=0.7, ge=0.0, le=1.0)
+    max_per_source: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Most results one source document may contribute to a top-k. 0 is off. "
+            "Only bites once write-time extraction is on, where a document becomes "
+            "~13 retrievable units and a few documents can otherwise consume the "
+            "whole window -- measured as full_recall@k 0.968 -> 0.948 with MRR "
+            "rising to 0.987, i.e. sharper retrieval and worse coverage."
+        ),
+    )
     half_life_days: float = Field(
         default=180.0,
         gt=0,

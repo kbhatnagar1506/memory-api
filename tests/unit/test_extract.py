@@ -296,5 +296,7 @@ def test_salvage_handles_braces_inside_quoted_values() -> None:
     """Depth counting must ignore braces inside strings, or one stray brace
     in a fact realigns every object after it."""
     text = PASSAGE + " I use {brackets} in my notes."
-    raw = '[{"fact": "Uses {brackets} in their notes.", "quote": "I use {brackets} in my notes."'
+    raw = (
+        '[{"fact": "Uses {brackets} in their notes.", "quote": "I use {brackets} in my notes."'
+    )
     assert parse_claims(raw + "}", text)[0].fact == "Uses {brackets} in their notes."

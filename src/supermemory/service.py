@@ -21,7 +21,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .config import Settings
-from .core.errors import NotFoundError, PayloadTooLargeError, ValidationError
+from .core.errors import (
+    NotFoundError,
+    PayloadTooLargeError,
+    ProviderError,
+    ValidationError,
+)
 from .core.logging import get_logger
 from .core.metrics import EMBEDDINGS, INGESTED, SEARCH_LATENCY, SEARCH_STAGE_LATENCY
 from .domain.chunking import chunk_text, normalize
@@ -36,6 +41,7 @@ from .domain.embeddings.base import EmbeddingProvider
 from .domain.models import (
     Chunk,
     Memory,
+    MemoryKind,
     MemoryStatus,
     MemoryVersion,
     Organization,
@@ -46,6 +52,8 @@ from .domain.models import (
 )
 from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchResponse
 from .domain.retrieval.rerank import Reranker
+from .domain.synthesis import classify
+from .domain.synthesis.derive import CompleteFn, DerivedAnswer, SourceDoc, derive_answer
 from .store.base import MemoryFilter, MemoryStore, Page
 
 log = get_logger(__name__)
@@ -87,11 +95,16 @@ class MemoryService:
         embedder: EmbeddingProvider,
         reranker: Reranker,
         settings: Settings,
+        completer: CompleteFn | None = None,
     ) -> None:
         self.store = store
         self.embedder = embedder
         self.reranker = reranker
         self.settings = settings
+        #: Async prompt -> text, or None when synthesis is off. Injected so
+        #: tests drive derivation deterministically and the service never
+        #: imports a vendor SDK.
+        self.completer = completer
         self.pipeline = RetrievalPipeline(store, embedder, reranker)
 
     # -- spaces ------------------------------------------------------------
@@ -141,6 +154,7 @@ class MemoryService:
         occurred_at: datetime | None = None,
         dedupe: bool = True,
         auto_supersede: bool = False,
+        kind: MemoryKind = MemoryKind.EPISODIC,
     ) -> IngestResult:
         await self.get_space_or_raise(org_id, space_id)
 
@@ -191,6 +205,7 @@ class MemoryService:
             metadata=dict(metadata or {}),
             tags=list(tags),
             source=source,
+            kind=kind,
             occurred_at=occurred_at or utcnow(),
         )
 
@@ -604,6 +619,158 @@ class MemoryService:
             "derived_memories_affected": derivatives,
             "erased_at": utcnow().isoformat(),
         }
+
+    # -- derivation and profiles -------------------------------------------
+
+    async def derive(
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        question: str,
+        k: int = 10,
+        materialize: bool = False,
+        bucket: str | None = None,
+    ) -> tuple[DerivedAnswer, Memory | None]:
+        """Compute an answer from episodes; optionally store it as a memory.
+
+        The read half runs map -> ground -> reduce over the top-k retrieved
+        episodes (code does the arithmetic; every table row carries a verbatim
+        quote checked against its source). The write half — `materialize` —
+        stores the answer as a `kind=derived` memory with `derived_from` edges
+        to every source, which buys three things nothing else in the market
+        has together:
+
+          * provenance: the answer names the episodes that made it true;
+          * a demand-driven index: the next similar question is a lookup, and
+            a wrong guess cost nothing because the episodes are still there;
+          * invalidation: erase/supersede a source and the stored fact goes
+            STALE via the existing lifecycle — it can never outlive its
+            evidence.
+
+        `bucket` tags the fact into a profile ("preferences", "dietary", ...).
+        Re-deriving the same bucket+question SUPERSEDES the previous fact, so
+        profiles update through the same revision machinery as everything
+        else — history, `?as_of=`, and lineage included.
+        """
+        if self.completer is None:
+            raise ProviderError(
+                "no synthesis backend configured; set synthesis_backend=gemini "
+                "or inject a completer"
+            )
+        response = await self.search(
+            SearchRequest(query=question, org_id=org_id, space_id=space_id, limit=k)
+        )
+        docs = [
+            SourceDoc(
+                id=hit.memory.id,
+                text=hit.memory.content,
+                occurred_at=hit.memory.occurred_at,
+            )
+            for hit in response.results
+        ]
+        kind = classify(question)
+        derived = await derive_answer(question, kind, docs, self.completer)
+        if derived is None:
+            derived = DerivedAnswer(
+                answer="", kind=kind, table=(), source_ids=(), computed=False
+            )
+        if not materialize or not derived.answer:
+            return derived, None
+
+        tags = [f"profile:{bucket}"] if bucket else []
+        result = await self.ingest(
+            org_id=org_id,
+            space_id=space_id,
+            content=derived.answer,
+            summary=question,
+            metadata={
+                "question": question,
+                "derive_kind": str(derived.kind),
+                "computed": derived.computed,
+                "table": [
+                    {
+                        "date": row.date.isoformat() if row.date else None,
+                        "fact": row.fact,
+                        "source_id": row.source_id,
+                    }
+                    for row in derived.table
+                ],
+            },
+            tags=tags,
+            source="derive",
+            kind=MemoryKind.DERIVED,
+            # A derived fact is not a duplicate of the episodes it summarises,
+            # and near-dup collapsing against them would eat the derivation.
+            dedupe=False,
+        )
+        stored = result.memory
+        for source_id in derived.source_ids:
+            await self.store.create_relation(
+                RelationEdge(
+                    org_id=org_id,
+                    space_id=space_id,
+                    source_id=stored.id,
+                    target_id=source_id,
+                    type=RelationType.DERIVED_FROM,
+                    reason="derive: grounded extraction",
+                )
+            )
+        # Same bucket + same question -> this fact replaces the previous one,
+        # through the normal supersession machinery (status flip + edge), so
+        # profile history is ordinary memory history.
+        if bucket:
+            previous = await self.list_memories(
+                org_id,
+                space_id,
+                filters=MemoryFilter(tags=(f"profile:{bucket}".casefold(),)),
+                limit=50,
+                cursor=None,
+            )
+            for old in previous.items:
+                if old.id == stored.id or old.kind is not MemoryKind.DERIVED:
+                    continue
+                if old.metadata.get("question") != question:
+                    continue
+                await self.store.create_relation(
+                    RelationEdge(
+                        org_id=org_id,
+                        space_id=space_id,
+                        source_id=stored.id,
+                        target_id=old.id,
+                        type=RelationType.SUPERSEDES,
+                        reason="re-derived profile fact",
+                    )
+                )
+                await self.store.upsert_memory(
+                    old.model_copy(
+                        update={
+                            "status": MemoryStatus.SUPERSEDED,
+                            "version": old.version + 1,
+                            "updated_at": utcnow(),
+                        }
+                    )
+                )
+        return derived, stored
+
+    async def get_profile(
+        self, org_id: str, space_id: str, bucket: str, *, limit: int = 100
+    ) -> list[Memory]:
+        """Current facts in one profile bucket.
+
+        ACTIVE only, on purpose: superseded facts are history (visible via
+        versions/lineage), stale facts are pending re-derivation, and neither
+        is something an agent should act on as current truth.
+        """
+        await self.get_space_or_raise(org_id, space_id)
+        page = await self.list_memories(
+            org_id,
+            space_id,
+            filters=MemoryFilter(tags=(f"profile:{bucket}".casefold(),)),
+            limit=limit,
+            cursor=None,
+        )
+        return [m for m in page.items if m.kind is MemoryKind.DERIVED]
 
     # -- search ------------------------------------------------------------
 

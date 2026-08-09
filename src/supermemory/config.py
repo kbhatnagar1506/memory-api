@@ -49,6 +49,18 @@ class RerankBackend(StrEnum):
     LLM = "llm"
 
 
+class SynthesisBackend(StrEnum):
+    """Provider for the derive path's map/compose calls.
+
+    NONE keeps the product free of read-path LLM calls (the default and the
+    posture the benchmarks run in); the /derive endpoint then returns 503
+    rather than silently degrading. Search and ingest never depend on this.
+    """
+
+    NONE = "none"
+    GEMINI = "gemini"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SUPERMEMORY_",
@@ -95,6 +107,9 @@ class Settings(BaseSettings):
     #: downside is 4x the upside, and a default should take the safe side of
     #: an asymmetric bet.
     rerank_backend: RerankBackend = RerankBackend.NONE
+    synthesis_backend: SynthesisBackend = SynthesisBackend.NONE
+    #: Model for derive map/compose calls. Flash: many small extraction calls.
+    synthesis_model: str = "gemini-2.5-flash"
     rerank_model: str = "gemini-2.5-flash"
     rerank_candidates: int = Field(default=32, ge=1, le=256)
     rerank_timeout_s: float = Field(default=12.0, gt=0)

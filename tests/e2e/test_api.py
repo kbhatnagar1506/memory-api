@@ -981,3 +981,116 @@ async def test_deleting_a_source_also_invalidates(client, space_id) -> None:
     response = await client.delete(f"/v1/spaces/{space_id}/memories/{source['id']}")
     assert response.status_code == 204
     assert await _status_of(client, space_id, derived) == "stale"
+
+
+# -- derive endpoint and profiles ----------------------------------------------
+
+
+def _install_fake_completer(app_context, mapping: dict[str, str]) -> None:
+    """Deterministic completer: first key found in the prompt wins."""
+
+    async def fake(prompt: str) -> str:
+        for needle, reply in mapping.items():
+            if needle in prompt:
+                return reply
+        return "[]"
+
+    app_context["app"].state.service.completer = fake
+
+
+async def test_derive_without_backend_is_503_not_silent(client, space_id) -> None:
+    response = await client.post(
+        f"/v1/spaces/{space_id}/derive", json={"question": "How many bikes do I own?"}
+    )
+    assert response.status_code == 502 or response.status_code == 503
+
+
+async def test_derive_counts_in_code_and_materializes_with_provenance(
+    client, app_context, space_id
+) -> None:
+    """The full loop: episodes in, computed answer out, provenance stored,
+    profile readable, invalidation live."""
+    a = await _mk(client, space_id, "Picked up a road bike today, love it")
+    b = await _mk(client, space_id, "My e-bike arrived, second bike in the garage")
+    _install_fake_completer(
+        app_context,
+        {
+            "road bike": '[{"date": "2026-03-01", "fact": "owns a road bike",'
+            ' "quote": "road bike"}]',
+            "e-bike": '[{"date": "2026-03-08", "fact": "owns an e-bike", "quote": "e-bike"}]',
+        },
+    )
+
+    response = await client.post(
+        f"/v1/spaces/{space_id}/derive",
+        json={
+            "question": "How many bikes do I own?",
+            "materialize": True,
+            "bucket": "possessions",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["answer"] == "2"
+    assert payload["computed"] is True
+    assert set(payload["source_ids"]) == {a["id"], b["id"]}
+    stored = payload["memory"]
+    assert stored is not None and stored["kind"] == "derived"
+
+    # Provenance visible through the context read.
+    context = (
+        await client.get(f"/v1/spaces/{space_id}/memories/{stored['id']}/context")
+    ).json()
+    assert {m["id"] for m in context["derived_from"]} == {a["id"], b["id"]}
+
+    # Profile lists the fact as current truth.
+    profile = (await client.get(f"/v1/spaces/{space_id}/profiles/possessions")).json()
+    assert [f["id"] for f in profile["facts"]] == [stored["id"]]
+
+    # Invalidation: erase a source, the profile fact stops being truth.
+    await client.post(f"/v1/spaces/{space_id}/memories/{a['id']}/erase")
+    assert await _status_of(client, space_id, stored) == "stale"
+    profile = (await client.get(f"/v1/spaces/{space_id}/profiles/possessions")).json()
+    assert profile["facts"] == []
+
+
+async def test_rederiving_a_bucket_supersedes_the_previous_fact(
+    client, app_context, space_id
+) -> None:
+    """Profiles update through ordinary revision machinery: the new fact
+    supersedes the old, history stays walkable."""
+    await _mk(client, space_id, "Bought a gravel bike, my first bicycle ever")
+    _install_fake_completer(
+        app_context,
+        {
+            "gravel": '[{"date": "2026-04-01", "fact": "owns a gravel bike",'
+            ' "quote": "gravel bike"}]'
+        },
+    )
+    body = {"question": "How many bikes do I own?", "materialize": True, "bucket": "gear"}
+    first = (await client.post(f"/v1/spaces/{space_id}/derive", json=body)).json()["memory"]
+    second = (await client.post(f"/v1/spaces/{space_id}/derive", json=body)).json()["memory"]
+    assert first["id"] != second["id"]
+
+    assert await _status_of(client, space_id, first) == "superseded"
+    profile = (await client.get(f"/v1/spaces/{space_id}/profiles/gear")).json()
+    assert [f["id"] for f in profile["facts"]] == [second["id"]]
+
+    lineage = (await client.get(f"/v1/spaces/{space_id}/memories/{first['id']}/lineage")).json()
+    assert lineage["is_current"] is False
+    assert lineage["head"] == second["id"]
+
+
+async def test_derive_fails_open_to_empty_answer_on_garbage(
+    client, app_context, space_id
+) -> None:
+    await _mk(client, space_id, "Some cycling note")
+    _install_fake_completer(app_context, {"cycling": "sorry, no JSON from me"})
+    response = await client.post(
+        f"/v1/spaces/{space_id}/derive",
+        json={"question": "How many bikes do I own?", "materialize": True},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["answer"] == ""
+    assert payload["memory"] is None  # nothing materialized from nothing

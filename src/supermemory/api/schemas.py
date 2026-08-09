@@ -175,6 +175,43 @@ class MemoryVersionResponse(Response):
         )
 
 
+class DeriveRequest(Request):
+    question: str = Field(min_length=3, max_length=2000)
+    k: int = Field(default=10, ge=1, le=50)
+    #: Store the answer as a `derived` memory with provenance edges.
+    materialize: bool = False
+    #: Profile bucket to tag the materialized fact into (e.g. "preferences").
+    bucket: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class DerivedRowResponse(Response):
+    date: str | None
+    fact: str
+    quote: str
+    source_id: str
+
+
+class DeriveResponse(Response):
+    """A computed answer plus the grounded table that proves it.
+
+    `computed` is true when code (len, max, timedelta) produced the value —
+    the model only found the rows. Empty `answer` means derivation could not
+    help; callers fall back to plain search.
+    """
+
+    answer: str
+    kind: str
+    computed: bool
+    table: list[DerivedRowResponse]
+    source_ids: list[str]
+    memory: MemoryResponse | None
+
+
+class ProfileResponse(Response):
+    bucket: str
+    facts: list[MemoryResponse]
+
+
 class MemoryContextResponse(Response):
     """A memory resolved together with its whole relation neighborhood.
 

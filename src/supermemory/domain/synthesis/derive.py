@@ -73,10 +73,22 @@ class DerivedAnswer:
     #: silently dropped: "8 found, 3 in March" is a different claim from
     #: "3 found", and an agent may want to say so.
     filtered_out: int = 0
+    #: Rows the extractor produced whose quote was NOT in its source -- i.e.
+    #: fabricated, and discarded by grounding. A free, continuously measured
+    #: hallucination rate on real traffic: the number every vendor in this
+    #: category asserts and none publishes. A rising value is also the earliest
+    #: warning that extraction has started to drift.
+    rejected: int = 0
 
     @property
     def empty(self) -> bool:
         return not self.table
+
+    @property
+    def fabrication_rate(self) -> float:
+        """Share of extracted rows that failed the verbatim-quote check."""
+        produced = len(self.table) + self.filtered_out + self.rejected
+        return self.rejected / produced if produced else 0.0
 
 
 _MAP_PROMPT = """\
@@ -393,6 +405,7 @@ async def derive_answer(
     mapped = await asyncio.gather(*(map_one(doc) for doc in docs))
     raw_rows = [row for rows in mapped for row in rows]
     grounded = ground(raw_rows, {doc.id: doc.text for doc in docs})
+    rejected = len(raw_rows) - len(grounded)
     table = _dedupe(grounded)
 
     # FILTER, then reduce. A question that bounds itself in time ("how many
@@ -437,6 +450,7 @@ async def derive_answer(
         computed=was_computed,
         scope=scope,
         filtered_out=filtered_out,
+        rejected=rejected,
     )
 
 

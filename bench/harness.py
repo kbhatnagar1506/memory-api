@@ -703,7 +703,13 @@ async def evaluate_end_to_end(
     judge_model: str,
     project: str | None,
     concurrency: int = 8,
-    max_session_chars: int = 12_000,
+    # 20k, not 12k: sweeping the cap against every gold turn's character
+    # offset, 12,000 cuts the answer sentence out of 32 questions (11 of which
+    # had ALL their gold sessions delivered and still failed), 16,000 cuts 8,
+    # and 20,000 cuts none. Cost is +15% context (mean session 8,894 -> 10,225
+    # chars). Truncating the sentence that holds the answer is the cheapest
+    # possible way to lose a question.
+    max_session_chars: int = 20_000,
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,

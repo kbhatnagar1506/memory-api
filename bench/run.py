@@ -353,11 +353,18 @@ async def main() -> int:
     parser.add_argument(
         "--answer-k",
         type=int,
-        default=4,
+        default=10,
         help=(
-            "results passed to the answerer. Lower than retrieval k because full "
-            "sessions are ~10x a chunk; MRR 0.939 means the right session is "
-            "almost always ranked first."
+            "sessions retrieved AND passed to the answerer. This is the "
+            "delivery budget, and it was the bottleneck: at 4, complete "
+            "evidence reached the answerer for only 87.0% of questions while "
+            "the ablation reported full_recall@10 = 0.968 -- two different "
+            "arms. Accuracy is 87.5% when evidence is complete and 26.2% when "
+            "it is not. The old default of 4 was justified by 'MRR 0.939 means "
+            "the right session is ranked first', which is a hit@k argument "
+            "applied to a CONJUNCTIVE metric: 324 of 500 questions need two or "
+            "more sessions, and 17 need five or more (arithmetically "
+            "impossible to satisfy at k=4)."
         ),
     )
     parser.add_argument("--answer-model", default="gemini-2.5-flash")

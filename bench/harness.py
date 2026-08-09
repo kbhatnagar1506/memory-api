@@ -706,6 +706,7 @@ async def evaluate_end_to_end(
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,
+    verbose: bool = True,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
     answerer = build_model_client(answer_model, project)
@@ -901,7 +902,40 @@ async def evaluate_end_to_end(
                 else None,
             }
 
-    rows = await asyncio.gather(*(one(q) for q in questions))
+    # Live per-question output. The QA phase was a silent black box for its
+    # whole duration -- the same shape as the ingestion stall that once looked
+    # identical to a hung run for two hours. Streaming the verdict as each
+    # question resolves makes a slow run distinguishable from a dead one, and
+    # makes systematic wrongness visible while it is happening rather than in
+    # a post-mortem. `flush=True` because stdout is block-buffered when
+    # redirected to a file, which is exactly how the earlier silence happened.
+    done = 0
+    total = len(questions)
+
+    async def one_verbose(question: Question) -> dict[str, Any]:
+        nonlocal done
+        row = await one(question)
+        done += 1
+        if verbose:
+            if "error" in row:
+                mark, detail = "ERROR  ", str(row["error"])[:60]
+            else:
+                mark = {
+                    "CORRECT": "ok     ",
+                    "DECLINED": "decline",
+                    "DECLINED_PROSE": "decline",
+                }.get(str(row["verdict"]), "WRONG  ")
+                detail = (
+                    f"{str(row['prediction'])[:44]!r} (gold {str(row['reference'])[:30]!r})"
+                )
+            print(
+                f"    [{done:3d}/{total}] {mark} {row.get('category', '?')!s:24s}"
+                f" {str(row.get('question', ''))[:52]:52s} -> {detail}",
+                flush=True,
+            )
+        return row
+
+    rows = await asyncio.gather(*(one_verbose(q) for q in questions))
     ok = [r for r in rows if "error" not in r]
     errors = [r for r in rows if "error" in r]
     answerable = [r for r in ok if not r["is_abstention"]]

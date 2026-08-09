@@ -106,10 +106,11 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
         concurrency=args.concurrency,
         cache=cache,
     )
-    print(f"  embedding cache: {cache.stats()}")
+    print(f"  embedding cache: {cache.stats()}", flush=True)
     print(
         f"  ingested {ingested.documents} docs / {ingested.chunks} chunks in "
-        f"{time.perf_counter() - started:.0f}s ({ingested.embed_seconds:.0f}s embedding)"
+        f"{time.perf_counter() - started:.0f}s ({ingested.embed_seconds:.0f}s embedding)",
+        flush=True,
     )
 
     # Warm the query cache before timing so latency compares configs, not order.
@@ -147,7 +148,8 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
         print(
             f"    {config_name:22s} FULL={summary['full_recall@k']:.3f} "
             f"hit={summary['hit@k']:.3f} mrr={summary['mrr']:.3f} "
-            f"{summary['latency_ms_mean']:.0f}ms ({time.perf_counter() - started:.0f}s)"
+            f"{summary['latency_ms_mean']:.0f}ms ({time.perf_counter() - started:.0f}s)",
+            flush=True,
         )
 
     end_to_end = None

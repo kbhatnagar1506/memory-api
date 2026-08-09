@@ -1,0 +1,482 @@
+[
+  {
+    "qid": "5d3d2817",
+    "category": "single-session-user",
+    "hits": 0
+  },
+  {
+    "qid": "3b6f954b",
+    "category": "single-session-user",
+    "hits": 0
+  },
+  {
+    "qid": "726462e0",
+    "category": "single-session-user",
+    "hits": 0
+  },
+  {
+    "qid": "0a995998",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "b5ef892d",
+    "category": "multi-session",
+    "hits": 2
+  },
+  {
+    "qid": "3a704032",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "dd2973ad",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "c4a1ceb8",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "46a3abf7",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "28dc39ac",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_2f8be40d",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "2e6d26dc",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "d23cf73b",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_7fce9456",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "7024f17c",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "2318644b",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_31ff4165",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "129d1232",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_194be4b3",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "a9f6b44c",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "5a7937c8",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_731e37d7",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "10d9b85a",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "e3038f8c",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "1a8a66a6",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "c2ac3c61",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "bf659f65",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "81507db6",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "75832dbd",
+    "category": "single-session-preference",
+    "hits": 1
+  },
+  {
+    "qid": "32260d93",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "195a1a1b",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "caf03d32",
+    "category": "single-session-preference",
+    "hits": 1
+  },
+  {
+    "qid": "09d032c9",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "57f827a0",
+    "category": "single-session-preference",
+    "hits": 2
+  },
+  {
+    "qid": "95228167",
+    "category": "single-session-preference",
+    "hits": 1
+  },
+  {
+    "qid": "75f70248",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "d6233ab6",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "a89d7624",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "b0479f84",
+    "category": "single-session-preference",
+    "hits": 3
+  },
+  {
+    "qid": "1d4e3b97",
+    "category": "single-session-preference",
+    "hits": 2
+  },
+  {
+    "qid": "1c0ddc50",
+    "category": "single-session-preference",
+    "hits": 0
+  },
+  {
+    "qid": "9aaed6a3",
+    "category": "multi-session",
+    "hits": 1
+  },
+  {
+    "qid": "51c32626",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "6456829e",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "3c1045c8",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "9ee3ecd6",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "92a0aa75",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "1c549ce4",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "67e0d0f2",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "ba358f49",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "73d42213",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "09ba9854",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "c18a7dc8",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "8cf4d046",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "37f165cf",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "8e91e7d9",
+    "category": "multi-session",
+    "hits": 0
+  },
+  {
+    "qid": "b46e15ed",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "9a707b81",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_7f6b06db",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_a1b77f9c",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_468eb063",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_7abb270c",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_45189cb4",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_e061b84f",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "370a8ff4",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_d6585ce8",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_21adecb5",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "5e1b23de",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_85da3956",
+    "category": "temporal-reasoning",
+    "hits": 3
+  },
+  {
+    "qid": "gpt4_7ca326fa",
+    "category": "temporal-reasoning",
+    "hits": 2
+  },
+  {
+    "qid": "2ebe6c92",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_d6585ce9",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_59149c78",
+    "category": "temporal-reasoning",
+    "hits": 2
+  },
+  {
+    "qid": "gpt4_468eb064",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_fa19884d",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "9a707b82",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "eac54add",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "4dfccbf8",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "0bc8ad93",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "6e984302",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_8279ba03",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_68e94288",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "gpt4_2312f94c",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "a3838d2b",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "982b5123",
+    "category": "temporal-reasoning",
+    "hits": 1
+  },
+  {
+    "qid": "gpt4_483dd43c",
+    "category": "temporal-reasoning",
+    "hits": 3
+  },
+  {
+    "qid": "gpt4_2c50253f",
+    "category": "temporal-reasoning",
+    "hits": 0
+  },
+  {
+    "qid": "72e3ee87",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "2133c1b5",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "22d2cb42",
+    "category": "knowledge-update",
+    "hits": 1
+  },
+  {
+    "qid": "59524333",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "50635ada",
+    "category": "knowledge-update",
+    "hits": 2
+  },
+  {
+    "qid": "69fee5aa",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "a2f3aa27",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "dad224aa",
+    "category": "knowledge-update",
+    "hits": 0
+  },
+  {
+    "qid": "eaca4986",
+    "category": "single-session-assistant",
+    "hits": 0
+  }
+]

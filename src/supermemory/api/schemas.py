@@ -80,6 +80,9 @@ class CreateMemoryRequest(Request):
     #: Let a newer conflicting memory mark older ones superseded. Off by
     #: default: hiding a user's data on a heuristic is not a safe default.
     auto_supersede: bool = False
+    #: Detect memories this write CONTRADICTS. Costs a candidate scan on the
+    #: write path, so it is opt-in; it never hides anything.
+    detect_conflicts: bool = False
 
     @field_validator("metadata")
     @classmethod
@@ -303,6 +306,9 @@ class CreateMemoryResponse(Response):
     duplicate_kind: str = "none"
     similarity: float = 0.0
     superseded: list[str] = Field(default_factory=list)
+    #: Memories this write CONTRADICTS. Recorded as symmetric edges and
+    #: reported; neither side is hidden, because either may be the true one.
+    contradicts: list[str] = Field(default_factory=list)
     chunk_count: int = 0
 
 
@@ -393,6 +399,10 @@ class SearchResponseBody(Response):
     #: True when reranking was requested but fell back to first-stage order.
     rerank_degraded: bool = False
     timings_ms: dict[str, float] = Field(default_factory=dict)
+    #: Pairs of returned memory ids that CONTRADICT each other. Surfaced,
+    #: never silently resolved: an agent told two facts disagree can ask the
+    #: user, an agent handed the newest one cannot.
+    conflicts: list[list[str]] = Field(default_factory=list)
 
 
 # -- keys ---------------------------------------------------------------------

@@ -12,6 +12,7 @@ from supermemory.domain.consolidation import (
     detect_exact_duplicate,
     detect_near_duplicate,
     merge_duplicate,
+    propose_contradictions,
     propose_supersessions,
 )
 from supermemory.domain.models import Memory, MemoryStatus, RelationType
@@ -185,3 +186,100 @@ def test_merge_duplicate_keeps_the_newer_event_time() -> None:
     existing = make("x", days_ago=10)
     incoming = make("x", days_ago=1)
     assert merge_duplicate(existing, incoming).occurred_at == incoming.occurred_at
+
+
+# -- contradiction detection ---------------------------------------------------
+#
+# The one real hole in belief revision until now: supersession handles
+# REVISION (newer replaces older, time orders them) but nothing handled
+# DISAGREEMENT (two ACTIVE memories that cannot both be true, with no
+# ordering to settle it).
+
+
+def _mem(content: str, *, day: int = 1, **kw) -> Memory:
+    return Memory(
+        org_id="org_x",
+        space_id="spc_x",
+        content=content,
+        occurred_at=datetime(2026, 3, day, tzinfo=UTC),
+        **kw,
+    )
+
+
+#: Unit vector at cosine 0.90 to [1, 0, 0] -- inside the contradiction band
+#: (0.82..0.97). Above 0.97 two memories are near-duplicates and are
+#: handled by dedup, not by conflict detection.
+SIMILAR_VEC = [0.9, 0.43589, 0.0]
+UNRELATED_VEC = [0.0, 1.0, 0.0]
+
+
+def test_same_claim_different_figures_is_a_contradiction() -> None:
+    """Two near-identical sentences differing only in a number are the
+    highest-signal conflict there is."""
+    new = _mem("The launch is scheduled for 40 users")
+    old = _mem("The launch is scheduled for 90 users", day=1)
+    proposals = propose_contradictions(new, [1.0, 0.0, 0.0], [(old, SIMILAR_VEC)])
+    assert len(proposals) == 1
+    assert "different figures" in proposals[0].reason
+    assert proposals[0].right_id == old.id
+
+
+def test_negation_flip_is_a_contradiction() -> None:
+    new = _mem("I am going to the conference in Berlin")
+    old = _mem("I am not going to the conference in Berlin")
+    proposals = propose_contradictions(new, [1.0, 0.0, 0.0], [(old, SIMILAR_VEC)])
+    assert len(proposals) == 1
+    assert "negated" in proposals[0].reason
+
+
+def test_contradiction_does_not_require_the_other_to_be_older() -> None:
+    """THE distinction from supersession. Disagreement has no direction: two
+    statements made in the same minute can conflict, and that is exactly the
+    case supersession cannot express."""
+    new = _mem("The meeting is on Tuesday", day=1)
+    newer = _mem("The meeting is on Thursday", day=5)  # NEWER than `new`
+    proposals = propose_contradictions(new, [1.0, 0.0, 0.0], [(newer, SIMILAR_VEC)])
+    assert len(proposals) == 1
+    assert "different days" in proposals[0].reason
+
+
+def test_similarity_alone_is_not_a_contradiction() -> None:
+    """A paraphrase is relatedness, not conflict. Treating one as the other is
+    how a restatement gets flagged as a disagreement, and a false contradiction
+    erodes trust faster than a missed one."""
+    new = _mem("The deployment pipeline uses GitHub Actions")
+    old = _mem("Our deploys run through GitHub Actions")
+    assert propose_contradictions(new, [1.0, 0.0, 0.0], [(old, SIMILAR_VEC)]) == []
+
+
+def test_unrelated_memories_never_conflict() -> None:
+    """Below the similarity floor, opposing words are coincidence: "I stopped
+    running" and "I started baking" share a polarity flip and nothing else."""
+    new = _mem("I stopped running in the mornings")
+    old = _mem("I started baking sourdough on weekends")
+    assert propose_contradictions(new, [1.0, 0.0, 0.0], [(old, UNRELATED_VEC)]) == []
+
+
+def test_superseded_memories_are_not_candidates() -> None:
+    """A memory already replaced is not in disagreement with anything; its
+    replacement is the current truth."""
+    new = _mem("The API rate limit is 100 requests")
+    old = _mem("The API rate limit is 500 requests", status=MemoryStatus.SUPERSEDED)
+    assert propose_contradictions(new, [1.0, 0.0, 0.0], [(old, SIMILAR_VEC)]) == []
+
+
+def test_two_signals_score_higher_than_one() -> None:
+    """A flipped negation AND a differing figure is much stronger evidence
+    than either alone."""
+    single = propose_contradictions(
+        _mem("The limit is 100 requests"),
+        [1.0, 0.0, 0.0],
+        [(_mem("The limit is 500 requests"), SIMILAR_VEC)],
+    )
+    double = propose_contradictions(
+        _mem("The limit is not 100 requests"),
+        [1.0, 0.0, 0.0],
+        [(_mem("The limit is 500 requests"), SIMILAR_VEC)],
+    )
+    assert single and double
+    assert double[0].confidence > single[0].confidence

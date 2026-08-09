@@ -24,6 +24,7 @@ per-request and per-space.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -56,6 +57,31 @@ class SupersessionProposal:
 
     new_id: str
     old_id: str
+    similarity: float
+    reason: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class ContradictionProposal:
+    """A claim that two memories cannot both be true, with why.
+
+    Distinct from supersession, and the distinction is the point. Supersession
+    is REVISION: a newer memory replaces an older one, and time orders them.
+    Contradiction is DISAGREEMENT: two memories conflict and nothing about
+    their timestamps says which wins — the user said "the meeting is Tuesday"
+    and "the meeting is Thursday" in the same hour, or two sources disagree.
+
+    Neither memory is marked superseded. A contradicted memory stays ACTIVE
+    because it may be the true one, and hiding either would answer the
+    question with silence. What retrieval does instead is SURFACE the conflict:
+    every competitor resolves it invisibly (newest timestamp wins), which is
+    indistinguishable from having no conflict at all. An agent told "these two
+    disagree" can ask; an agent handed the winner cannot.
+    """
+
+    left_id: str
+    right_id: str
     similarity: float
     reason: str
     confidence: float
@@ -261,6 +287,7 @@ def merge_duplicate(existing: Memory, incoming: Memory) -> Memory:
 __all__ = [
     "SUPERSEDE_HIGH",
     "SUPERSEDE_LOW",
+    "ContradictionProposal",
     "DuplicateKind",
     "DuplicateVerdict",
     "SupersessionProposal",
@@ -268,5 +295,142 @@ __all__ = [
     "detect_exact_duplicate",
     "detect_near_duplicate",
     "merge_duplicate",
+    "propose_contradictions",
     "propose_supersessions",
 ]
+
+
+#: Contradiction needs a TIGHTER similarity floor than supersession. Two
+#: memories that merely share a topic are not in conflict; they have to be
+#: about the same specific claim before disagreeing about it is meaningful.
+CONTRADICT_LOW = 0.82
+
+#: Pairs whose presence on opposite sides of two similar statements is
+#: evidence they conflict. Ordered longest-first inside each pair so
+#: "not going" is not read as containing "going".
+_ANTONYMS: tuple[tuple[str, str], ...] = (
+    ("increase", "decrease"),
+    ("accept", "reject"),
+    ("accepted", "declined"),
+    ("approve", "deny"),
+    ("enable", "disable"),
+    ("start", "stop"),
+    ("open", "closed"),
+    ("before", "after"),
+    ("more", "less"),
+    ("always", "never"),
+    ("yes", "no"),
+    ("on", "off"),
+    ("up", "down"),
+    ("win", "lose"),
+    ("buy", "sell"),
+    ("hire", "fire"),
+    ("add", "remove"),
+    ("include", "exclude"),
+    ("agree", "disagree"),
+    ("like", "dislike"),
+    ("prefer", "avoid"),
+    ("confirmed", "cancelled"),
+)
+
+#: Numbers and dates are the highest-signal disagreement: two near-identical
+#: sentences differing only in a figure are almost always in conflict.
+_FIGURE = re.compile(r"\b(\d[\d,]*(?:\.\d+)?)\b")
+_WEEKDAY = re.compile(
+    r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", re.IGNORECASE
+)
+
+
+def _polarity_conflict(left: str, right: str) -> str | None:
+    """A negation or antonym present on one side and absent on the other."""
+    lower_left, lower_right = left.casefold(), right.casefold()
+    left_neg = any(n in lower_left for n in _NEGATIONS)
+    right_neg = any(n in lower_right for n in _NEGATIONS)
+    if left_neg != right_neg:
+        return "one statement is negated and the other is not"
+    for positive, negative in _ANTONYMS:
+        in_left = positive in lower_left, negative in lower_left
+        in_right = positive in lower_right, negative in lower_right
+        # One side asserts the positive term, the other the negative term.
+        if (in_left[0] and in_right[1]) or (in_left[1] and in_right[0]):
+            return f"opposing terms ({positive}/{negative})"
+    return None
+
+
+def _figure_conflict(left: str, right: str) -> str | None:
+    """Same claim, different number or weekday."""
+    left_figures, right_figures = set(_FIGURE.findall(left)), set(_FIGURE.findall(right))
+    if left_figures and right_figures and not (left_figures & right_figures):
+        return "same subject, different figures"
+    left_days = {d.casefold() for d in _WEEKDAY.findall(left)}
+    right_days = {d.casefold() for d in _WEEKDAY.findall(right)}
+    if left_days and right_days and not (left_days & right_days):
+        return "same subject, different days"
+    return None
+
+
+def propose_contradictions(
+    new_memory: Memory,
+    new_embedding: Vector,
+    candidates: Sequence[tuple[Memory, Vector]],
+    *,
+    low: float = CONTRADICT_LOW,
+    high: float = SUPERSEDE_HIGH,
+) -> list[ContradictionProposal]:
+    """Propose that `new_memory` conflicts with existing memories.
+
+    Requires BOTH high topical similarity and a concrete disagreement signal —
+    a flipped negation, opposing terms, or a differing figure/day. Similarity
+    alone is not evidence of conflict; it is evidence of relatedness, and
+    treating one as the other is how a paraphrase gets flagged as a
+    contradiction. A false contradiction erodes trust faster than a missed one,
+    so the bar is deliberately high and the output is a PROPOSAL.
+
+    Unlike supersession this does NOT require the candidate to be older.
+    Disagreement has no direction: two statements made in the same minute can
+    conflict, and that is precisely the case supersession cannot express.
+    """
+    if not new_embedding:
+        return []
+    if low > high:
+        raise ValueError("low must not exceed high")
+
+    proposals: list[ContradictionProposal] = []
+    for memory, vector in candidates:
+        if memory.id == new_memory.id:
+            continue
+        if memory.status is not MemoryStatus.ACTIVE:
+            continue
+        if len(vector) != len(new_embedding):
+            continue
+        similarity = cosine_similarity(new_embedding, vector)
+        if not (low <= similarity < high):
+            continue
+
+        reasons = [
+            r
+            for r in (
+                _polarity_conflict(new_memory.content, memory.content),
+                _figure_conflict(new_memory.content, memory.content),
+            )
+            if r
+        ]
+        if not reasons:
+            continue
+
+        # Two independent signals is much stronger evidence than one.
+        confidence = min(0.45 + 0.2 * (similarity - low) / max(high - low, 1e-9), 0.95)
+        if len(reasons) > 1:
+            confidence = min(confidence + 0.2, 0.95)
+        proposals.append(
+            ContradictionProposal(
+                left_id=new_memory.id,
+                right_id=memory.id,
+                similarity=similarity,
+                reason=f"same subject (similarity {similarity:.2f}); " + "; ".join(reasons),
+                confidence=confidence,
+            )
+        )
+
+    proposals.sort(key=lambda p: (-p.confidence, p.right_id))
+    return proposals

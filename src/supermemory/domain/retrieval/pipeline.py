@@ -39,7 +39,7 @@ from datetime import datetime
 from ...core.logging import get_logger
 from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
-from ..models import Memory, MemoryStatus, ScoredMemory
+from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
 from .decay import apply_decay
 from .entities import salient_entities
 from .expansion import NoopExpander, QueryExpander
@@ -137,6 +137,12 @@ class SearchResponse:
     #: Entities the bridging stage expanded on. Part of the explain surface:
     #: "why is this result here" must be answerable for bridged hits too.
     entities_used: list[str] = field(default_factory=list)
+    #: Pairs of returned memory ids joined by a CONTRADICTS edge. Surfaced,
+    #: not resolved: every competitor picks a winner invisibly (newest
+    #: timestamp), which is indistinguishable from there being no conflict at
+    #: all. An agent told "these two disagree" can ask the user; an agent
+    #: handed the winner cannot.
+    conflicts: list[tuple[str, str]] = field(default_factory=list)
 
 
 class RetrievalPipeline:
@@ -478,15 +484,54 @@ class RetrievalPipeline:
                 )
             scored = kept
 
+        final = scored[: request.limit]
+        conflicts = await self._find_conflicts(final, request)
         return SearchResponse(
-            results=scored[: request.limit],
+            results=final,
             query=request.query,
             total_candidates=len(fused),
             timings_ms={k: round(v, 2) for k, v in timings.items()},
             rerank_degraded=degraded,
             strategies=strategies,
             entities_used=entities,
+            conflicts=conflicts,
         )
+
+    async def _find_conflicts(
+        self, scored: list[ScoredMemory], request: SearchRequest
+    ) -> list[tuple[str, str]]:
+        """CONTRADICTS edges joining two memories in this result set.
+
+        Surfaced, never resolved. A contradicted memory stays in the results
+        because it may be the true one — suppressing either would answer with
+        silence, and picking the newer one (the market default) hides the
+        disagreement entirely. Reporting it lets the agent ask.
+
+        Only pairs where BOTH sides are visible are reported: a conflict with
+        something the caller cannot see is not actionable.
+        """
+        if len(scored) < 2:
+            return []
+        ids = [s.memory.id for s in scored]
+        edges = await self.store.get_relations_between(
+            request.org_id, request.space_id, ids, type=RelationType.CONTRADICTS
+        )
+        present = set(ids)
+        seen: set[tuple[str, str]] = set()
+        out: list[tuple[str, str]] = []
+        for edge in edges:
+            if edge.source_id not in present or edge.target_id not in present:
+                continue
+            # `contradicts` is symmetric and stored as two edges; report once.
+            pair = (
+                (edge.source_id, edge.target_id)
+                if edge.source_id < edge.target_id
+                else (edge.target_id, edge.source_id)
+            )
+            if pair not in seen:
+                seen.add(pair)
+                out.append(pair)
+        return out
 
     @staticmethod
     def _representative_embedding(memory: Memory) -> Vector | None:

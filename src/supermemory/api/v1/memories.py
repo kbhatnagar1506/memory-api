@@ -53,6 +53,7 @@ def _to_response(result: IngestResult) -> CreateMemoryResponse:
         duplicate_kind=str(result.duplicate_kind),
         similarity=round(result.similarity, 6),
         superseded=result.superseded,
+        contradicts=result.contradicts,
         chunk_count=result.chunk_count,
     )
 
@@ -82,6 +83,7 @@ async def create_memory(
         occurred_at=body.occurred_at,
         dedupe=body.dedupe,
         auto_supersede=body.auto_supersede,
+        detect_conflicts=body.detect_conflicts,
     )
     # A deduplicated write did not create anything; 200 says so honestly.
     if not result.created:
@@ -118,6 +120,7 @@ async def bulk_create(
             occurred_at=item.occurred_at,
             dedupe=item.dedupe,
             auto_supersede=item.auto_supersede,
+            detect_conflicts=item.detect_conflicts,
         )
         items.append(_to_response(result))
     return BulkCreateMemoryResponse(

@@ -70,6 +70,7 @@ async def search(
         strategies=result.strategies,
         rerank_degraded=result.rerank_degraded,
         timings_ms=result.timings_ms,
+        conflicts=[list(pair) for pair in result.conflicts],
     )
 
 

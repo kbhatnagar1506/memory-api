@@ -1094,3 +1094,82 @@ async def test_derive_fails_open_to_empty_answer_on_garbage(
     payload = response.json()
     assert payload["answer"] == ""
     assert payload["memory"] is None  # nothing materialized from nothing
+
+
+# -- contradiction surfacing ---------------------------------------------------
+
+
+async def test_conflicting_writes_are_detected_and_surfaced_in_search(client, space_id) -> None:
+    """Disagreement, not revision: neither memory is hidden, and search REPORTS
+    the conflict. Every competitor resolves this invisibly by picking the
+    newest timestamp, which is indistinguishable from there being no conflict
+    at all. An agent told two facts disagree can ask the user."""
+    first = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={"content": "The quarterly planning meeting is on Tuesday at 3pm"},
+        )
+    ).json()["memory"]
+    second = await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={
+            "content": "The quarterly planning meeting is on Thursday at 3pm",
+            "detect_conflicts": True,
+        },
+    )
+    assert second.status_code == 201
+    payload = second.json()
+    assert first["id"] in payload["contradicts"]
+
+    # Both remain active and retrievable — either may be the true one.
+    body = (
+        await client.post(
+            f"/v1/spaces/{space_id}/search", json={"query": "quarterly planning meeting"}
+        )
+    ).json()
+    ids = {r["memory"]["id"] for r in body["results"]}
+    assert {first["id"], payload["memory"]["id"]} <= ids
+
+    # And the disagreement is reported rather than silently resolved.
+    pairs = {tuple(sorted(pair)) for pair in body["conflicts"]}
+    assert tuple(sorted((first["id"], payload["memory"]["id"]))) in pairs
+
+
+async def test_contradiction_is_visible_from_both_sides(client, space_id) -> None:
+    """`contradicts` is symmetric: the answer must not depend on which memory
+    you happen to look up first."""
+    a = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={"content": "The API rate limit is 100 requests per minute"},
+        )
+    ).json()["memory"]
+    b = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={
+                "content": "The API rate limit is 500 requests per minute",
+                "detect_conflicts": True,
+            },
+        )
+    ).json()["memory"]
+
+    for left, right in ((a, b), (b, a)):
+        ctx = (await client.get(f"/v1/spaces/{space_id}/memories/{left['id']}/context")).json()
+        assert right["id"] in {m["id"] for m in ctx["contradicts"]}
+
+
+async def test_conflict_detection_is_opt_in(client, space_id) -> None:
+    """It costs a candidate scan on the write path, and a cheap write path is
+    the architectural bet of this system — so it is off by default."""
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={"content": "The office moves to the 4th floor in June"},
+    )
+    second = (
+        await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={"content": "The office moves to the 9th floor in June"},
+        )
+    ).json()
+    assert second["contradicts"] == []

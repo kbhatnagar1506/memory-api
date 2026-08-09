@@ -35,6 +35,7 @@ from .domain.consolidation import (
     apply_supersession,
     detect_near_duplicate,
     merge_duplicate,
+    propose_contradictions,
     propose_supersessions,
 )
 from .domain.embeddings.base import EmbeddingProvider
@@ -85,6 +86,9 @@ class IngestResult:
     duplicate_kind: DuplicateKind = DuplicateKind.NONE
     similarity: float = 0.0
     superseded: list[str] = field(default_factory=list)
+    #: Memories this write is judged to CONTRADICT. Recorded as edges and
+    #: reported; never suppressed, because either side may be the true one.
+    contradicts: list[str] = field(default_factory=list)
     chunk_count: int = 0
 
 
@@ -154,6 +158,7 @@ class MemoryService:
         occurred_at: datetime | None = None,
         dedupe: bool = True,
         auto_supersede: bool = False,
+        detect_conflicts: bool = False,
         kind: MemoryKind = MemoryKind.EPISODIC,
     ) -> IngestResult:
         await self.get_space_or_raise(org_id, space_id)
@@ -261,25 +266,64 @@ class MemoryService:
                         chunk_count=len(merged.chunks),
                     )
 
-        # -- supersession ------------------------------------------------------
+        # -- belief revision ---------------------------------------------------
+        # Two different operations that both need the same candidate scan:
+        # supersession (revision -- newer replaces older) and contradiction
+        # (disagreement -- two ACTIVE memories that cannot both be true).
+        #
+        # Both are gated, but for different reasons. Supersession is gated on
+        # SAFETY: it hides a memory, and hiding a user's data because a
+        # similarity score crossed a threshold has an invisible failure mode.
+        # Contradiction hides nothing, so it is gated purely on COST -- it
+        # needs a candidate scan, and a cheap write path is the architectural
+        # bet of this whole system. Enable it per request or per space.
         superseded: list[str] = []
-        if auto_supersede and chunks:
+        conflicts: list[str] = []
+        if chunks and (auto_supersede or detect_conflicts):
             page = await self.store.list_memories(
-                org_id, space_id, filters=MemoryFilter(), limit=256
+                org_id, space_id, filters=MemoryFilter(), limit=256, cursor=None
             )
             pairs = [
                 (m, m.chunks[0].embedding)
                 for m in page.items
                 if m.chunks and m.chunks[0].embedding is not None
             ]
-            proposals = propose_supersessions(
-                memory,
-                chunks[0].embedding or [],
-                pairs,
+            proposals = (
+                propose_supersessions(memory, chunks[0].embedding or [], pairs)
+                if auto_supersede
+                else []
+            )
+            conflict_proposals = (
+                propose_contradictions(memory, chunks[0].embedding or [], pairs)
+                if detect_conflicts
+                else []
             )
             # The memory must exist before an edge can point at it: the edge
             # has a foreign key to both endpoints.
             memory = await self.store.upsert_memory(memory)
+
+            for conflict in conflict_proposals:
+                # `contradicts` is symmetric, so both directions are written --
+                # otherwise the answer to "does this conflict with anything"
+                # would depend on which memory you happened to look up first.
+                # Neither side is superseded or hidden: either may be true.
+                for source_id, target_id in (
+                    (memory.id, conflict.right_id),
+                    (conflict.right_id, memory.id),
+                ):
+                    await self.store.create_relation(
+                        RelationEdge(
+                            org_id=org_id,
+                            space_id=space_id,
+                            source_id=source_id,
+                            target_id=target_id,
+                            type=RelationType.CONTRADICTS,
+                            reason=conflict.reason,
+                            confidence=conflict.confidence,
+                        )
+                    )
+                conflicts.append(conflict.right_id)
+
             for proposal in proposals:
                 old = await self.store.get_memory(org_id, space_id, proposal.old_id)
                 if old is None:
@@ -302,6 +346,7 @@ class MemoryService:
             memory=stored,
             created=True,
             superseded=superseded,
+            contradicts=conflicts,
             chunk_count=len(chunks),
         )
 

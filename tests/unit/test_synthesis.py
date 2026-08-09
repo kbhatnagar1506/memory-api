@@ -11,7 +11,7 @@ dedupes; the model only finds.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -414,3 +414,83 @@ def test_advice_precedes_count_when_both_could_match() -> None:
     """ "How many lenses should I buy" is advice, not a count — mistaking the
     task produces a number where a recommendation belongs."""
     assert classify("How many lenses should I buy for my camera?") is QuestionKind.ADVICE
+
+
+# -- filter-then-reduce --------------------------------------------------------
+
+
+def test_scope_filters_rows_before_the_count() -> None:
+    """The measured failure: "how many weddings this year" counted weddings
+    from every year. Filter, THEN aggregate."""
+
+    async def fake(prompt: str) -> str:
+        if "road bike" in prompt:
+            return (
+                '[{"date": "2026-03-05", "fact": "attended a wedding", "quote": "road bike"},'
+                ' {"date": "2025-06-01", "fact": "attended a wedding in Rome",'
+                ' "quote": "mountain bike"}]'
+            )
+        return '[{"date": "2026-03-20", "fact": "attended a beach wedding", "quote": "e-bike"}]'
+
+    result = asyncio.run(
+        derive_answer(
+            "How many weddings have I attended this year?",
+            QuestionKind.COUNT,
+            _docs(),
+            fake,
+            asked_at=date(2026, 4, 1),
+        )
+    )
+    assert result is not None
+    assert result.answer == "2"  # the 2025 wedding is out of scope
+    assert result.scope is not None and result.scope.label == "this year"
+    assert result.filtered_out == 1
+
+
+def test_an_empty_window_declines_rather_than_asserting_zero() -> None:
+    """No rows inside the window is more likely a dating failure than a true
+    zero, and "0" is a confident wrong answer. Decline; the model still sees
+    the excerpts."""
+
+    async def fake(prompt: str) -> str:
+        if "road bike" in prompt:
+            return (
+                '[{"date": "2019-01-01", "fact": "attended a wedding", "quote": "road bike"}]'
+            )
+        return "[]"
+
+    result = asyncio.run(
+        derive_answer(
+            "How many weddings have I attended this year?",
+            QuestionKind.COUNT,
+            _docs(),
+            fake,
+            asked_at=date(2026, 4, 1),
+        )
+    )
+    assert result is None
+
+
+def test_no_scope_means_no_filtering() -> None:
+    async def fake(prompt: str) -> str:
+        if "road bike" in prompt:
+            return (
+                '[{"date": "2019-01-01", "fact": "owns a road bike", "quote": "road bike"},'
+                ' {"date": "2026-03-01", "fact": "owns a mountain bike",'
+                ' "quote": "mountain bike"}]'
+            )
+        return "[]"
+
+    result = asyncio.run(
+        derive_answer(
+            "How many bikes do I own?",
+            QuestionKind.COUNT,
+            _docs(),
+            fake,
+            asked_at=date(2026, 4, 1),
+        )
+    )
+    assert result is not None
+    assert result.answer == "2"
+    assert result.scope is None
+    assert result.filtered_out == 0

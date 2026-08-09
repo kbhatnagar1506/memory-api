@@ -20,12 +20,15 @@ future question answerable.
 
 from .classify import QuestionKind, classify
 from .derive import DerivedAnswer, Extraction, derive_answer, ground
+from .scope import DateRange, extract_scope
 
 __all__ = [
+    "DateRange",
     "DerivedAnswer",
     "Extraction",
     "QuestionKind",
     "classify",
     "derive_answer",
+    "extract_scope",
     "ground",
 ]

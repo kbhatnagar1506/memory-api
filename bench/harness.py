@@ -811,7 +811,13 @@ async def evaluate_end_to_end(
                     text, _ = await answerer.complete(prompt, max_tokens=1024)
                     return text
 
-                derived = await derive_answer(question.text, derive_kind, docs, complete_text)
+                derived = await derive_answer(
+                    question.text,
+                    derive_kind,
+                    docs,
+                    complete_text,
+                    asked_at=question.asked_at.date() if question.asked_at else None,
+                )
                 # Derivation FILLS declines; it never overrides an answer.
                 # The previous policy preferred any code-computed value over a
                 # non-declined direct answer, reasoning that the direct model

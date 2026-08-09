@@ -26,6 +26,7 @@ from datetime import date, datetime
 
 from ..text import STOPWORDS
 from .classify import QuestionKind
+from .scope import DateRange, extract_scope
 
 #: Any async text completion — the harness's Gemini client, a future product
 #: client, or a test stub. Returns the raw completion text.
@@ -65,6 +66,13 @@ class DerivedAnswer:
     table: tuple[Extraction, ...]
     source_ids: tuple[str, ...]
     computed: bool  #: True when code (not the model) produced the value
+    #: The window the question restricted itself to, if any. Rows outside it
+    #: were dropped BEFORE the reduce -- filter-then-aggregate, in code.
+    scope: DateRange | None = None
+    #: Grounded rows discarded by the scope filter. Reported rather than
+    #: silently dropped: "8 found, 3 in March" is a different claim from
+    #: "3 found", and an agent may want to say so.
+    filtered_out: int = 0
 
     @property
     def empty(self) -> bool:
@@ -343,6 +351,7 @@ async def derive_answer(
     *,
     concurrency: int = 8,
     max_doc_chars: int = 12_000,
+    asked_at: date | None = None,
 ) -> DerivedAnswer | None:
     """Run map -> ground -> dedupe -> reduce for one question.
 
@@ -385,6 +394,22 @@ async def derive_answer(
     raw_rows = [row for rows in mapped for row in rows]
     grounded = ground(raw_rows, {doc.id: doc.text for doc in docs})
     table = _dedupe(grounded)
+
+    # FILTER, then reduce. A question that bounds itself in time ("how many
+    # weddings this year") must aggregate over the window, not over everything
+    # the map stage found -- measured, the errors ran BOTH ways, which is the
+    # signature of a missing filter rather than a missing fact.
+    scope = extract_scope(question, asked_at) if asked_at else None
+    filtered_out = 0
+    if scope is not None:
+        in_scope = [row for row in table if scope.contains(row.date)]
+        filtered_out = len(table) - len(in_scope)
+        # An empty window is more likely a dating failure than a true zero, so
+        # decline rather than assert "0" -- the model still sees the excerpts.
+        if not in_scope:
+            return None
+        table = in_scope
+
     if not table:
         return None
 
@@ -410,6 +435,8 @@ async def derive_answer(
         table=tuple(table),
         source_ids=tuple(dict.fromkeys(row.source_id for row in table)),
         computed=was_computed,
+        scope=scope,
+        filtered_out=filtered_out,
     )
 
 

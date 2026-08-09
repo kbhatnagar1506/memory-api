@@ -609,11 +609,16 @@ def parse_answer(raw: str) -> str:
 class Gemini:
     """Thin Vertex client for the answer and judge phases."""
 
-    def __init__(self, model: str, project: str | None) -> None:
+    def __init__(self, model: str, project: str | None, *, thinking_budget: int = 128) -> None:
         from google import genai
 
         if not project:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for answer/judge")
+        #: Reasoning tokens the model may spend before its first output token.
+        #: 128 is barely any: 19 of the 40 delivery-clean failures are
+        #: multi-step chains, so this is a candidate binding constraint that
+        #: has never been varied in this project.
+        self.thinking_budget = thinking_budget
         from google.genai import types as genai_types
 
         self.client = genai.Client(
@@ -640,7 +645,7 @@ class Gemini:
                     # models; without headroom the response is truncated before
                     # it reaches "ANSWER:".
                     max_output_tokens=max_tokens + 640,
-                    thinking_config=types.ThinkingConfig(thinking_budget=128),
+                    thinking_config=types.ThinkingConfig(thinking_budget=self.thinking_budget),
                 ),
             )
             usage = response.usage_metadata
@@ -699,10 +704,12 @@ class AnthropicVertexJudge:
 #: everything else to the Gemini client. Keeping this in one place means
 #: `--judge-model` and `--answer-model` accept either family without the caller
 #: knowing which SDK backs it.
-def build_model_client(model: str, project: str | None) -> Gemini | AnthropicVertexJudge:
+def build_model_client(
+    model: str, project: str | None, *, thinking_budget: int = 128
+) -> Gemini | AnthropicVertexJudge:
     if model.startswith("claude"):
         return AnthropicVertexJudge(model, project)
-    return Gemini(model, project)
+    return Gemini(model, project, thinking_budget=thinking_budget)
 
 
 async def evaluate_end_to_end(
@@ -728,9 +735,10 @@ async def evaluate_end_to_end(
     measure_judge_bias: bool = True,
     use_derive: bool = False,
     verbose: bool = True,
+    thinking_budget: int = 128,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
-    answerer = build_model_client(answer_model, project)
+    answerer = build_model_client(answer_model, project, thinking_budget=thinking_budget)
     judge = build_model_client(judge_model, project)
     # Only a control arm when the judge is genuinely a different model. Pointing
     # both at the same model would "measure" a bias of exactly zero by
@@ -1072,6 +1080,7 @@ async def evaluate_end_to_end(
         "config": config,
         "answer_model": answer_model,
         "judge_model": judge_model,
+        "thinking_budget": thinking_budget,
         "n_attempted": len(rows),
         "n_scored": len(ok),
         "n_errors": len(errors),

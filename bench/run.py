@@ -169,6 +169,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             judge_model=args.judge_model,
             official_judge=not args.strict_judge,
             use_derive=args.derive,
+            thinking_budget=args.thinking_budget,
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             concurrency=args.concurrency,
         )
@@ -368,6 +369,19 @@ async def main() -> int:
         ),
     )
     parser.add_argument("--answer-model", default="gemini-2.5-flash")
+    parser.add_argument(
+        "--thinking-budget",
+        type=int,
+        default=128,
+        help=(
+            "reasoning tokens the ANSWERER may spend before its first output "
+            "token. Applies to Gemini answerers only. 128 is the historical "
+            "default and has never been varied; 19 of the 40 failures that "
+            "received complete evidence are multi-step chains, so reasoning "
+            "depth is a candidate bottleneck. NOTE: a gain here is an answerer "
+            "property, not a memory property, and should be reported as such."
+        ),
+    )
     parser.add_argument(
         "--judge-model",
         # Deliberately NOT the answering model. Grading your own output is a

@@ -85,6 +85,12 @@ def _token_batches(texts: list[str], *, max_items: int, max_tokens: int) -> list
     return batches
 
 
+#: Documents per durable checkpoint. Large enough that the cache write is
+#: negligible against the model calls it protects, small enough that a crash
+#: costs at most this many round-trips.
+_EXTRACT_CHECKPOINT = 500
+
+
 async def extract_corpora(
     corpora: list[Corpus],
     extractor: Any,
@@ -134,27 +140,44 @@ async def extract_corpora(
     if pending:
         gate = asyncio.Semaphore(concurrency)
         done = 0
+        failures = 0
 
         async def one(text: str) -> tuple[str, list[tuple[str, str]]]:
-            nonlocal done
+            nonlocal done, failures
             async with gate:
-                claims = await extract_claims(text, extractor)
+                try:
+                    claims = await extract_claims(text, extractor)
+                except Exception:
+                    # `extract_claims` already fails open, so reaching here
+                    # means something outside it broke. Counted, never
+                    # silently folded into "this document had no facts".
+                    failures += 1
+                    claims = []
             done += 1
             if progress_every and done % progress_every == 0:
                 rate = done / max(time.perf_counter() - started, 1e-9)
+                left = (len(pending) - done) / max(rate, 1e-9) / 60
                 print(
                     f"    extracted {done}/{len(pending)} docs "
-                    f"(~{(len(pending) - done) / max(rate, 1e-9):.0f}s left)",
+                    f"({rate:.1f}/s, ~{left:.0f}m left)",
                     flush=True,
                 )
             return text, [(c.fact, c.quote) for c in claims]
 
-        results = await asyncio.gather(*(one(t) for t in pending))
-        out.update(dict(results))
-        if cache is not None:
-            cache.put_many(
-                (DiskClaimCache.key(model, text), claims) for text, claims in results
-            )
+        # Checkpointed, not one gather over everything. A 20,000-document
+        # extraction is ~40 minutes of model calls, and writing the cache only
+        # at the end means any failure in that window throws all of it away.
+        # Each slice is durable as soon as it lands, so a re-run resumes.
+        for start in range(0, len(pending), _EXTRACT_CHECKPOINT):
+            window = pending[start : start + _EXTRACT_CHECKPOINT]
+            results = await asyncio.gather(*(one(t) for t in window))
+            out.update(dict(results))
+            if cache is not None:
+                cache.put_many(
+                    (DiskClaimCache.key(model, text), claims) for text, claims in results
+                )
+        if failures:
+            print(f"    WARNING: {failures} extraction calls failed outright", flush=True)
 
     total = sum(len(v) for v in out.values())
     empty = sum(1 for v in out.values() if not v)

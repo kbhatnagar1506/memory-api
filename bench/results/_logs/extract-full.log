@@ -1,0 +1,15 @@
+=== ADD  started Mon Aug 10 00:26:36 IST 2026 ===
+run lme-v17-extract-add
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+  extracting with gemini-2.5-flash ...
+    claim cache: 1684 hits, 16780 to extract
+    extracted 200/16780 docs (~1830s left)
+    extracted 400/16780 docs (~1791s left)
+    extracted 600/16780 docs (~1769s left)
+    extracted 800/16780 docs (~1694s left)
+2026-08-09T18:58:13.827211Z [warning  ] completion_truncated           chars=13582 max_output_tokens=4096 model=gemini-2.5-flash thinking_budget=0
+    extracted 1000/16780 docs (~1645s left)
+    extracted 1200/16780 docs (~1631s left)

@@ -319,17 +319,34 @@ def _states_quantity(fact: str) -> bool:
 def _reduce_in_code(kind: QuestionKind, table: list[Extraction]) -> str | None:
     """The arithmetic stage. Returns None when this kind needs the model."""
     if kind is QuestionKind.COUNT:
-        # 1. A stated quantity beats a row count, always. Return the whole
-        #    fact rather than the bare number: the official judge asks whether
-        #    the response CONTAINS the correct answer, so carrying the
-        #    surrounding words is strictly safer than extracting a scalar and
-        #    risking the wrong one ("12 bass and 3 trout").
-        stated = [row for row in table if _states_quantity(row.fact)]
-        if stated:
-            # Conflicting statements ("3 bikes" in March, "4 bikes" in May)
-            # resolve the same way the store resolves any revision: latest
-            # event time wins.
-            return max(stated, key=lambda row: row.date or date.min).fact
+        # The stated-quantity branch was DELETED here, not disabled.
+        #
+        # It returned one row's PROSE with computed=True, which satisfied the
+        # harness override gate written to admit only code-computed values --
+        # and `DerivedAnswer.verified` documents itself as "code did the
+        # arithmetic over at least two independently grounded rows". The branch
+        # violated that contract while reporting compliance with it.
+        #
+        # Measured: 16 of 17 COUNT firings across all runs bypassed len()
+        # through this branch (a date like 2023-02-01 inside `fact` flips it
+        # via the 02/01 tokens, which the year filter does not catch), and
+        # every one of the 4 firings in lme-v8 was wrong -- 3 of those
+        # questions are answered correctly by the config that never invokes
+        # derive at all.
+        #
+        # A count is len() over grounded rows. If the number is stated in the
+        # prose, the direct answer path already reads it correctly (measured:
+        # count-shaped questions score 0.869 with complete evidence, versus
+        # 0.880 for everything else -- there is no counting gap to harvest).
+        #
+        # But deleting the branch outright would trade one bug for another:
+        # rows reading "owns 3 bikes" and "owns 4 bikes" are not two instances,
+        # and len() would answer 2. A row that states its own quantity is not
+        # an enumerable instance, so if ANY row does, this reduce cannot
+        # safely aggregate and declines -- leaving the question to the direct
+        # path, which has the full text and reads the number correctly.
+        if any(_states_quantity(row.fact) for row in table):
+            return None
         # 2. A single row with no stated quantity is unresolvable: "one
         #    instance" and "the number was in the text and extraction missed
         #    it" are indistinguishable, and answering "1" was wrong far more

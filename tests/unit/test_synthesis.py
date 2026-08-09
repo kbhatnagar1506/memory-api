@@ -291,10 +291,17 @@ def test_json_survives_fences_and_prose() -> None:
         "owns a dozen mugs",
     ],
 )
-def test_a_stated_quantity_beats_the_row_count(fact: str) -> None:
-    """One row holding "12 bass" answers 12, never 1."""
+def test_rows_that_state_their_own_quantity_make_the_reduce_decline(fact: str) -> None:
+    """A row reading "caught 12 bass" is not one enumerable instance, so
+    len() would answer 1 — and returning the prose instead would report
+    computed=True for something code did not compute, which is exactly the
+    contract `verified` promises. Neither is acceptable, so the reduce
+    declines and the direct answer path (which has the full text and reads
+    "12" correctly) handles it. Measured: with complete evidence, count-shaped
+    questions score 0.869 against 0.880 for everything else — there is no
+    counting gap for derivation to harvest."""
     rows = [Extraction(date=D1.date(), fact=fact, quote="q", source_id="s1")]
-    assert _reduce_in_code(QuestionKind.COUNT, rows) == fact
+    assert _reduce_in_code(QuestionKind.COUNT, rows) is None
 
 
 def test_a_lone_row_without_a_quantity_declines_to_compute() -> None:
@@ -319,14 +326,15 @@ def test_genuine_instance_counting_still_counts() -> None:
     assert _reduce_in_code(QuestionKind.COUNT, rows) == "3"
 
 
-def test_conflicting_stated_quantities_resolve_by_event_time() -> None:
-    """ "3 bikes" in March and "4 bikes" in May is a revision, and revisions
-    resolve the way the store resolves every revision: latest wins."""
+def test_two_rows_that_each_state_a_total_are_not_two_instances() -> None:
+    """ "owns 3 bikes" and "owns 4 bikes" are two REPORTS of a total, not two
+    bikes. len() would answer 2, which is wrong in a new way — the failure
+    mode plain deletion of the stated-quantity branch would have introduced."""
     rows = [
         Extraction(date=D1.date(), fact="owns 3 bikes", quote="a", source_id="s1"),
         Extraction(date=D2.date(), fact="owns 4 bikes", quote="b", source_id="s2"),
     ]
-    assert _reduce_in_code(QuestionKind.COUNT, rows) == "owns 4 bikes"
+    assert _reduce_in_code(QuestionKind.COUNT, rows) is None
 
 
 def test_a_year_in_the_fact_is_not_read_as_a_quantity() -> None:

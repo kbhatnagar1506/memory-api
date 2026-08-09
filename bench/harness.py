@@ -570,6 +570,20 @@ def parse_grade(raw: str, *, official: bool) -> bool:
     return "CORRECT" in upper and "INCORRECT" not in upper
 
 
+def _facts_block(raw: str) -> str:
+    """The model's stated reasoning, for post-mortems.
+
+    Recorded because every failure diagnosis in this project so far has been
+    inferred from the final answer string alone -- which is how a context
+    truncation bug looked like a reasoning failure for weeks. Truncated: this
+    is a debugging aid, not a transcript.
+    """
+    for line in raw.splitlines():
+        if line.strip().upper().startswith("FACTS:"):
+            return line.split(":", 1)[1].strip()[:400]
+    return ""
+
+
 def parse_answer(raw: str) -> str:
     """Pull the final answer out of a FACTS/ANSWER response.
 
@@ -762,7 +776,11 @@ async def evaluate_end_to_end(
             # and the only remaining question is which of several values wins.
             ordered = sorted(response.results, key=lambda h: h.memory.occurred_at)
             context = "\n\n---\n\n".join(
-                f"[{hit.memory.occurred_at.date().isoformat()}]\n"
+                # Full timestamp, not just the date: three questions have two
+                # gold sessions on the SAME day, and a date-only header leaves
+                # them positionally unorderable — the model cannot answer
+                # "which happened first" from evidence it cannot sequence.
+                f"[{hit.memory.occurred_at.isoformat(timespec='minutes')}]\n"
                 f"{hit.memory.content[:max_session_chars]}"
                 for hit in ordered
             )
@@ -781,6 +799,21 @@ async def evaluate_end_to_end(
             except Exception as exc:
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
             prediction = parse_answer(raw)
+            if not prediction.strip():
+                # An empty completion is a transport failure wearing the mask
+                # of a wrong answer: the model returned nothing, and scoring
+                # that as "incorrect" attributes an API hiccup to the memory
+                # system. One retry, then it counts honestly as whatever it is.
+                try:
+                    raw, context_tokens = await answerer.complete(
+                        template.format(
+                            context=context, question=question.text, asked_at=asked_at
+                        ),
+                        max_tokens=512 if is_advice else 256,
+                    )
+                    prediction = parse_answer(raw)
+                except Exception:
+                    pass
             declined = prediction.upper().startswith("NO_ANSWER")
 
             # -- derive path (opt-in, ablation-flagged) -----------------------
@@ -928,6 +961,11 @@ async def evaluate_end_to_end(
                 "question": question.text,
                 "reference": question.answer,
                 "prediction": prediction,
+                # The FACTS block the model wrote before answering. No run in
+                # this project had ever recorded WHY an answer was wrong --
+                # every diagnosis was inferred from the final string, which is
+                # how a truncation bug read as a reasoning failure for weeks.
+                "facts": _facts_block(raw),
                 "verdict": verdict,
                 "correct": correct,
                 "self_correct": self_correct,
@@ -935,6 +973,18 @@ async def evaluate_end_to_end(
                 "derived": derived_used,
                 "search_ms": round(search_ms, 2),
                 "context_tokens": context_tokens,
+                # THE field whose absence let a delivery defect survive six
+                # runs. `full_recall@k` here is measured at the ANSWER window
+                # (k = answer_k), while the ablation table reports it at the
+                # retrieval k. Those were two different numbers under one name:
+                # 0.870 delivered vs 0.968 retrieved. Both are recorded now,
+                # explicitly named, so the gap is impossible to overlook again.
+                "answer_k": k,
+                "full_recall@answer_k": full_recall_at_k(
+                    retrieved, set(question.evidence_ids), k
+                )
+                if question.evidence_ids
+                else None,
                 "full_recall@k": full_recall_at_k(retrieved, set(question.evidence_ids), k)
                 if question.evidence_ids
                 else None,

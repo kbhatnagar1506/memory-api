@@ -1226,3 +1226,89 @@ async def test_conflicting_results_lower_confidence(client, space_id) -> None:
     assert body["confidence"]["level"] == "low"
     assert body["confidence"]["refusal_reason"] == "conflicting_evidence"
     assert body["confidence"]["has_conflicts"] is True
+
+
+# -- consolidation -------------------------------------------------------------
+
+
+async def test_consolidation_rederives_a_stale_profile_fact(
+    client, app_context, space_id
+) -> None:
+    """Closes the loop Phase 2 left open: invalidation marked facts STALE and
+    nothing recomputed them, so a profile stayed permanently empty after its
+    first source was erased."""
+    a = await _mk(client, space_id, "Picked up a road bike today, love it")
+    b = await _mk(client, space_id, "My e-bike arrived, second bike in the garage")
+    _install_fake_completer(
+        app_context,
+        {
+            "road bike": '[{"date": "2026-03-01", "fact": "owns a road bike",'
+            ' "quote": "road bike"}]',
+            "e-bike": '[{"date": "2026-03-08", "fact": "owns an e-bike", "quote": "e-bike"}]',
+        },
+    )
+    body = {"question": "How many bikes do I own?", "materialize": True, "bucket": "gear"}
+    first = (await client.post(f"/v1/spaces/{space_id}/derive", json=body)).json()["memory"]
+    assert first["kind"] == "derived"
+    assert (await client.get(f"/v1/spaces/{space_id}/profiles/gear")).json()["facts"]
+
+    # Erase a source: the fact goes stale and the profile falls silent.
+    await client.post(f"/v1/spaces/{space_id}/memories/{a['id']}/erase")
+    assert await _status_of(client, space_id, first) == "stale"
+    assert (await client.get(f"/v1/spaces/{space_id}/profiles/gear")).json()["facts"] == []
+
+    # Consolidation recomputes it from what survives.
+    report = (await client.post(f"/v1/spaces/{space_id}/consolidate")).json()
+    assert report["examined"] >= 1
+    assert report["refreshed"]
+
+    facts = (await client.get(f"/v1/spaces/{space_id}/profiles/gear")).json()["facts"]
+    assert len(facts) == 1
+    assert facts[0]["id"] != first["id"]  # a NEW fact, not the stale one revived
+    assert await _status_of(client, space_id, first) == "superseded"
+    # And it was recomputed from the surviving source only.
+    ctx = (await client.get(f"/v1/spaces/{space_id}/memories/{facts[0]['id']}/context")).json()
+    assert {m["id"] for m in ctx["derived_from"]} == {b["id"]}
+
+
+async def test_consolidation_leaves_unrecoverable_facts_stale(
+    client, app_context, space_id
+) -> None:
+    """When the surviving evidence no longer supports an answer, staying stale
+    is the CORRECT outcome — not deletion, and not silent resurrection."""
+    source = await _mk(client, space_id, "Bought a single gravel bike this spring")
+    _install_fake_completer(
+        app_context,
+        {
+            "gravel": '[{"date": "2026-04-01", "fact": "owns a gravel bike",'
+            ' "quote": "gravel bike"}]'
+        },
+    )
+    fact = (
+        await client.post(
+            f"/v1/spaces/{space_id}/derive",
+            json={"question": "How many bikes do I own?", "materialize": True},
+        )
+    ).json()["memory"]
+    await client.post(f"/v1/spaces/{space_id}/memories/{source['id']}/erase")
+    assert await _status_of(client, space_id, fact) == "stale"
+
+    report = (await client.post(f"/v1/spaces/{space_id}/consolidate")).json()
+    assert fact["id"] in report["abandoned"]
+    assert await _status_of(client, space_id, fact) == "stale"
+
+
+async def test_consolidation_budget_is_bounded(client, app_context, space_id) -> None:
+    """Background LLM spend is how competitors' token bills became marketing
+    liabilities. The cost is capped and reported, never ambient."""
+    _install_fake_completer(app_context, {})
+    report = (await client.post(f"/v1/spaces/{space_id}/consolidate?budget=5")).json()
+    assert report["budget"] == 5
+    assert report["examined"] == 0  # nothing stale in a fresh space
+
+
+async def test_consolidation_without_a_backend_fails_loudly(client, space_id) -> None:
+    """Re-derivation needs a synthesis backend. Silence would look like
+    "nothing to do" while stale facts accumulated forever."""
+    response = await client.post(f"/v1/spaces/{space_id}/consolidate")
+    assert response.status_code in (502, 503)

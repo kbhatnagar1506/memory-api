@@ -11,6 +11,7 @@ from ...core.ids import is_valid
 from ...domain.models import Scope
 from ..deps import Principal, ServiceDep, require_scope
 from ..schemas import (
+    ConsolidateResponse,
     DerivedRowResponse,
     DeriveRequest,
     DeriveResponse,
@@ -85,3 +86,30 @@ async def get_profile(
     _validate_space_id(space_id)
     facts = await service.get_profile(principal.org_id, space_id, bucket)
     return ProfileResponse(bucket=bucket, facts=[MemoryResponse.from_domain(m) for m in facts])
+
+
+@router.post(
+    "/consolidate",
+    response_model=ConsolidateResponse,
+    summary="Re-derive facts whose sources changed",
+)
+async def consolidate(
+    space_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
+    budget: int = 20,
+) -> ConsolidateResponse:
+    """Finds derived facts marked STALE (their sources were erased, deleted or
+    superseded) and recomputes them from the surviving evidence, superseding
+    the stale fact with the fresh one.
+
+    The same idea competitors run as a background "dream cycle", minus the
+    destructive half: nothing is merged away, nothing expires, episodes are
+    never touched. A derivation whose evidence no longer supports an answer
+    stays stale rather than being deleted or silently resurrected. `budget`
+    caps LLM spend per call."""
+    _validate_space_id(space_id)
+    report = await service.refresh_stale_derivations(
+        principal.org_id, space_id, budget=max(1, min(budget, 200))
+    )
+    return ConsolidateResponse(**report)  # type: ignore[arg-type]

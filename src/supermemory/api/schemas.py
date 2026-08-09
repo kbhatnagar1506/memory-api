@@ -210,6 +210,20 @@ class DeriveResponse(Response):
     memory: MemoryResponse | None
 
 
+class ConsolidateResponse(Response):
+    """What a consolidation pass did.
+
+    `abandoned` is not a failure list: a derivation whose surviving evidence
+    no longer supports an answer SHOULD stay stale, and the profile should
+    stay silent about it.
+    """
+
+    examined: int
+    refreshed: list[str]
+    abandoned: list[str]
+    budget: int
+
+
 class ProfileResponse(Response):
     bucket: str
     facts: list[MemoryResponse]

@@ -798,6 +798,103 @@ class MemoryService:
                 )
         return derived, stored
 
+    async def refresh_stale_derivations(
+        self, org_id: str, space_id: str, *, budget: int = 20
+    ) -> dict[str, object]:
+        """Re-derive facts whose sources changed. Consolidation, done safely.
+
+        Phase 2 marks a derivation STALE when any source is erased, deleted or
+        superseded, but nothing re-computed it -- an open loop that left
+        profiles permanently empty after the first invalidation. This closes
+        it: find STALE derived memories, re-run the question that produced
+        them against the surviving evidence, and supersede the stale fact with
+        the fresh one.
+
+        This is the same machinery competitors run as a "dream cycle", with the
+        destructive half removed. Theirs merges facts into cleaner
+        abstractions, resolves contradictions by newest timestamp, and deletes
+        on `forgetAfter`. Ours only ADDS a recomputed fact and supersedes the
+        one it replaces -- episodes are never touched, so a bad consolidation
+        costs a re-derivation rather than the evidence.
+
+        `budget` bounds LLM spend per call. Background consolidation is exactly
+        how competitors' token bills became marketing liabilities, so the cost
+        is capped and attributable rather than ambient.
+
+        Safe to call repeatedly: a derivation that cannot be re-derived (its
+        sources are gone entirely) stays STALE rather than being deleted or
+        silently resurrected.
+        """
+        if self.completer is None:
+            raise ProviderError("no synthesis backend configured")
+        await self.get_space_or_raise(org_id, space_id)
+
+        page = await self.store.list_memories(
+            org_id,
+            space_id,
+            filters=MemoryFilter(statuses=frozenset({MemoryStatus.STALE})),
+            limit=max(budget * 4, budget),
+            cursor=None,
+        )
+        stale = [m for m in page.items if m.kind is MemoryKind.DERIVED][:budget]
+
+        refreshed: list[str] = []
+        abandoned: list[str] = []
+        for memory in stale:
+            question = str(memory.metadata.get("question") or memory.summary or "")
+            if not question:
+                # Nothing records what this fact answered, so it cannot be
+                # recomputed. Leave it stale rather than guess.
+                abandoned.append(memory.id)
+                continue
+            bucket = next(
+                (t.split(":", 1)[1] for t in memory.tags if t.startswith("profile:")), None
+            )
+            try:
+                _, stored = await self.derive(
+                    org_id, space_id, question=question, materialize=True, bucket=bucket
+                )
+            except Exception:
+                abandoned.append(memory.id)
+                continue
+            if stored is None:
+                # The surviving evidence no longer supports an answer. Correct
+                # outcome: the fact stays stale and the profile stays silent.
+                abandoned.append(memory.id)
+                continue
+            if bucket is None:
+                # Bucketed facts are superseded inside `derive`; unbucketed
+                # ones need the link written here so lineage stays walkable.
+                await self.store.create_relation(
+                    RelationEdge(
+                        org_id=org_id,
+                        space_id=space_id,
+                        source_id=stored.id,
+                        target_id=memory.id,
+                        type=RelationType.SUPERSEDES,
+                        reason="re-derived after its sources changed",
+                    )
+                )
+            current = await self.store.get_memory(org_id, space_id, memory.id)
+            if current is not None and current.status is MemoryStatus.STALE:
+                await self.store.upsert_memory(
+                    current.model_copy(
+                        update={
+                            "status": MemoryStatus.SUPERSEDED,
+                            "version": current.version + 1,
+                            "updated_at": utcnow(),
+                        }
+                    )
+                )
+            refreshed.append(stored.id)
+
+        return {
+            "examined": len(stale),
+            "refreshed": refreshed,
+            "abandoned": abandoned,
+            "budget": budget,
+        }
+
     async def get_profile(
         self, org_id: str, space_id: str, bucket: str, *, limit: int = 100
     ) -> list[Memory]:

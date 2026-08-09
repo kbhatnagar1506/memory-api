@@ -388,14 +388,7 @@ it is absent.
 - Excerpts are ordered oldest to newest. If a fact CHANGED, the answer is the \
 value from the most recent excerpt that mentions it.
 - Answer with the specific value asked for (a name, place, date, number), not \
-a description of where it came from. Identify what SHAPE the question wants -- \
-"where" wants a place, "who" wants a person, "when" wants a date -- and make \
-sure your answer is that thing. An event summary is not an answer to "where".
-- If the question asks HOW MANY, first list the items you are counting in \
-FACTS, one per line with the date each came from, then give the count as the \
-length of that list. If an item is borderline, include it and say so. Counting \
-a list you have written down is reliable; producing a number from memory is \
-not.
+a description of where it came from.
 - Two different reasons to withhold, and only one of them is right. If the \
 answer is stated indirectly, or needs a small inference across excerpts, \
 ANSWER it. If the excerpts genuinely do not contain what was asked, reply \
@@ -751,7 +744,16 @@ _DEFAULT_BUDGET = 12
 
 
 def evidence_budget(question: str, *, cap: int) -> int:
-    """Sessions to retrieve for THIS question, bounded by the caller's cap."""
+    """RETIRED -- measured harmful. Kept only so the flag still resolves.
+
+    Budgets denominated in DOCUMENTS cannot transfer: the constants were
+    fitted where a document is a 12,000-char session, and on a corpus
+    where a document is a 400-char turn the same numbers starved
+    retrieval -- LoCoMo delivery 0.833 -> 0.586, accuracy 72.5% -> 50.1%.
+    The successor is domain/retrieval/budget.py, which stops on the score
+    cliff and so reads concentration off the result set instead of
+    assuming a document size.
+    """
     return min(_EVIDENCE_BUDGET.get(classify(question), _DEFAULT_BUDGET), cap)
 
 

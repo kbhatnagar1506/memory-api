@@ -170,6 +170,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             official_judge=not args.strict_judge,
             use_derive=args.derive,
             thinking_budget=args.thinking_budget,
+            dynamic_k=args.dynamic_k,
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             concurrency=args.concurrency,
         )
@@ -366,6 +367,17 @@ async def main() -> int:
             "applied to a CONJUNCTIVE metric: 324 of 500 questions need two or "
             "more sessions, and 17 need five or more (arithmetically "
             "impossible to satisfy at k=4)."
+        ),
+    )
+    parser.add_argument(
+        "--dynamic-k",
+        action="store_true",
+        help=(
+            "size the evidence budget per question from its SHAPE instead of "
+            "using one k for everything. Measured: gold-session need varies 6x "
+            "by shape (advice max 1, multi-session up to 5), so a fixed k "
+            "always starves someone or drowns someone. 43% of questions are "
+            "single-evidence shapes currently receiving ten sessions."
         ),
     )
     parser.add_argument("--answer-model", default="gemini-2.5-flash")

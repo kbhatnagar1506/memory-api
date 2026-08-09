@@ -388,7 +388,14 @@ it is absent.
 - Excerpts are ordered oldest to newest. If a fact CHANGED, the answer is the \
 value from the most recent excerpt that mentions it.
 - Answer with the specific value asked for (a name, place, date, number), not \
-a description of where it came from.
+a description of where it came from. Identify what SHAPE the question wants -- \
+"where" wants a place, "who" wants a person, "when" wants a date -- and make \
+sure your answer is that thing. An event summary is not an answer to "where".
+- If the question asks HOW MANY, first list the items you are counting in \
+FACTS, one per line with the date each came from, then give the count as the \
+length of that list. If an item is borderline, include it and say so. Counting \
+a list you have written down is reliable; producing a number from memory is \
+not.
 - Two different reasons to withhold, and only one of them is right. If the \
 answer is stated indirectly, or needs a small inference across excerpts, \
 ANSWER it. If the excerpts genuinely do not contain what was asked, reply \
@@ -712,6 +719,42 @@ def build_model_client(
     return Gemini(model, project, thinking_budget=thinking_budget)
 
 
+#: Evidence budget by question SHAPE, not one number for everything.
+#:
+#: Measured on 500 questions, the number of gold sessions a question needs
+#: varies 6x by shape and our label-free classifier predicts it:
+#:
+#:     advice      median 1, max 1      <- never needs more than one
+#:     direct      median 1, p90 2, max 5
+#:     count       median 2, p90 4, max 6
+#:     order       median 2, p90 3, max 6
+#:     date_arith  median 2, p90 2, max 6
+#:
+#: A single fixed k is therefore always the wrong number for someone. At k=10
+#: the 213 single-evidence questions get nine sessions of pure distraction --
+#: measured cost: single-session-user -2.8 going 4->10, and preference -16.7
+#: going 10->20. At the same time multi-session gained +10.5 from the increase
+#: and needs up to five. One budget cannot serve both, and every k sweep so
+#: far has been finding the least-bad compromise between them.
+#:
+#: Deterministic and label-free: routed on the same classifier the derive path
+#: uses, so the product behaves identically. Budgets sit above each shape's
+#: observed maximum, not at its median, because retrieval is imperfect and a
+#: budget that only fits the typical case starves the tail.
+_EVIDENCE_BUDGET: dict[QuestionKind, int] = {
+    QuestionKind.ADVICE: 5,
+    QuestionKind.DIRECT: 6,
+}
+#: Everything else is a multi-evidence shape (count, order, span, compare,
+#: list) and keeps the measured-best budget.
+_DEFAULT_BUDGET = 12
+
+
+def evidence_budget(question: str, *, cap: int) -> int:
+    """Sessions to retrieve for THIS question, bounded by the caller's cap."""
+    return min(_EVIDENCE_BUDGET.get(classify(question), _DEFAULT_BUDGET), cap)
+
+
 async def evaluate_end_to_end(
     corpora: list[Corpus],
     ingested: Ingested,
@@ -736,6 +779,7 @@ async def evaluate_end_to_end(
     use_derive: bool = False,
     verbose: bool = True,
     thinking_budget: int = 128,
+    dynamic_k: bool = False,
 ) -> dict[str, Any]:
     pipeline = RetrievalPipeline(ingested.store, embedder, reranker)
     answerer = build_model_client(answer_model, project, thinking_budget=thinking_budget)
@@ -757,13 +801,16 @@ async def evaluate_end_to_end(
             return {"qid": question.qid, "error": "no space"}
         async with semaphore:
             started = time.perf_counter()
+            # Per-question evidence budget, not one k for everyone. `k` is
+            # the ceiling; the question's shape decides how much to use.
+            per_question_k = evidence_budget(question.text, cap=k) if dynamic_k else k
             try:
                 response = await pipeline.search(
                     SearchRequest(
                         query=question.text,
                         org_id=ingested.org_id,
                         space_id=space_id,
-                        limit=k,
+                        limit=per_question_k,
                         known_speakers=ingested.speakers,
                         **config,
                     )
@@ -987,9 +1034,9 @@ async def evaluate_end_to_end(
                 # retrieval k. Those were two different numbers under one name:
                 # 0.870 delivered vs 0.968 retrieved. Both are recorded now,
                 # explicitly named, so the gap is impossible to overlook again.
-                "answer_k": k,
+                "answer_k": per_question_k,
                 "full_recall@answer_k": full_recall_at_k(
-                    retrieved, set(question.evidence_ids), k
+                    retrieved, set(question.evidence_ids), per_question_k
                 )
                 if question.evidence_ids
                 else None,
@@ -1081,6 +1128,7 @@ async def evaluate_end_to_end(
         "answer_model": answer_model,
         "judge_model": judge_model,
         "thinking_budget": thinking_budget,
+        "dynamic_k": dynamic_k,
         "n_attempted": len(rows),
         "n_scored": len(ok),
         "n_errors": len(errors),

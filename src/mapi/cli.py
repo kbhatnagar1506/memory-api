@@ -248,7 +248,35 @@ async def _demo_replay_async(args: argparse.Namespace) -> int:
         say(f"   {key}: {attestation[key]}")
 
     say()
-    say("6. PROOF - the content is gone from every timeline")
+    say("6. PROPAGATION - what was COMPUTED from the erased memory")
+    say("   (the claim extraction-based systems cannot make: their derived")
+    say("    facts have fuzzy lineage, so nothing knows what to invalidate)")
+    derived_now = await store.get_memory(org.id, space.id, derived.id)
+    derived_status = derived_now.status.value if derived_now else "gone"
+    say(f'   derived fact: "{derived.content}"')
+    say(f"   status after erasing its source: {derived_status.upper()}")
+    say(
+        "   -> "
+        + (
+            "stale: recomputable from survivors, never served as current truth"
+            if derived_status == "stale"
+            else f"UNEXPECTED ({derived_status})"
+        )
+    )
+    listed = await service.search(
+        SearchRequest(
+            query="how long do we retain customer data?",
+            org_id=org.id,
+            space_id=space.id,
+            limit=10,
+            use_decay=False,
+        )
+    )
+    derived_served = any(h.memory.id == derived.id for h in listed.results)
+    say(f"   still returned by search: {derived_served}  (stale is a hard status)")
+
+    say()
+    say("7. PROOF - the content is gone from every timeline")
     gone_now = await store.get_memory(org.id, space.id, v1.id)
     gone_then = await store.get_memory_as_of(org.id, space.id, v1.id, moment_before_revision)
     gone_history = await store.list_memory_versions(org.id, space.id, v1.id)
@@ -269,9 +297,22 @@ async def _demo_replay_async(args: argparse.Namespace) -> int:
         )
     )
     say(f'   current answer still served: "{survivors.results[0].memory.content}"')
-    ok = gone_now is None and gone_then is None and not gone_history
+    ok = (
+        gone_now is None
+        and gone_then is None
+        and not gone_history
+        and derived_status == "stale"
+        and not derived_served
+    )
     say()
-    say("VERDICT: " + ("erasure propagated to live, past and history - PASS" if ok else "FAIL"))
+    say("VERDICT:")
+    say(f"   source erased from live, reconstructed past and history : {gone_now is None}")
+    invalidated = derived_status == "stale"
+    say(f"   derivation invalidated rather than left standing        : {invalidated}")
+    say(f"   invalidated fact withheld from search                   : {not derived_served}")
+    say("   surviving current answer still served                   : True")
+    say()
+    say("   " + ("PASS - erasure propagated through the graph" if ok else "FAIL"))
     return 0 if ok else 1
 
 

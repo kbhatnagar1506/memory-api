@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from .config import Settings
 from .core.errors import (
@@ -76,6 +77,17 @@ class MemoryContext:
     derivatives: list[Memory]
     references: list[Memory]
     contradicts: list[Memory]
+
+
+@dataclass(frozen=True, slots=True)
+class Graph:
+    """A space as memories plus the typed relations between them."""
+
+    space_id: str
+    memories: list[Memory]
+    edges: list[RelationEdge]
+    degree: dict[str, int]
+    counts: dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -535,6 +547,76 @@ class MemoryService:
             "is_current": not forward,
             "head": forward[-1].source_id if forward else memory_id,
         }
+
+    async def get_graph(self, org_id: str, space_id: str, *, limit: int = 300) -> Graph:
+        """Every memory in a space plus the typed edges between them.
+
+        The edges are the point. A graph built from write-time extraction is a
+        forest: each memory has exactly one parent, the document it was pulled
+        from, so the picture is disconnected stars and the only question it can
+        answer is "where did this come from". Ours are relations BETWEEN
+        memories -- what replaced what, what disagrees with what, what was
+        computed from what -- so the picture answers "what does this system
+        believe, and why".
+
+        Nodes carry status, so a viewer can show a superseded fact greyed
+        behind its replacement and a STALE derivation as a fact whose evidence
+        moved. Both are states no extraction-time graph represents.
+        """
+        await self.get_space_or_raise(org_id, space_id)
+        page = await self.store.list_memories(
+            org_id,
+            space_id,
+            filters=MemoryFilter(statuses=frozenset(MemoryStatus)),
+            limit=limit,
+            cursor=None,
+        )
+        memories = page.items
+        ids = [m.id for m in memories]
+        edges = await self.store.get_relations_between(org_id, space_id, ids) if ids else []
+
+        present = set(ids)
+        # `contradicts` is stored as a symmetric pair; render one line, not two.
+        seen: set[tuple[str, str, str]] = set()
+        out_edges = []
+        for e in edges:
+            if e.source_id not in present or e.target_id not in present:
+                continue
+            key = (
+                (min(e.source_id, e.target_id), max(e.source_id, e.target_id), e.type)
+                if e.type is RelationType.CONTRADICTS
+                else (e.source_id, e.target_id, e.type)
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            out_edges.append(e)
+
+        degree: dict[str, int] = {}
+        for e in out_edges:
+            degree[e.source_id] = degree.get(e.source_id, 0) + 1
+            degree[e.target_id] = degree.get(e.target_id, 0) + 1
+
+        return Graph(
+            space_id=space_id,
+            memories=memories,
+            edges=out_edges,
+            degree=degree,
+            counts={
+                "memories": len(memories),
+                "edges": len(out_edges),
+                "isolated": sum(1 for m in memories if degree.get(m.id, 0) == 0),
+                "by_status": {
+                    s.value: sum(1 for m in memories if m.status is s) for s in MemoryStatus
+                },
+                "by_kind": {
+                    k.value: sum(1 for m in memories if m.kind is k) for k in MemoryKind
+                },
+                "by_edge": {
+                    t.value: sum(1 for e in out_edges if e.type is t) for t in RelationType
+                },
+            },
+        )
 
     async def get_memory_context(
         self, org_id: str, space_id: str, memory_id: str, *, limit_per_relation: int = 20

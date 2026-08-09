@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
@@ -261,6 +261,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(app)
     app.include_router(health_router)
     app.include_router(api_router)
+
+    @app.get("/graph", include_in_schema=False, response_class=HTMLResponse)
+    async def graph_ui() -> str:
+        """Read-only viewer for a space's memory graph.
+
+        Served by the app rather than shipped as a separate front end: it is a
+        debugging surface for the relation graph, and a viewer needing its own
+        build step is a viewer nobody runs. Requires ?space=&key= -- it holds
+        no credentials of its own.
+        """
+        from .api.graph_ui import PAGE
+
+        return PAGE
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, Any]:

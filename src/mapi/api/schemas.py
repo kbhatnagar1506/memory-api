@@ -220,6 +220,42 @@ class DeriveResponse(Response):
     memory: MemoryResponse | None
 
 
+class GraphNode(Response):
+    """One memory as a graph node. `content` is a preview, not the full text."""
+
+    id: str
+    content: str
+    kind: MemoryKind
+    status: MemoryStatus
+    occurred_at: datetime
+    tags: list[str]
+    #: How many typed relations touch this memory. Zero means an island --
+    #: which in an extraction-built graph is most of them.
+    degree: int
+
+
+class GraphEdge(Response):
+    source: str
+    target: str
+    type: RelationType
+    reason: str
+    confidence: float
+
+
+class GraphResponse(Response):
+    """A space as a graph of memories and the typed relations between them.
+
+    Not a document->chunk tree. Every edge here is a claim about how two
+    MEMORIES relate: what replaced what, what disagrees with what, what was
+    computed from what.
+    """
+
+    space_id: str
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    counts: dict[str, Any]
+
+
 class ConsolidateResponse(Response):
     """What a consolidation pass did.
 

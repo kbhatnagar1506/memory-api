@@ -1312,3 +1312,65 @@ async def test_consolidation_without_a_backend_fails_loudly(client, space_id) ->
     "nothing to do" while stale facts accumulated forever."""
     response = await client.post(f"/v1/spaces/{space_id}/consolidate")
     assert response.status_code in (502, 503)
+
+
+# -- memory graph --------------------------------------------------------------
+
+
+async def test_graph_returns_typed_edges_between_memories(client, space_id) -> None:
+    """The distinction that matters: these are relations between MEMORIES, not
+    between a document and the chunks pulled out of it. An extraction-built
+    graph gives every node exactly one parent and answers only "where did this
+    text come from"; these edges answer "what does the system believe, and
+    why"."""
+    a = await _mk(client, space_id, "We deploy with Jenkins on Fridays")
+    b = await _mk(client, space_id, "We deploy with GitHub Actions now")
+    src = await _mk(client, space_id, "Standup: shipped the auth fix")
+    fact = await _mk(client, space_id, "Derived: one release this week")
+    other = await _mk(client, space_id, "Unrelated note about lunch")
+
+    await _rel(client, space_id, b, a, "supersedes")
+    await _rel(client, space_id, fact, src, "derived_from")
+
+    g = (await client.get(f"/v1/spaces/{space_id}/graph")).json()
+    ids = {n["id"] for n in g["nodes"]}
+    assert {a["id"], b["id"], src["id"], fact["id"], other["id"]} <= ids
+
+    kinds = {(e["source"], e["target"]): e["type"] for e in g["edges"]}
+    assert kinds[(b["id"], a["id"])] == "supersedes"
+    assert kinds[(fact["id"], src["id"])] == "derived_from"
+
+    # Superseded memories stay IN the graph -- they are history, not deletions.
+    assert next(n for n in g["nodes"] if n["id"] == a["id"])["status"] == "superseded"
+    # Degree drives node size, so an island is visibly an island.
+    assert next(n for n in g["nodes"] if n["id"] == other["id"])["degree"] == 0
+    assert g["counts"]["isolated"] >= 1
+
+
+async def test_graph_reports_contradictions_once_not_twice(client, space_id) -> None:
+    """`contradicts` is stored symmetrically so lookups work from either side.
+    The graph must render one line between the pair, not two overlapping."""
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={"content": "The retention window is 30 days for all customers"},
+    )
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={
+            "content": "The retention window is 90 days for all customers",
+            "detect_conflicts": True,
+        },
+    )
+    g = (await client.get(f"/v1/spaces/{space_id}/graph")).json()
+    conflicts = [e for e in g["edges"] if e["type"] == "contradicts"]
+    assert len(conflicts) == 1
+    assert g["counts"]["by_edge"]["contradicts"] == 1
+
+
+async def test_graph_ui_is_served(client) -> None:
+    """The viewer ships with the app: a debugging surface needing its own
+    build step is one nobody runs."""
+    r = await client.get("/graph")
+    assert r.status_code == 200
+    assert "memory graph" in r.text.lower()
+    assert "/context" in r.text  # clicking a node resolves the neighbourhood

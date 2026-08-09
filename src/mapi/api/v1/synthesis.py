@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ...core.errors import ValidationError
 from ...core.ids import is_valid
@@ -15,6 +15,9 @@ from ..schemas import (
     DerivedRowResponse,
     DeriveRequest,
     DeriveResponse,
+    GraphEdge,
+    GraphNode,
+    GraphResponse,
     MemoryResponse,
     ProfileResponse,
 )
@@ -115,3 +118,49 @@ async def consolidate(
         principal.org_id, space_id, budget=max(1, min(budget, 200))
     )
     return ConsolidateResponse(**report)  # type: ignore[arg-type]
+
+
+@router.get("/graph", response_model=GraphResponse, summary="The space as a memory graph")
+async def get_graph(
+    space_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 300,
+) -> GraphResponse:
+    """Memories and the typed relations between them: `supersedes`,
+    `contradicts`, `derived_from`, `references`.
+
+    These are relations between MEMORIES, not between a document and the
+    chunks pulled out of it. That difference is visible in the shape: an
+    extraction-built graph is a forest of stars, because each memory has
+    exactly one parent and the only question it answers is where the text
+    came from."""
+    _validate_space_id(space_id)
+    g = await service.get_graph(principal.org_id, space_id, limit=limit)
+    degree = g.degree
+    return GraphResponse(
+        space_id=g.space_id,
+        nodes=[
+            GraphNode(
+                id=m.id,
+                content=m.content[:280],
+                kind=m.kind,
+                status=m.status,
+                occurred_at=m.occurred_at,
+                tags=m.tags,
+                degree=degree.get(m.id, 0),
+            )
+            for m in g.memories
+        ],
+        edges=[
+            GraphEdge(
+                source=e.source_id,
+                target=e.target_id,
+                type=e.type,
+                reason=e.reason,
+                confidence=e.confidence,
+            )
+            for e in g.edges
+        ],
+        counts=g.counts,
+    )

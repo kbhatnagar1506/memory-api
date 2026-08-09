@@ -484,7 +484,7 @@ async def main() -> int:
         ),
     )
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
-    parser.add_argument("--extract-concurrency", type=int, default=24)
+    parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()

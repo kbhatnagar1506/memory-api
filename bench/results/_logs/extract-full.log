@@ -1,15 +1,44 @@
-=== ADD  started 00:29:52 ===
+=== ADD  started 00:34:14 ===
 run lme-v17-extract-add
 
 === longmemeval (session-level evidence) ===
   500 corpora, 23867 documents, 500 questions
   embedder: gemini/text-embedding-004  ingesting ...
   extracting with gemini-2.5-flash ...
-    claim cache: 1684 hits, 16780 to extract
-    extracted 200/16780 docs (8.9/s, ~31m left)
-    extracted 400/16780 docs (9.1/s, ~30m left)
-    extracted 600/16780 docs (7.8/s, ~34m left)
-    extracted 800/16780 docs (8.2/s, ~32m left)
-2026-08-09T19:01:41.793616Z [warning  ] completion_truncated           chars=13582 max_output_tokens=4096 model=gemini-2.5-flash thinking_budget=0
-    extracted 1000/16780 docs (7.8/s, ~34m left)
-    extracted 1200/16780 docs (7.7/s, ~34m left)
+    claim cache: 0 hits, 18464 to extract
+    extracted 200/18464 docs (8.3/s, ~37m left)
+    extracted 400/18464 docs (8.7/s, ~34m left)
+    extracted 600/18464 docs (8.3/s, ~36m left)
+    extracted 800/18464 docs (8.5/s, ~35m left)
+    extracted 1000/18464 docs (8.5/s, ~34m left)
+    extracted 1200/18464 docs (8.5/s, ~34m left)
+    extracted 1400/18464 docs (8.6/s, ~33m left)
+    extracted 1600/18464 docs (8.4/s, ~33m left)
+    extracted 1800/18464 docs (8.5/s, ~32m left)
+    extracted 2000/18464 docs (8.5/s, ~32m left)
+    extracted 2200/18464 docs (8.5/s, ~32m left)
+    extracted 2400/18464 docs (8.6/s, ~31m left)
+    extracted 2600/18464 docs (8.3/s, ~32m left)
+    extracted 2800/18464 docs (8.4/s, ~31m left)
+2026-08-09T19:10:05.532842Z [warning  ] completion_truncated           chars=129125 max_output_tokens=8192 model=gemini-2.5-flash thinking_budget=0
+    extracted 3000/18464 docs (8.4/s, ~31m left)
+    extracted 3200/18464 docs (8.4/s, ~30m left)
+    extracted 3400/18464 docs (8.5/s, ~30m left)
+    extracted 3600/18464 docs (8.5/s, ~29m left)
+    extracted 3800/18464 docs (8.5/s, ~29m left)
+    extracted 4000/18464 docs (8.5/s, ~28m left)
+    extracted 4200/18464 docs (8.5/s, ~28m left)
+    extracted 4400/18464 docs (8.6/s, ~27m left)
+    extracted 4600/18464 docs (8.5/s, ~27m left)
+    extracted 4800/18464 docs (8.6/s, ~26m left)
+    extracted 5000/18464 docs (8.6/s, ~26m left)
+    extracted 5200/18464 docs (8.6/s, ~26m left)
+    extracted 5400/18464 docs (8.6/s, ~25m left)
+    extracted 5600/18464 docs (8.6/s, ~25m left)
+    extracted 5800/18464 docs (8.6/s, ~25m left)
+    extracted 6000/18464 docs (8.4/s, ~25m left)
+    extracted 6200/18464 docs (8.4/s, ~24m left)
+    extracted 6400/18464 docs (8.5/s, ~24m left)
+    extracted 6600/18464 docs (8.4/s, ~23m left)
+    extracted 6800/18464 docs (8.5/s, ~23m left)
+    extracted 7000/18464 docs (8.5/s, ~23m left)

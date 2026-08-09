@@ -19,10 +19,12 @@ Honesty constraints, same as the LoCoMo harness they were learned on:
 from __future__ import annotations
 
 import asyncio
+import re
 import statistics
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from mapi.domain.chunking import chunk_text, estimate_tokens
@@ -32,7 +34,7 @@ from mapi.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
 from mapi.domain.retrieval.rerank import Reranker
 from mapi.domain.synthesis import QuestionKind, classify
 from mapi.domain.synthesis.derive import SourceDoc, derive_answer
-from mapi.domain.synthesis.extract import extract_claims
+from mapi.domain.synthesis.extract import DEFAULT_SUBJECT, extract_claims
 from mapi.store.memory import InMemoryStore
 
 from .cache import DiskClaimCache, DiskVectorCache, cache_key
@@ -90,6 +92,37 @@ def _token_batches(texts: list[str], *, max_items: int, max_tokens: int) -> list
 #: costs at most this many round-trips.
 _EXTRACT_CHECKPOINT = 500
 
+#: LongMemEval sessions are rendered "role: text" by the loader.
+_TURN_RE = re.compile(r"(?:^|\s)(user|assistant):\s")
+
+
+def split_turns(text: str) -> list[tuple[str, str]]:
+    """A session transcript as (speaker, text) turns, or one unlabelled turn.
+
+    Extraction is run per TURN, not per session, and the reason is measured.
+    On a 20,107-character session the model returned 9 claims, four of them
+    restatements of one topic near the end -- classic long-context recency,
+    and far short of what the transcript states. The same session split into
+    its 6 user turns returned 6 claims with no redundancy.
+
+    The count going DOWN is the point. Three of the nine were grounded in the
+    ASSISTANT's text, which passes the quote check (the assistant's words are
+    in the passage) while asserting the assistant's suggestions as the user's
+    facts. Splitting by speaker makes that structurally impossible: text the
+    user never said is never in the prompt that produces a fact about them.
+
+    Both roles are extracted, with the speaker as the subject. Dropping the
+    assistant's turns would be cheaper and would silently gut LongMemEval's
+    `single-session-assistant` capability, which asks what the assistant said.
+    """
+    parts = _TURN_RE.split(text)
+    if len(parts) < 3:
+        return [("", text)]
+    roles, bodies = parts[1::2], parts[2::2]
+    return [
+        (role, body.strip()) for role, body in zip(roles, bodies, strict=False) if body.strip()
+    ]
+
 
 async def extract_corpora(
     corpora: list[Corpus],
@@ -113,22 +146,26 @@ async def extract_corpora(
     dozens of haystacks and extracting it once is worth more than any
     batching.
     """
-    unique: dict[str, None] = {}
+    # Keyed by (text, date), not text alone. LongMemEval reuses the same
+    # filler session across many haystacks, so deduping by text is worth a lot
+    # -- but the SAME text dated differently must extract separately, because
+    # the date is what "last Thursday" resolves against.
+    unique: dict[tuple[str, datetime], None] = {}
     for corpus in corpora:
         for document in corpus.documents:
-            unique.setdefault(document.text, None)
-    texts = list(unique)
+            unique.setdefault((document.text, document.occurred_at), None)
+    items = list(unique)
 
     out: dict[str, list[tuple[str, str]]] = {}
-    pending = texts
+    pending = items
     if cache is not None:
-        keys = [DiskClaimCache.key(model, t) for t in texts]
+        keys = [DiskClaimCache.key(model, f"{when.isoformat()}|{t}") for t, when in items]
         found = cache.get_many(keys)
         pending = []
-        for text, key in zip(texts, keys, strict=True):
+        for (text, when), key in zip(items, keys, strict=True):
             hit = found.get(key)
             if hit is None:
-                pending.append(text)
+                pending.append((text, when))
             else:
                 out[text] = hit
         print(
@@ -142,17 +179,40 @@ async def extract_corpora(
         done = 0
         failures = 0
 
-        async def one(text: str) -> tuple[str, list[tuple[str, str]]]:
-            nonlocal done, failures
+        async def one_turn(speaker: str, body: str, when: datetime) -> list[tuple[str, str]]:
+            nonlocal failures
+            if speaker == "assistant":
+                # Kept VERBATIM, not decomposed. Measured: asking for "durable
+                # facts stated by the assistant" over a recommendation list
+                # returns nothing at all -- the frame does not fit, because an
+                # assistant turn is content, not claims about a person. Storing
+                # it whole is also what LongMemEval's single-session-assistant
+                # capability needs: those questions ask what the assistant
+                # SAID, so a lossy restatement is the wrong unit even when
+                # extraction does produce one.
+                return [(body, body)]
+            subject = {"user": "the user"}.get(speaker, DEFAULT_SUBJECT)
             async with gate:
                 try:
-                    claims = await extract_claims(text, extractor)
+                    # `as_of` is the DOCUMENT's date, not today's. Without it
+                    # the prompt resolves "last Thursday" against the wall
+                    # clock, which on a 2023 corpus writes 2026 dates into
+                    # memory -- a fabricated fact, not a missing one.
+                    claims = await extract_claims(body, extractor, as_of=when, subject=subject)
                 except Exception:
                     # `extract_claims` already fails open, so reaching here
                     # means something outside it broke. Counted, never
                     # silently folded into "this document had no facts".
                     failures += 1
                     claims = []
+            return [(c.fact, c.quote) for c in claims]
+
+        async def one(text: str, when: datetime) -> tuple[str, list[tuple[str, str]]]:
+            nonlocal done
+            groups = await asyncio.gather(
+                *(one_turn(role, body, when) for role, body in split_turns(text))
+            )
+            claims = [c for group in groups for c in group]
             done += 1
             if progress_every and done % progress_every == 0:
                 rate = done / max(time.perf_counter() - started, 1e-9)
@@ -162,7 +222,7 @@ async def extract_corpora(
                     f"({rate:.1f}/s, ~{left:.0f}m left)",
                     flush=True,
                 )
-            return text, [(c.fact, c.quote) for c in claims]
+            return text, claims
 
         # Checkpointed, not one gather over everything. A 20,000-document
         # extraction is ~40 minutes of model calls, and writing the cache only
@@ -170,11 +230,16 @@ async def extract_corpora(
         # Each slice is durable as soon as it lands, so a re-run resumes.
         for start in range(0, len(pending), _EXTRACT_CHECKPOINT):
             window = pending[start : start + _EXTRACT_CHECKPOINT]
-            results = await asyncio.gather(*(one(t) for t in window))
+            results = await asyncio.gather(*(one(t, w) for t, w in window))
             out.update(dict(results))
             if cache is not None:
+                keyed = zip(window, results, strict=True)
                 cache.put_many(
-                    (DiskClaimCache.key(model, text), claims) for text, claims in results
+                    (
+                        DiskClaimCache.key(model, f"{when.isoformat()}|{text}"),
+                        claims,
+                    )
+                    for (text, when), (_t, claims) in keyed
                 )
         if failures:
             print(f"    WARNING: {failures} extraction calls failed outright", flush=True)
@@ -182,7 +247,7 @@ async def extract_corpora(
     total = sum(len(v) for v in out.values())
     empty = sum(1 for v in out.values() if not v)
     print(
-        f"    {total} claims from {len(texts)} documents "
+        f"    {total} claims from {len(items)} documents "
         f"({empty} yielded none) in {time.perf_counter() - started:.0f}s",
         flush=True,
     )

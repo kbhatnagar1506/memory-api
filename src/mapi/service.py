@@ -26,6 +26,7 @@ from .core.errors import (
     NotFoundError,
     PayloadTooLargeError,
     ProviderError,
+    SupermemoryError,
     ValidationError,
 )
 from .core.logging import get_logger
@@ -56,6 +57,7 @@ from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchR
 from .domain.retrieval.rerank import Reranker
 from .domain.synthesis import classify
 from .domain.synthesis.derive import CompleteFn, DerivedAnswer, SourceDoc, derive_answer
+from .domain.synthesis.extract import DEFAULT_SUBJECT, Claim, extract_claims
 from .store.base import MemoryFilter, MemoryStore, Page
 
 log = get_logger(__name__)
@@ -101,6 +103,9 @@ class IngestResult:
     #: Memories this write is judged to CONTRADICT. Recorded as edges and
     #: reported; never suppressed, because either side may be the true one.
     contradicts: list[str] = field(default_factory=list)
+    #: Ids of the atomic claims extracted from this write. The parent is
+    #: untouched and still retrievable; these are additions, not a rewrite.
+    extracted: list[str] = field(default_factory=list)
     #: Supersessions proposed but NOT applied, because confidence fell below
     #: `supersede_min_confidence`. Reported so the decision is auditable
     #: rather than a silent drop -- these memories are still active.
@@ -116,6 +121,7 @@ class MemoryService:
         reranker: Reranker,
         settings: Settings,
         completer: CompleteFn | None = None,
+        extractor: CompleteFn | None = None,
     ) -> None:
         self.store = store
         self.embedder = embedder
@@ -125,6 +131,10 @@ class MemoryService:
         #: tests drive derivation deterministically and the service never
         #: imports a vendor SDK.
         self.completer = completer
+        #: Write-path completion, separate from `completer` because
+        #: extraction runs per document and derivation runs per question --
+        #: different models, different budgets, tuned independently.
+        self.extractor = extractor
         self.pipeline = RetrievalPipeline(store, embedder, reranker)
 
     # -- spaces ------------------------------------------------------------
@@ -175,6 +185,8 @@ class MemoryService:
         dedupe: bool = True,
         auto_supersede: bool = False,
         detect_conflicts: bool = False,
+        extract: bool = False,
+        claims: Sequence[Claim] | None = None,
         kind: MemoryKind = MemoryKind.EPISODIC,
     ) -> IngestResult:
         await self.get_space_or_raise(org_id, space_id)
@@ -379,14 +391,123 @@ class MemoryService:
 
         stored = await self.store.upsert_memory(memory)
         INGESTED.labels(outcome="created").inc()
+
+        written_claims: list[str] = []
+        if claims is not None or extract:
+            written_claims = await self._write_claims(
+                stored,
+                tags=tags,
+                auto_supersede=auto_supersede,
+                detect_conflicts=detect_conflicts,
+                claims=claims,
+            )
+
         return IngestResult(
             memory=stored,
             created=True,
             superseded=superseded,
             contradicts=conflicts,
             supersede_declined=declined,
+            extracted=written_claims,
             chunk_count=len(chunks),
         )
+
+    async def _write_claims(
+        self,
+        parent: Memory,
+        *,
+        tags: Sequence[str],
+        auto_supersede: bool,
+        detect_conflicts: bool,
+        claims: Sequence[Claim] | None = None,
+    ) -> list[str]:
+        """Store the atomic claims a document contains, pointing back at it.
+
+        ADDITIVE, never destructive: the parent stays exactly as written and
+        stays retrievable. If extraction misses the one attribute a question
+        needed, the original text still holds it. That is the difference
+        between an upgrade and a lossy rewrite of the user's data.
+
+        Each claim gets a `derived_from` edge to its parent, which is not
+        bookkeeping -- it is what makes deletion propagate. Erase the source
+        turn and every claim drawn from it goes stale by the machinery that
+        already exists, instead of surviving as an orphaned assertion nobody
+        can trace.
+
+        Consolidation runs on the CLAIMS, which is the point of the whole
+        exercise: cosine between two atomic facts measures whether they are
+        the same claim, where cosine between two multi-topic blobs only
+        measures whether they share a subject.
+        """
+        if claims is not None:
+            # Pre-computed upstream. Extraction is one model round-trip per
+            # document and depends on nothing but that document, so it
+            # parallelises freely -- while the WRITES cannot, because
+            # supersession compares each write against what already exists.
+            # Splitting the two is what lets a bulk ingest saturate the API
+            # without making its edges depend on scheduling order.
+            found = list(claims)
+        elif self.extractor is not None:
+            # The parent's own event time is the anchor that turns "last
+            # Thursday" into a date; without it the model has no reference.
+            found = await extract_claims(
+                parent.content,
+                self.extractor,
+                as_of=parent.occurred_at,
+                subject=str(parent.metadata.get("subject") or DEFAULT_SUBJECT),
+            )
+        else:
+            return []
+        if not found:
+            return []
+
+        written: list[str] = []
+        for claim in found:
+            try:
+                result = await self.ingest(
+                    org_id=parent.org_id,
+                    space_id=parent.space_id,
+                    content=claim.fact,
+                    occurred_at=parent.occurred_at,
+                    source=parent.source,
+                    tags=tags,
+                    metadata={
+                        **parent.metadata,
+                        "extracted_from": parent.id,
+                        "quote": claim.quote,
+                    },
+                    kind=MemoryKind.DERIVED,
+                    auto_supersede=auto_supersede,
+                    detect_conflicts=detect_conflicts,
+                    # Not recursive: a claim is already atomic, and asking a
+                    # model to decompose one sentence burns a call to return
+                    # the sentence.
+                    extract=False,
+                )
+            except SupermemoryError:
+                # One bad claim must not lose the parent write, which has
+                # already succeeded and is the thing the caller asked for.
+                continue
+            if result.memory.id == parent.id:
+                # The claim restated the parent almost verbatim, so dedupe
+                # resolved it back to the parent itself. Real: a one-sentence
+                # turn is already atomic and has nothing to decompose into.
+                # There is no second memory here and nothing to link -- a
+                # self-edge would claim a document was derived from itself.
+                continue
+            await self.store.create_relation(
+                RelationEdge(
+                    org_id=parent.org_id,
+                    space_id=parent.space_id,
+                    source_id=result.memory.id,
+                    target_id=parent.id,
+                    type=RelationType.DERIVED_FROM,
+                    reason="extracted at write time",
+                    confidence=1.0,
+                )
+            )
+            written.append(result.memory.id)
+        return written
 
     # -- reads -------------------------------------------------------------
 

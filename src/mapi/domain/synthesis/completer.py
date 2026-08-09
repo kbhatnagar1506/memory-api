@@ -15,41 +15,104 @@ from __future__ import annotations
 
 from ...config import Settings, SynthesisBackend
 from ...core.errors import ConfigurationError
+from ...core.logging import get_logger
 from .derive import CompleteFn
+
+log = get_logger(__name__)
+
+
+def _gemini(
+    settings: Settings, *, model: str, thinking_budget: int, max_output_tokens: int
+) -> CompleteFn:
+    """One Gemini completion callable, with both token budgets pinned.
+
+    Both budgets are set EXPLICITLY, because leaving thinking unbounded is
+    not a neutral default. On gemini-2.5-flash reasoning tokens are drawn
+    from the same allowance as the answer, so an unbounded think against a
+    1536 ceiling returned 196 characters of a JSON array cut mid-string --
+    which parses to nothing and looks exactly like "this passage contained
+    no facts". A silent, plausible zero is the worst failure shape
+    available, so truncation is logged rather than swallowed.
+    """
+    if not settings.google_cloud_project:
+        raise ConfigurationError("synthesis_backend=gemini requires google_cloud_project")
+    from google import genai
+    from google.genai import types as genai_types
+
+    client = genai.Client(
+        vertexai=True,
+        project=settings.google_cloud_project,
+        location=settings.google_cloud_location,
+        http_options=genai_types.HttpOptions(timeout=60_000),
+    )
+
+    async def complete(prompt: str) -> str:
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=max_output_tokens,
+                thinking_config=genai_types.ThinkingConfig(thinking_budget=thinking_budget),
+            ),
+        )
+        candidates = response.candidates or []
+        reason = str(getattr(candidates[0], "finish_reason", "")) if candidates else ""
+        if "MAX_TOKENS" in reason.upper():
+            log.warning(
+                "completion_truncated",
+                model=model,
+                max_output_tokens=max_output_tokens,
+                thinking_budget=thinking_budget,
+                chars=len(response.text or ""),
+            )
+        return response.text or ""
+
+    return complete
 
 
 def build_completer(settings: Settings) -> CompleteFn | None:
-    """The configured completion callable, or None when synthesis is off."""
+    """The READ-path completer: derivation, run once per question."""
     if settings.synthesis_backend is SynthesisBackend.NONE:
         return None
     if settings.synthesis_backend is SynthesisBackend.GEMINI:
-        if not settings.google_cloud_project:
-            raise ConfigurationError("synthesis_backend=gemini requires google_cloud_project")
-        from google import genai
-        from google.genai import types as genai_types
-
-        client = genai.Client(
-            vertexai=True,
-            project=settings.google_cloud_project,
-            location=settings.google_cloud_location,
-            http_options=genai_types.HttpOptions(timeout=60_000),
+        return _gemini(
+            settings,
+            model=settings.synthesis_model,
+            thinking_budget=settings.synthesis_thinking_budget,
+            max_output_tokens=settings.synthesis_max_output_tokens,
         )
-        model = settings.synthesis_model
+    raise ConfigurationError(f"unknown synthesis backend: {settings.synthesis_backend}")
 
-        async def complete(prompt: str) -> str:
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=0.0,
-                    # Headroom for thinking models: reasoning tokens share the
-                    # output budget, and a too-tight cap truncates mid-answer.
-                    max_output_tokens=1536,
-                ),
-            )
-            return response.text or ""
 
-        return complete
+def build_extractor(settings: Settings) -> CompleteFn | None:
+    """The WRITE-path completer: extraction, run once per document.
+
+    Separate from the read-path completer because the two jobs have nothing
+    in common except the SDK. Derivation runs per question, reasons over
+    several documents, and its quality shows up directly in an answer.
+    Extraction runs on every write and is closer to transcription: read a
+    passage, restate what it says, copy the quote that proves it.
+
+    The constraint that actually binds here is THROUGHPUT, not quality per
+    call. One LongMemEval ingest is hundreds of thousands of documents, so
+    a per-document reasoning model turns a 90-minute ingest into a multi-day
+    one. Same reason `extraction_thinking_budget` defaults low: this task
+    has little to reason about, and we measured on the answer path that more
+    thinking made things worse, not better.
+
+    Split so both can be pointed at different models without one dragging
+    the other.
+    """
+    if settings.synthesis_backend is SynthesisBackend.NONE:
+        return None
+    if settings.synthesis_backend is SynthesisBackend.GEMINI:
+        return _gemini(
+            settings,
+            model=settings.extraction_model,
+            thinking_budget=settings.extraction_thinking_budget,
+            max_output_tokens=settings.extraction_max_output_tokens,
+        )
     raise ConfigurationError(f"unknown synthesis backend: {settings.synthesis_backend}")
 
 

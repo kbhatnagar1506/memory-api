@@ -99,10 +99,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.store = store
     app.state.embedder = embedder
     app.state.reranker = reranker
-    from .domain.synthesis.completer import build_completer
+    from .domain.synthesis.completer import build_completer, build_extractor
 
     app.state.service = MemoryService(
-        store, embedder, reranker, settings, completer=build_completer(settings)
+        store,
+        embedder,
+        reranker,
+        settings,
+        completer=build_completer(settings),
+        extractor=build_extractor(settings),
     )
     app.state.rate_limiter = build_rate_limiter(
         per_minute=settings.rate_limit_per_minute,

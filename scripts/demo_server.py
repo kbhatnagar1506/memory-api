@@ -18,6 +18,7 @@ Run:  .venv/bin/python -m scripts.build_demo_corpus   (once)
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import os
@@ -29,8 +30,15 @@ from typing import Any
 
 import uvicorn
 
-from mapi.config import EmbeddingBackend, RerankBackend, Settings, StoreBackend
+from mapi.config import (
+    EmbeddingBackend,
+    RerankBackend,
+    Settings,
+    StoreBackend,
+    SynthesisBackend,
+)
 from mapi.domain.models import Organization, Scope, Space
+from mapi.domain.synthesis.extract import Claim, extract_claims
 from mapi.main import create_app
 
 from .cached_embedder import DiskCachedEmbedder
@@ -49,6 +57,11 @@ _DATE_RE = re.compile(r"(\d{4})/(\d{2})/(\d{2})(?:[^\d]+(\d{2}):(\d{2}))?")
 #: display names would make two runs of the same corpus impossible to line up
 #: against each other, or against a LongMemEval result file.
 SPACE_PREFIX = "lme"
+
+#: Extraction calls in flight at once. High enough to saturate a Vertex
+#: project's default quota, low enough that a 429 storm does not become the
+#: bottleneck. The work is entirely network-bound, so this is not a CPU count.
+CONCURRENCY = 24
 
 
 def _adc_project() -> str | None:
@@ -95,9 +108,51 @@ async def seed(app: Any) -> tuple[str, str, list[dict[str, Any]]]:
     await store.create_api_key(record)
 
     started = time.perf_counter()
-    profiles: list[dict[str, Any]] = []
 
-    for p in corpus["profiles"]:
+    # -- phase 1: extract everything, in parallel ---------------------------
+    #
+    # One model round-trip per turn, and a turn's extraction depends on
+    # nothing but that turn's text and date. So all of them can be in flight
+    # at once, bounded only by what the API will take. In series this is 374
+    # sequential round-trips (~25 minutes of pure waiting); the bound below
+    # turns it into 374/CONCURRENCY.
+    #
+    # Deliberately NOT parallelised: the writes. Supersession compares each
+    # write against the memories that already exist, so writing out of order
+    # would make the graph depend on scheduling.
+    turns = [
+        (session["id"], _when(session["date"]), turn)
+        for p in corpus["profiles"]
+        for session in p["sessions"]
+        for turn in session["turns"]
+    ]
+    gate = asyncio.Semaphore(CONCURRENCY)
+    extractor = app.state.service.extractor
+    done = 0
+
+    async def extract_one(when: datetime, text: str) -> tuple[str, list[Claim]]:
+        nonlocal done
+        async with gate:
+            found = await extract_claims(text, extractor, as_of=when) if extractor else []
+        done += 1
+        if done % 50 == 0:
+            print(f"    extracted {done}/{len(turns)} turns", flush=True)
+        return text, found
+
+    pairs = await asyncio.gather(*(extract_one(when, text) for _, when, text in turns))
+    # Keyed by text: the same turn text extracts to the same claims, and a
+    # duplicate turn should not cost a second call.
+    by_text: dict[str, list[Claim]] = dict(pairs)
+    total_claims = sum(len(v) for v in by_text.values())
+    print(
+        f"  extracted {total_claims} claims from {len(turns)} turns "
+        f"in {time.perf_counter() - started:.0f}s ({CONCURRENCY}-way)",
+        flush=True,
+    )
+
+    # -- phase 2: write, in order, with no model calls left to make ---------
+
+    async def seed_profile(p: dict[str, Any]) -> dict[str, Any]:
         name = _slug(p["question_id"])
         space = await store.create_space(
             Space(
@@ -118,7 +173,11 @@ async def seed(app: Any) -> tuple[str, str, list[dict[str, Any]]]:
             )
         )
 
-        written = superseded = conflicts = 0
+        written = superseded = conflicts = extracted = 0
+        # Turns stay strictly sequential WITHIN a space. Supersession compares
+        # a write against the memories that already exist, so writing a
+        # person's history out of order would change which candidates each
+        # turn ever sees -- the edges would depend on scheduling.
         for session in p["sessions"]:
             occurred = _when(session["date"])
             # Session only. `is_evidence` is a gold label and it stays out of
@@ -143,27 +202,35 @@ async def seed(app: Any) -> tuple[str, str, list[dict[str, Any]]]:
                     # Every edge in the picture comes from here.
                     auto_supersede=True,
                     detect_conflicts=True,
+                    claims=by_text.get(turn, []),
                 )
-                written += 1
+                written += 1 + len(result.extracted)
+                extracted += len(result.extracted)
                 superseded += len(result.superseded)
                 conflicts += len(result.contradicts)
 
-        profiles.append(
-            {
-                "name": name,
-                "space_id": space.id,
-                "type": p["question_type"],
-                "memories": written,
-                "sessions": len(p["sessions"]),
-                "superseded": superseded,
-                "conflicts": conflicts,
-            }
-        )
         print(
-            f"  {name:<6} {p['question_type']:<26} {len(p['sessions']):>2} sessions  "
-            f"{written:>3} memories  {superseded:>2} superseded  {conflicts:>2} conflicts",
+            f"  {name:<22} {p['question_type']:<26} {len(p['sessions']):>2}s  "
+            f"{written:>4} mem ({extracted:>3} claims)  "
+            f"{superseded:>2} sup  {conflicts:>2} conf",
             flush=True,
         )
+        return {
+            "name": name,
+            "space_id": space.id,
+            "type": p["question_type"],
+            "memories": written,
+            "sessions": len(p["sessions"]),
+            "superseded": superseded,
+            "conflicts": conflicts,
+            "extracted": extracted,
+        }
+
+    # Spaces run concurrently. Extraction is one model round-trip per turn and
+    # 374 of them in series is ~25 minutes of pure waiting; a space is a
+    # tenant boundary that no mechanism reaches across, so running six at once
+    # changes nothing about the result and divides the wall clock by six.
+    profiles = list(await asyncio.gather(*(seed_profile(p) for p in corpus["profiles"])))
 
     print(f"  seeded in {time.perf_counter() - started:.0f}s", flush=True)
     return org.id, key, profiles
@@ -178,6 +245,9 @@ def main() -> None:
         embedding_batch_size=32,
         google_cloud_project=os.getenv("GOOGLE_CLOUD_PROJECT") or _adc_project(),
         rerank_backend=RerankBackend.HEURISTIC,
+        # Write-time extraction on: the graph is only worth looking at if the
+        # nodes are claims rather than blobs.
+        synthesis_backend=SynthesisBackend.GEMINI,
     )
     app = create_app(settings)
 

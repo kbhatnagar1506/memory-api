@@ -110,6 +110,24 @@ class Settings(BaseSettings):
     synthesis_backend: SynthesisBackend = SynthesisBackend.NONE
     #: Model for derive map/compose calls. Flash: many small extraction calls.
     synthesis_model: str = "gemini-2.5-flash"
+    #: Output allowance for a derive call. Not generous for its own sake:
+    #: on a thinking model, reasoning tokens come out of this same budget,
+    #: and a completion cut mid-JSON parses to nothing and is indistinguish-
+    #: able from "there was nothing to extract".
+    synthesis_max_output_tokens: int = Field(default=4096, ge=256, le=65_536)
+    #: Reasoning allowance. 128 is the value our best benchmark numbers were
+    #: produced with; raising it to 4096 on the answer path measured -34
+    #: questions, so more thinking is not a free upgrade here.
+    synthesis_thinking_budget: int = Field(default=128, ge=0, le=32_768)
+
+    #: Write-path extraction, configured separately from derivation because
+    #: it runs per DOCUMENT rather than per question -- hundreds of thousands
+    #: of calls on a full ingest, where throughput is the binding constraint.
+    extraction_model: str = "gemini-2.5-flash"
+    extraction_max_output_tokens: int = Field(default=4096, ge=256, le=65_536)
+    #: Extraction is closer to transcription than reasoning; a large thinking
+    #: budget spends latency on every write to restate a passage.
+    extraction_thinking_budget: int = Field(default=0, ge=0, le=32_768)
     rerank_model: str = "gemini-2.5-flash"
     rerank_candidates: int = Field(default=32, ge=1, le=256)
     rerank_timeout_s: float = Field(default=12.0, gt=0)

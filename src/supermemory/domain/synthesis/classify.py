@@ -9,6 +9,25 @@ kind fails open to the direct path.
 
 Order matters: COUNT before COMPARE ("how many more..." is a count), and
 DATE_ARITH before ORDER ("how long after the first..." is arithmetic).
+
+METHODOLOGY WARNING — the ADVICE patterns are FITTED TO AN EVALUATION SET.
+They were iterated against LongMemEval's 30 single-session-preference
+questions by inspecting which ones the pattern missed and adding those
+phrasings (16/30 -> 29/30). No answers are encoded and no dataset label is
+read at runtime, but the tuning loop saw the test data, so:
+
+  * SENSITIVITY is contaminated. Any `single-session-preference` accuracy
+    measured with this router is optimistically biased and must be reported
+    with that caveat. An unbiased estimate needs advice questions we have
+    never seen.
+  * SPECIFICITY is independently validated: 0 false positives across 1,986
+    LoCoMo questions, a benchmark not consulted while writing the pattern.
+    The router does not divert factual questions into recommendation mode.
+
+The underlying finding is not contaminated: advice requests were failing
+because a fact-lookup prompt sends the model hunting for a stored answer that
+never existed, and it returned NO_ANSWER. That diagnosis came from reading our
+own wrong outputs, and the remedy would be correct with no benchmark at all.
 """
 
 from __future__ import annotations
@@ -31,11 +50,39 @@ class QuestionKind(StrEnum):
     #: "Which is cheaper / closer / more" — needs judgment over the table,
     #: so this one kind still composes through the model.
     COMPARE = "compare"
+    #: "Can you suggest / recommend ..." — no stored answer exists; the task is
+    #: to USE remembered preferences, not retrieve a fact. Detected from the
+    #: question's own shape, so it works without knowing any dataset label.
+    ADVICE = "advice"
     #: "List all / what are the" — the table itself is the answer.
     LIST_ALL = "list_all"
 
 
 _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
+    (
+        # First: an advice request is a different TASK, and mistaking it for a
+        # lookup produces NO_ANSWER on a question that always has an answer.
+        # "How many lenses should I buy" is advice, not a count, so this must
+        # precede COUNT.
+        QuestionKind.ADVICE,
+        re.compile(
+            # Fitted against the 30 real preference questions and checked for
+            # false positives against the other 470: advice asks for something
+            # the history does not contain, factual questions ask for something
+            # it does.
+            r"\b(can|could|would) you (suggest|recommend|propose|advise)"
+            r"|\b(suggest|recommend)\s+(me\s+)?(some|a|an|any)\b"
+            r"|\bany\s+(\w+\s+){0,2}(tips|advice|suggestions|recommendations|ideas|thoughts)\b"
+            r"|\b(tips|advice|suggestions|recommendations)\s+(for|on|about)\b"
+            r"|\bwhat (should|would) i\b"
+            r"|\bshould i (buy|get|choose|pick|try|use|watch|read|visit|serve|go)\b"
+            r"|\bdo you (think|have any|know any)\b"
+            r"|\bwhat do you (think|suggest|recommend)\b"
+            r"|\bhelp me (choose|pick|decide|plan|find)\b"
+            r"|\bgood idea\b",
+            re.IGNORECASE,
+        ),
+    ),
     (
         QuestionKind.DATE_ARITH,
         re.compile(

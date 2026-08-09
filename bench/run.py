@@ -299,6 +299,21 @@ def write_report(out: Path, payloads: list[dict[str, Any]]) -> None:
                 "grader; this delta is what a self-graded number would have "
                 "silently added.",
             ]
+        lines += [
+            "",
+            "### Methodology caveats",
+            "",
+            "* The advice/preference router that selects the personalisation "
+            "prompt was **tuned against this benchmark's own "
+            "`single-session-preference` questions**. Its specificity is "
+            "independently validated (0 false positives on 1,986 LoCoMo "
+            "questions), but its sensitivity is fitted, so the "
+            "`single-session-preference` figure above is optimistically "
+            "biased. Every other capability is untouched by it.",
+            "* `question_date` is a benchmark-provided input, not a label: it "
+            'is what "how many weeks ago" is measured from, and every '
+            "system evaluated here receives it.",
+        ]
         lines += ["", "### Completeness", ""]
         lines.append(
             f"Failed searches: **{errors}** (excluded from retrieval metrics, "

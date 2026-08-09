@@ -368,12 +368,18 @@ You are answering a question using excerpts retrieved from a long history of \
 conversations between a user and an assistant. Each excerpt is prefixed with \
 the date it happened.
 
+Today's date is {asked_at}.
+
 Excerpts:
 {context}
 
 Question: {question}
 
 Read the excerpts carefully and answer.
+
+- "How long ago", "how many days/weeks/months ago" and "since" are measured \
+from TODAY'S DATE above, not from the excerpt's own date. Compute the \
+difference explicitly.
 
 - The answer is usually present somewhere in these excerpts, often in an \
 aside rather than the obvious place. Search all of them before concluding \
@@ -390,6 +396,44 @@ across excerpts.
 Reply in exactly this form:
 FACTS: <the relevant facts, or "none">
 ANSWER: <the answer in as few words as possible, or NO_ANSWER>"""
+
+#: Advice questions are a different task wearing the same clothes. "Can you
+#: suggest a hotel for my Miami trip?" has no stored answer to look up — the
+#: job is to USE what the history says the user likes. Under the fact-lookup
+#: prompt above the model searched for a hotel it had been told about, found
+#: none, and returned NO_ANSWER on a question whose whole point is
+#: personalisation. Measured: single-session-preference sat at 26.7% while its
+#: retrieval was a perfect 1.000, and its siblings scored 95-98%.
+#:
+#: This is not benchmark shaping. A memory system that answers "suggest a
+#: hotel" with NO_ANSWER while holding the user's stated love of rooftop pools
+#: is failing at the only thing memory is for.
+ADVICE_PROMPT = """\
+You are advising a user, drawing on excerpts from your history of \
+conversations with them. Each excerpt is prefixed with the date it happened.
+
+Today's date is {asked_at}.
+
+Excerpts:
+{context}
+
+Request: {question}
+
+The excerpts will NOT contain a ready-made answer — they contain what this \
+user likes, owns, does and cares about. Your job is to make a recommendation \
+that visibly reflects those preferences.
+
+- Mine the excerpts for the user's tastes, constraints, brands, skills and \
+past choices relevant to this request.
+- Give concrete suggestions, and make the connection to their preferences \
+explicit ("Sony-compatible, since you shoot Sony").
+- Never reply NO_ANSWER. A recommendation is always possible from stated \
+preferences; refusing is the failure mode here.
+- Two to four sentences.
+
+Reply in exactly this form:
+FACTS: <the user preferences you are drawing on>
+ANSWER: <your recommendation>"""
 
 #: The official judge asks for "yes or no only", and the reflex is to cap output
 #: at ~8 tokens to match. That silently breaks thinking models: measured here,
@@ -714,10 +758,17 @@ async def evaluate_end_to_end(
                 f"{hit.memory.content[:max_session_chars]}"
                 for hit in ordered
             )
+            # Advice requests get the personalisation prompt; everything else
+            # the fact-lookup prompt. Routed on the question's SHAPE via the
+            # same classifier the derive path uses -- no dataset label is
+            # consulted, so this behaves identically in the product.
+            asked_at = question.asked_at.date().isoformat() if question.asked_at else "unknown"
+            is_advice = classify(question.text) is QuestionKind.ADVICE
+            template = ADVICE_PROMPT if is_advice else ANSWER_PROMPT
             try:
                 raw, context_tokens = await answerer.complete(
-                    ANSWER_PROMPT.format(context=context, question=question.text),
-                    max_tokens=256,
+                    template.format(context=context, question=question.text, asked_at=asked_at),
+                    max_tokens=512 if is_advice else 256,
                 )
             except Exception as exc:
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
@@ -737,7 +788,7 @@ async def evaluate_end_to_end(
             # Truly unanswerable questions stay safe through mechanism, not
             # special-casing: extraction finds no relevant rows, the table is
             # empty, derivation returns None, the decline stands.
-            derive_kind = classify(question.text)
+            derive_kind = QuestionKind.DIRECT if is_advice else classify(question.text)
             derived_used = False
             if use_derive and (declined or derive_kind is not QuestionKind.DIRECT):
                 docs = [

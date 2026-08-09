@@ -364,3 +364,53 @@ def test_duration_answers_keep_their_qualifier() -> None:
 )
 def test_how_much_aggregates_only_when_asked_to(question: str, expected: QuestionKind) -> None:
     assert classify(question) == expected
+
+
+# -- advice routing ------------------------------------------------------------
+#
+# Real questions from the run. single-session-preference scored 26.7% while
+# its retrieval was a perfect 1.000 and its sibling capabilities scored 95-98%:
+# the model was answering "can you suggest a hotel?" with NO_ANSWER because the
+# fact-lookup prompt sent it hunting for a hotel it had been told about. These
+# are advice requests, and the answer has to be built from remembered
+# preferences rather than retrieved.
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Can you suggest a hotel for my upcoming trip to Miami?",
+        "Can you recommend some recent publications I might find interesting?",
+        "Any tips for keeping my kitchen clean?",
+        "I've been struggling with my slow cooker. Any advice on getting better results?",
+        "What should I serve for dinner this weekend?",
+        "I've got some free time tonight, any documentary recommendations?",
+        "I'm trying to decide whether to buy a NAS now or wait. What do you think?",
+        "Do you have any helpful tips for getting around Tokyo?",
+        "Do you think it would be a good idea to revisit my old hobby?",
+    ],
+)
+def test_advice_requests_are_detected_by_shape(question: str) -> None:
+    assert classify(question) is QuestionKind.ADVICE
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        # Factual lookups that must NOT be diverted into recommendation mode.
+        "What degree did I graduate with?",
+        "How many bikes do I own?",
+        "Where does my sister live?",
+        "What did I say about the deployment process?",
+        "How many days passed between my two museum visits?",
+        "What was my last name before I changed it?",
+    ],
+)
+def test_factual_questions_are_not_routed_to_advice(question: str) -> None:
+    assert classify(question) is not QuestionKind.ADVICE
+
+
+def test_advice_precedes_count_when_both_could_match() -> None:
+    """ "How many lenses should I buy" is advice, not a count — mistaking the
+    task produces a number where a recommendation belongs."""
+    assert classify("How many lenses should I buy for my camera?") is QuestionKind.ADVICE

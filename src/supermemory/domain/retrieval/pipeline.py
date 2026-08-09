@@ -40,6 +40,7 @@ from ...core.logging import get_logger
 from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
 from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
+from .confidence import RetrievalConfidence, assess
 from .decay import apply_decay
 from .entities import salient_entities
 from .expansion import NoopExpander, QueryExpander
@@ -143,6 +144,13 @@ class SearchResponse:
     #: all. An agent told "these two disagree" can ask the user; an agent
     #: handed the winner cannot.
     conflicts: list[tuple[str, str]] = field(default_factory=list)
+    #: How much this result set supports asserting an answer, computed from
+    #: the score distribution rather than asked of a model. Measured need: on
+    #: 500 questions the system failed in BOTH calibration directions at once
+    #: -- 24 declines while holding the evidence, 8 answers to unanswerable
+    #: questions -- and a model's own certainty is a property of its tone,
+    #: not of the data.
+    confidence: RetrievalConfidence | None = None
 
 
 class RetrievalPipeline:
@@ -261,9 +269,13 @@ class RetrievalPipeline:
 
         query = request.query.strip()
         if not query:
-            return SearchResponse([], request.query, 0, timings, False, [])
+            return SearchResponse(
+                [], request.query, 0, timings, False, [], confidence=assess([])
+            )
         if request.limit <= 0:
-            return SearchResponse([], request.query, 0, timings, False, [])
+            return SearchResponse(
+                [], request.query, 0, timings, False, [], confidence=assess([])
+            )
 
         fetch = max(request.limit * max(request.candidate_multiplier, 1), request.limit)
 
@@ -303,7 +315,9 @@ class RetrievalPipeline:
         if lexical_hits:
             strategies.append("lexical")
         if not vector_hits and not lexical_hits:
-            return SearchResponse([], request.query, 0, timings, False, strategies)
+            return SearchResponse(
+                [], request.query, 0, timings, False, strategies, confidence=assess([])
+            )
 
         # -- stage 2: fusion --------------------------------------------------
         t0 = loop.time()
@@ -486,6 +500,7 @@ class RetrievalPipeline:
 
         final = scored[: request.limit]
         conflicts = await self._find_conflicts(final, request)
+        confidence = assess([s.score for s in final], has_conflicts=bool(conflicts))
         return SearchResponse(
             results=final,
             query=request.query,
@@ -495,6 +510,7 @@ class RetrievalPipeline:
             strategies=strategies,
             entities_used=entities,
             conflicts=conflicts,
+            confidence=confidence,
         )
 
     async def _find_conflicts(

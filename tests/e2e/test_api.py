@@ -1173,3 +1173,56 @@ async def test_conflict_detection_is_opt_in(client, space_id) -> None:
         )
     ).json()
     assert second["contradicts"] == []
+
+
+# -- calibration ---------------------------------------------------------------
+
+
+async def test_search_reports_confidence_and_names_correct_silence(client, space_id) -> None:
+    """A query matching nothing must be distinguishable from one matching
+    something weakly. Only the second is a memory gap; the first is the system
+    behaving correctly, and an agent needs to tell them apart."""
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={"content": "The deployment pipeline runs on GitHub Actions"},
+    )
+    hit = (
+        await client.post(
+            f"/v1/spaces/{space_id}/search", json={"query": "deployment pipeline"}
+        )
+    ).json()
+    assert hit["confidence"]["level"] in {"high", "medium", "low"}
+    assert hit["confidence"]["n_results"] >= 1
+
+    miss = (
+        await client.post(
+            f"/v1/spaces/{space_id}/search",
+            json={"query": "deployment pipeline", "min_score": 0.99},
+        )
+    ).json()
+    assert miss["results"] == []
+    assert miss["confidence"]["level"] == "none"
+    assert miss["confidence"]["refusal_reason"] == "no_relevant_memory"
+
+
+async def test_conflicting_results_lower_confidence(client, space_id) -> None:
+    """Contradiction feeds calibration: a perfect match to two memories that
+    disagree is the worst case, not the best."""
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={"content": "The retention window is 30 days for all customers"},
+    )
+    await client.post(
+        f"/v1/spaces/{space_id}/memories",
+        json={
+            "content": "The retention window is 90 days for all customers",
+            "detect_conflicts": True,
+        },
+    )
+    body = (
+        await client.post(f"/v1/spaces/{space_id}/search", json={"query": "retention window"})
+    ).json()
+    assert body["conflicts"]
+    assert body["confidence"]["level"] == "low"
+    assert body["confidence"]["refusal_reason"] == "conflicting_evidence"
+    assert body["confidence"]["has_conflicts"] is True

@@ -389,9 +389,15 @@ it is absent.
 value from the most recent excerpt that mentions it.
 - Answer with the specific value asked for (a name, place, date, number), not \
 a description of where it came from.
-- Reserve NO_ANSWER for when the information is genuinely absent. Do not use \
-it because the answer is stated indirectly or requires a small inference \
-across excerpts.
+- Two different reasons to withhold, and only one of them is right. If the \
+answer is stated indirectly, or needs a small inference across excerpts, \
+ANSWER it. If the excerpts genuinely do not contain what was asked, reply \
+NO_ANSWER.
+- Never estimate a total. If the question asks how many, how much or how long \
+and the excerpts do not let you enumerate the items or compute it from stated \
+values, reply NO_ANSWER rather than producing a plausible number. An \
+aggregate is always producible, which is exactly why a wrong one is easy to \
+state confidently.
 
 Reply in exactly this form:
 FACTS: <the relevant facts, or "none">

@@ -390,6 +390,16 @@ class SearchHit(Response):
         )
 
 
+class ConfidenceBlock(Response):
+    level: str
+    top_score: float
+    margin: float
+    n_results: int
+    has_conflicts: bool
+    reason: str
+    refusal_reason: str | None = None
+
+
 class SearchResponseBody(Response):
     query: str
     results: list[SearchHit]
@@ -403,6 +413,11 @@ class SearchResponseBody(Response):
     #: never silently resolved: an agent told two facts disagree can ask the
     #: user, an agent handed the newest one cannot.
     conflicts: list[list[str]] = Field(default_factory=list)
+    #: How far this evidence supports asserting an answer. Computed from the
+    #: score distribution, not asked of a model -- a model's certainty is a
+    #: property of its tone. `refusal_reason` distinguishes correct silence
+    #: ("no_relevant_memory") from a real gap ("weak_evidence").
+    confidence: ConfidenceBlock | None = None
 
 
 # -- keys ---------------------------------------------------------------------

@@ -12,7 +12,12 @@ from ...domain.models import Scope
 from ...domain.retrieval.pipeline import SearchRequest
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
-from ..schemas import SearchHit, SearchRequestBody, SearchResponseBody
+from ..schemas import (
+    ConfidenceBlock,
+    SearchHit,
+    SearchRequestBody,
+    SearchResponseBody,
+)
 
 router = APIRouter(prefix="/spaces/{space_id}", tags=["search"])
 
@@ -71,6 +76,23 @@ async def search(
         rerank_degraded=result.rerank_degraded,
         timings_ms=result.timings_ms,
         conflicts=[list(pair) for pair in result.conflicts],
+        confidence=(
+            ConfidenceBlock(
+                level=str(result.confidence.level),
+                top_score=round(result.confidence.top_score, 4),
+                margin=round(result.confidence.margin, 4),
+                n_results=result.confidence.n_results,
+                has_conflicts=result.confidence.has_conflicts,
+                reason=result.confidence.reason,
+                refusal_reason=(
+                    str(result.confidence.refusal_reason)
+                    if result.confidence.refusal_reason
+                    else None
+                ),
+            )
+            if result.confidence
+            else None
+        ),
     )
 
 

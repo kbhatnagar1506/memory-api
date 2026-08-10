@@ -44,18 +44,31 @@ from .store import build_store
 
 log = get_logger("mapi")
 
+#: The public blurb. Describes what the API DOES and what a caller can rely
+#: on, never how it is built: the retrieval strategy, the consolidation rules
+#: and the thresholds behind them are the product, and an API reference is not
+#: the place to publish them. Everything here is a promise to a caller, and
+#: every promise is one the endpoints below actually keep.
 DESCRIPTION = """\
 A memory API for AI agents.
 
-**Hybrid retrieval** fuses dense vector search with BM25 lexical search using
-Reciprocal Rank Fusion, then reranks, applies recency decay, and diversifies
-with Maximal Marginal Relevance.
+**Search** returns the memories that answer a question, ranked, with a
+`score` comparable within one response.
 
-**Belief revision** is the part most memory APIs lack: memories form a typed
-graph (`supersedes`, `contradicts`), so a fact that has been overtaken stops
-being returned instead of sitting next to the fact that replaced it.
+**Currency.** A fact that has been overtaken stops being returned instead of
+sitting beside the fact that replaced it. Nothing is deleted to achieve that:
+the superseded memory stays readable, marked, and pointed at whatever
+replaced it, so "what did we believe in March" remains answerable.
 
-Every result carries its full score provenance under `explain`.
+**Provenance.** `/context` resolves a memory together with everything that
+relates to it -- what replaced it, what it replaced, what it was computed
+from, and what disagrees with it. Contradictions are surfaced rather than
+resolved: either side may be the true one.
+
+**Erasure propagates.** Remove a source and anything computed from it is
+marked stale, because a derivation must not outlive its evidence.
+
+Every result can carry its ranking provenance under `explain`.
 """
 
 
@@ -252,7 +265,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description=DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
-        docs_url="/docs",
+        docs_url="/reference",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
         contact={"name": "Mapi"},
@@ -296,6 +309,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         no credentials of its own.
         """
         from .api.graph_ui import PAGE
+
+        return PAGE
+
+    @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
+    async def documentation() -> str:
+        """Written documentation, distinct from the generated reference.
+
+        A reference is always correct and explains nothing; documentation
+        explains what a call is for and what happens when you make it. Both
+        exist -- /reference is generated from the schema, this is written.
+        """
+        from .api.docs_page import PAGE
 
         return PAGE
 

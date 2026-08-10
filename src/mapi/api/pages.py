@@ -79,7 +79,7 @@ def _shell(title: str, body: str, *, nav: str = "") -> str:
   <nav>{nav}</nav>
 </div></header>
 {body}
-<footer><div class="wrap">mapi — memory for agents. <a href="/docs">API reference</a></div></footer>
+<footer><div class="wrap">mapi — memory for agents. <a href="/docs">Documentation</a> · <a href="/reference">API reference</a></div></footer>
 """
     )
 
@@ -104,7 +104,7 @@ def landing(signed_in: bool, sign_in_available: bool) -> str:
   claims, with a graph of what replaced what, what disagrees with what, and what was
   computed from what.</p>
   <div style="display:flex;gap:12px;align-items:center">{cta}
-    <a class="btn" href="/docs">API reference</a></div>
+    <a class="btn" href="/docs">Documentation</a></div>
 
   <div class="grid" style="margin-top:72px">
     <div class="card">
@@ -126,7 +126,7 @@ def landing(signed_in: bool, sign_in_available: bool) -> str:
   </div>
 </div>
 """,
-        nav='<a href="/docs">Docs</a><a href="/orgs">Dashboard</a>',
+        nav='<a href="/docs">Docs</a><a href="/reference">Reference</a><a href="/orgs">Dashboard</a>',
     )
 
 

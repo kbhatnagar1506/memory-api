@@ -31,6 +31,8 @@ from ...domain.embeddings.base import Vector
 from ...domain.models import (
     ApiKey,
     Chunk,
+    MemberRole,
+    Membership,
     Memory,
     MemoryKind,
     MemoryStatus,
@@ -40,6 +42,7 @@ from ...domain.models import (
     RelationType,
     Scope,
     Space,
+    User,
     utcnow,
 )
 from ..base import EraseReport, LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
@@ -47,11 +50,13 @@ from .models import (
     ApiKeyRow,
     Base,
     ChunkRow,
+    MembershipRow,
     MemoryRow,
     MemoryVersionRow,
     OrganizationRow,
     RelationEdgeRow,
     SpaceRow,
+    UserRow,
 )
 
 log = get_logger(__name__)
@@ -78,6 +83,28 @@ def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
+def _to_user(row: UserRow) -> User:
+    return User(
+        id=row.id,
+        email=row.email,
+        google_sub=row.google_sub,
+        name=row.name,
+        picture=row.picture,
+        created_at=row.created_at,
+        last_seen_at=row.last_seen_at,
+    )
+
+
+def _to_membership(row: MembershipRow) -> Membership:
+    return Membership(
+        id=row.id,
+        user_id=row.user_id,
+        org_id=row.org_id,
+        role=MemberRole(row.role),
+        created_at=row.created_at,
+    )
 
 
 class PostgresStore(MemoryStore):
@@ -209,6 +236,85 @@ class PostgresStore(MemoryStore):
         return stmt
 
     # -- organizations & spaces --------------------------------------------
+
+    # -- identity ----------------------------------------------------------
+
+    async def upsert_user(self, user: User) -> User:
+        async with self._session() as session, session.begin():
+            row = (
+                await session.execute(
+                    select(UserRow).where(UserRow.google_sub == user.google_sub)
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                row = UserRow(
+                    id=user.id,
+                    email=user.email,
+                    google_sub=user.google_sub,
+                    name=user.name,
+                    picture=user.picture,
+                    created_at=user.created_at,
+                    last_seen_at=user.last_seen_at,
+                )
+                session.add(row)
+            else:
+                # The id stays put across logins: memberships point at it, and
+                # minting a new one on every sign-in would orphan them.
+                row.email = user.email
+                row.name = user.name or row.name
+                row.picture = user.picture or row.picture
+                row.last_seen_at = user.last_seen_at
+            await session.flush()
+            return _to_user(row)
+
+    async def get_user_by_google_sub(self, google_sub: str) -> User | None:
+        async with self._session() as session:
+            row = (
+                await session.execute(select(UserRow).where(UserRow.google_sub == google_sub))
+            ).scalar_one_or_none()
+            return _to_user(row) if row is not None else None
+
+    async def create_membership(self, membership: Membership) -> Membership:
+        async with self._session() as session, session.begin():
+            session.add(
+                MembershipRow(
+                    id=membership.id,
+                    user_id=membership.user_id,
+                    org_id=membership.org_id,
+                    role=membership.role.value,
+                    created_at=membership.created_at,
+                )
+            )
+            from sqlalchemy.exc import IntegrityError
+
+            try:
+                await session.flush()
+            except IntegrityError as exc:
+                raise ConflictError("already a member of that organization") from exc
+        return membership
+
+    async def list_memberships(self, user_id: str) -> list[Membership]:
+        async with self._session() as session:
+            rows = (
+                await session.execute(
+                    select(MembershipRow)
+                    .where(MembershipRow.user_id == user_id)
+                    .order_by(MembershipRow.created_at)
+                )
+            ).scalars()
+            return [_to_membership(r) for r in rows]
+
+    async def get_membership(self, user_id: str, org_id: str) -> Membership | None:
+        async with self._session() as session:
+            row = (
+                await session.execute(
+                    select(MembershipRow).where(
+                        MembershipRow.user_id == user_id,
+                        MembershipRow.org_id == org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            return _to_membership(row) if row is not None else None
 
     async def create_organization(self, org: Organization) -> Organization:
         async with self._session() as session, session.begin():

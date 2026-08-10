@@ -56,6 +56,55 @@ class OrganizationRow(Base):
     )
 
 
+class UserRow(Base):
+    """A person. Not scoped to any organization -- they exist before they
+    belong to one, and belong to several."""
+
+    __tablename__ = "users"
+    __table_args__ = (
+        # Google's subject id is the identity we match on: an email can be
+        # reassigned inside a workspace, the subject cannot.
+        UniqueConstraint("google_sub", name="uq_users_google_sub"),
+        Index("ix_users_email", "email"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    google_sub: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, server_default="")
+    picture: Mapped[str] = mapped_column(String(500), nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MembershipRow(Base):
+    __tablename__ = "memberships"
+    __table_args__ = (
+        # One row per person per org. The cap on how many orgs a user may
+        # join is a policy decision and lives in the service; this constraint
+        # is the invariant that must hold regardless of policy.
+        UniqueConstraint("user_id", "org_id", name="uq_memberships_user_org"),
+        Index("ix_memberships_user", "user_id"),
+        Index("ix_memberships_org", "org_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    org_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="member")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class SpaceRow(Base):
     __tablename__ = "spaces"
     __table_args__ = (

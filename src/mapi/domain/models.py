@@ -119,6 +119,75 @@ class Base(BaseModel):
     )
 
 
+class User(Base):
+    """A person, identified by the email Google asserts.
+
+    THE EMAIL IS THE IDENTITY. An API key authorises a request against an
+    organization; it says nothing about who is behind it, and two people on
+    one team legitimately share one. Conflating the two -- treating a key as
+    a user -- is how audit trails become useless and how revoking a person's
+    access turns into revoking a service's.
+
+    `google_sub` is Google's stable subject id and is what we actually match
+    on: an email can be reassigned within a workspace, the subject cannot.
+    The email is stored because it is what a human recognises.
+    """
+
+    id: str = Field(default_factory=lambda: new_id("user"))
+    email: NonEmptyStr
+    google_sub: NonEmptyStr
+    name: str = ""
+    picture: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        # Case-folded so one person cannot become two accounts by capitalising
+        # their own address.
+        cleaned = v.strip().casefold()
+        if "@" not in cleaned:
+            raise ValueError(f"not an email address: {v!r}")
+        return cleaned
+
+    @field_validator("id")
+    @classmethod
+    def _id_shape(cls, v: str) -> str:
+        if not is_valid(v, "user"):
+            raise ValueError(f"invalid user id: {v!r}")
+        return v
+
+
+class MemberRole(StrEnum):
+    """What a member may do. Owner is the only role that can delete the org."""
+
+    OWNER = "owner"
+    MEMBER = "member"
+
+
+class Membership(Base):
+    """A user's place in an organization.
+
+    Separate from both sides because the relationship carries its own facts --
+    when they joined, in what role -- and because a user belongs to several
+    organizations while an organization has several users.
+    """
+
+    id: str = Field(default_factory=lambda: new_id("membership"))
+    user_id: str
+    org_id: str
+    role: MemberRole = MemberRole.MEMBER
+    created_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator("id")
+    @classmethod
+    def _id_shape(cls, v: str) -> str:
+        if not is_valid(v, "membership"):
+            raise ValueError(f"invalid membership id: {v!r}")
+        return v
+
+
 class Organization(Base):
     id: str = Field(default_factory=lambda: new_id("org"))
     name: NonEmptyStr

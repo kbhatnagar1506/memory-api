@@ -25,6 +25,7 @@ from ..core.errors import ConflictError
 from ..domain.embeddings.base import Vector, cosine_similarity
 from ..domain.models import (
     ApiKey,
+    Membership,
     Memory,
     MemoryStatus,
     MemoryVersion,
@@ -32,6 +33,7 @@ from ..domain.models import (
     RelationEdge,
     RelationType,
     Space,
+    User,
     utcnow,
 )
 from ..domain.text import analyze, analyze_query
@@ -63,6 +65,9 @@ class InMemoryStore(MemoryStore):
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._orgs: dict[str, Organization] = {}
+        self._users: dict[str, User] = {}
+        self._users_by_sub: dict[str, User] = {}
+        self._memberships: dict[str, Membership] = {}
         self._spaces: dict[str, Space] = {}
         self._keys: dict[str, ApiKey] = {}
         self._key_by_hash: dict[str, str] = {}
@@ -92,6 +97,58 @@ class InMemoryStore(MemoryStore):
             self._edges_by_source.clear()
             self._edges_by_target.clear()
             self._versions.clear()
+            self._users.clear()
+            self._users_by_sub.clear()
+            self._memberships.clear()
+
+    # -- identity ----------------------------------------------------------
+
+    async def upsert_user(self, user: User) -> User:
+        async with self._lock:
+            existing = self._users_by_sub.get(user.google_sub)
+            if existing is not None:
+                # Keep the id stable across logins: memberships point at it,
+                # and a new id on every sign-in would orphan them.
+                merged = existing.model_copy(
+                    update={
+                        "email": user.email,
+                        "name": user.name or existing.name,
+                        "picture": user.picture or existing.picture,
+                        "last_seen_at": user.last_seen_at,
+                    }
+                )
+                self._users[merged.id] = merged
+                self._users_by_sub[merged.google_sub] = merged
+                return merged
+            self._users[user.id] = user
+            self._users_by_sub[user.google_sub] = user
+            return user
+
+    async def get_user_by_google_sub(self, google_sub: str) -> User | None:
+        return self._users_by_sub.get(google_sub)
+
+    async def create_membership(self, membership: Membership) -> Membership:
+        async with self._lock:
+            for existing in self._memberships.values():
+                if (
+                    existing.user_id == membership.user_id
+                    and existing.org_id == membership.org_id
+                ):
+                    raise ConflictError("already a member of that organization")
+            self._memberships[membership.id] = membership
+            return membership
+
+    async def list_memberships(self, user_id: str) -> list[Membership]:
+        return sorted(
+            (m for m in self._memberships.values() if m.user_id == user_id),
+            key=lambda m: m.created_at,
+        )
+
+    async def get_membership(self, user_id: str, org_id: str) -> Membership | None:
+        for m in self._memberships.values():
+            if m.user_id == user_id and m.org_id == org_id:
+                return m
+        return None
 
     # -- organizations & spaces -------------------------------------------
 

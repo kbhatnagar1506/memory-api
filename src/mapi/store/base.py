@@ -23,6 +23,7 @@ from typing import Any
 from ..domain.embeddings.base import Vector
 from ..domain.models import (
     ApiKey,
+    Membership,
     Memory,
     MemoryStatus,
     MemoryVersion,
@@ -30,6 +31,7 @@ from ..domain.models import (
     RelationEdge,
     RelationType,
     Space,
+    User,
 )
 
 
@@ -126,6 +128,29 @@ class MemoryStore(abc.ABC):
     @abc.abstractmethod
     async def ping(self) -> bool:
         """Cheap liveness probe. Must not raise."""
+
+    # -- identity ----------------------------------------------------------
+    #
+    # Users are NOT scoped by org: a person exists before they belong to
+    # anything, and belongs to several. Every other read in this interface
+    # takes org_id first precisely because it must not cross a tenant
+    # boundary; these three are the deliberate exception, and the boundary
+    # they respect instead is the user's own id.
+
+    @abc.abstractmethod
+    async def upsert_user(self, user: User) -> User: ...
+
+    @abc.abstractmethod
+    async def get_user_by_google_sub(self, google_sub: str) -> User | None: ...
+
+    @abc.abstractmethod
+    async def create_membership(self, membership: Membership) -> Membership: ...
+
+    @abc.abstractmethod
+    async def list_memberships(self, user_id: str) -> list[Membership]: ...
+
+    @abc.abstractmethod
+    async def get_membership(self, user_id: str, org_id: str) -> Membership | None: ...
 
     # -- organizations & spaces -------------------------------------------
 

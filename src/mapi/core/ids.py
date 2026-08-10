@@ -27,6 +27,8 @@ PREFIXES: Final[dict[str, str]] = {
     "job": "job",
     "edge": "edg",
     "version": "ver",
+    "user": "usr",
+    "membership": "mbr",
 }
 
 _ID_RE: Final = re.compile(

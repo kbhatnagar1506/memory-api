@@ -125,7 +125,12 @@ def upgrade() -> None:
         INSERT INTO relation_edges
             (id, org_id, space_id, source_id, target_id, type, reason, confidence, created_at)
         SELECT
-            'edg_' || substr(md5(random()::text || m.id || rel->>'target_id'), 1, 26),
+            -- (rel->>'target_id') MUST stay parenthesised: `||` binds tighter
+            -- than `->>`, so without it Postgres reads this as
+            -- (random()::text || m.id || rel) ->> 'target_id' -- concatenating
+            -- the jsonb into a string and then subscripting the string, which
+            -- fails with "operator does not exist: text ->> unknown".
+            'edg_' || substr(md5(random()::text || m.id || (rel->>'target_id')), 1, 26),
             m.org_id,
             m.space_id,
             m.id,

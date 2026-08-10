@@ -1295,3 +1295,100 @@ Python(74298) MallocStackLogging: can't turn off malloc stack logging because it
     lexical_only           FULL=0.826 hit=0.966 mrr=0.898 17294ms (276s)
     hybrid_rrf             FULL=0.916 hit=0.998 mrr=0.963 18059ms (288s)
     hybrid_rerank          FULL=0.800 hit=0.962 mrr=0.810 16787ms (267s)
+    hybrid_rerank_entity   FULL=0.800 hit=0.962 mrr=0.810 30435ms (487s)
+  end-to-end with vector_only (best full recall) ...
+Python(77529) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77548) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77549) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77550) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77551) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77552) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77553) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77554) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77555) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77556) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77557) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77558) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77574) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77590) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77607) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77624) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77641) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+    [  1/500] decline single-session-user      What breed is my dog?                                -> 'NO_ANSWER' (gold 'Golden Retriever')Python(77668) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+
+Python(77675) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77680) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77699) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77718) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+    [  2/500] decline single-session-user      How much RAM did I upgrade my laptop to?             -> 'NO_ANSWER' (gold '16GB')
+    [  3/500] decline single-session-user      What was my last name before I changed it?           -> 'NO_ANSWER' (gold 'Johnson')
+    [  4/500] decline single-session-user      Where do I take yoga classes?                        -> 'NO_ANSWER' (gold 'Serenity Yoga')
+Python(77760) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77765) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77794) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77812) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77829) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77837) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77861) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77868) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77895) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77900) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77931) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77934) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77953) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(77968) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+    [  5/500] decline single-session-user      Where did I redeem a $5 coupon on coffee creamer?    -> 'NO_ANSWER' (gold 'Target')
+Python(77992) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(78018) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+    [  6/500] ok      single-session-user      How old was I when my grandma gave me the silver nec -> '18' (gold '18')
+    [  7/500] WRONG   single-session-user      What was my previous occupation?                     -> 'marketing specialist' (gold 'Marketing specialist at a smal')
+    [  8/500] ok      single-session-user      How much is the painting of a sunset worth in terms  -> 'Triple what I paid for it.' (gold 'The painting is worth triple w')
+    [  9/500] ok      single-session-user      What speed is my new internet plan?                  -> '500 Mbps' (gold '500 Mbps')
+    [ 10/500] ok      single-session-user      How long is my daily commute to work?                -> '45 minutes each way' (gold '45 minutes each way')
+    [ 11/500] ok      single-session-user      What is the name of my cat?                          -> 'Luna' (gold 'Luna')
+    [ 12/500] ok      single-session-user      When did I volunteer at the local animal shelter's f -> 'February 14, 2023' (gold 'February 14th')
+    [ 13/500] ok      single-session-user      How long did it take me to assemble the IKEA bookshe -> '4 hours' (gold '4 hours')
+    [ 14/500] ok      single-session-user      What brand are my favorite running shoes?            -> 'Nike' (gold 'Nike')
+    [ 15/500] ok      single-session-user      What certification did I complete last month?        -> 'Data Science' (gold 'Data Science')
+    [ 16/500] ok      single-session-user      Where did I buy my new tennis racket from?           -> 'a sports store downtown' (gold 'the sports store downtown')
+    [ 17/500] ok      single-session-user      How many amateur comedians did I watch perform at th -> '10' (gold '10')
+    [ 18/500] ok      single-session-user      What did I buy for my sister's birthday gift?        -> 'A yellow dress and a pair of earrings (match' (gold 'a yellow dress')
+    [ 19/500] ok      single-session-user      Where did I attend my cousin's wedding?              -> 'the Grand Ballroom' (gold 'The Grand Ballroom')
+    [ 20/500] ok      single-session-user      What is the name of the playlist I created on Spotif -> 'Summer Vibes' (gold 'Summer Vibes')
+    [ 21/500] ok      single-session-user      What was the discount I got on my first purchase fro -> '10%' (gold '10%')
+    [ 22/500] ok      single-session-user      What is my preferred gin-to-vermouth ratio for a cla -> '3:1' (gold '3:1')
+    [ 23/500] ok      single-session-user      How many playlists do I have on Spotify?             -> '20' (gold '20')
+    [ 24/500] ok      single-session-user      How many largemouth bass did I catch on my fishing t -> '12' (gold '12')
+    [ 25/500] ok      single-session-user      What play did I attend at the local community theate -> 'The Glass Menagerie' (gold 'The Glass Menagerie')
+    [ 26/500] ok      single-session-user      What degree did I graduate with?                     -> 'Business Administration' (gold 'Business Administration')
+    [ 27/500] ok      single-session-user      How much did I spend on a designer handbag?          -> '$800' (gold '$800')
+    [ 28/500] ok      single-session-user      What color did I repaint my bedroom walls?           -> 'a lighter shade of gray' (gold 'a lighter shade of gray')
+    [ 29/500] ok      single-session-user      How many shirts did I pack for my 5-day trip to Cost -> '7' (gold '7')
+    [ 30/500] ok      single-session-user      What type of rice is my favorite?                    -> 'Japanese short-grain rice' (gold 'Japanese short-grain rice')
+    [ 31/500] ok      single-session-user      Who did I have a conversation with about destiny?    -> 'Sarah' (gold 'Sarah')
+    [ 32/500] ok      single-session-user      How many bikes do I own?                             -> '3' (gold 'three')
+    [ 33/500] WRONG   single-session-user      Where did I attend for my study abroad program?      -> 'University of Melbourne' (gold 'University of Melbourne in Aus')
+    [ 34/500] ok      single-session-user      How long did it take to move to the new apartment?   -> 'around 5 hours' (gold '5 hours')
+    [ 35/500] ok      single-session-user      What type of cocktail recipe did I try last weekend? -> 'Lavender Gin Fizz' (gold 'lavender gin fizz')
+    [ 36/500] WRONG   single-session-user      What was my previous stance on spirituality?         -> 'not anything special' (gold 'A staunch atheist')
+    [ 37/500] ok      single-session-user      Where did I complete my Bachelor's degree in Compute -> 'UCLA' (gold 'University of California, Los ')
+    [ 38/500] decline single-session-user      How many skeins of worsted weight yarn did I find in -> 'NO_ANSWER' (gold '17')
+    [ 39/500] decline single-session-user      How long did Alex marinate the BBQ ribs in special s -> 'NO_ANSWER' (gold '24 hours')
+    [ 40/500] decline single-session-user      What brand of shampoo do I currently use?            -> 'NO_ANSWER' (gold "Trader Joe's")
+    [ 41/500] decline single-session-user      What is the name of my hamster?                      -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 42/500] decline single-session-user      What game did I finally beat last weekend?           -> 'NO_ANSWER' (gold 'Dark Souls 3 DLC')
+    [ 43/500] decline single-session-user      How long was I in Korea for?                         -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 44/500] decline single-session-user      How long have I been collecting vintage films?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 45/500] decline single-session-user      What did I bake for my uncle's birthday party?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 46/500] decline single-session-user      What did my dad gave me as a birthday gift?          -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 47/500] ok      single-session-user      How many copies of my favorite artist's debut album  -> '500' (gold '500')
+    [ 48/500] decline single-session-user      How much time do I dedicate to practicing violin eve -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 49/500] ok      single-session-user      What size is my new Samsung TV?                      -> '55-inch' (gold '55-inch')
+    [ 50/500] ok      single-session-user      What health issue did I initially think was just a c -> 'bronchitis' (gold 'bronchitis')
+    [ 51/500] ok      single-session-user      Where did I attend the Imagine Dragons concert?      -> 'Xfinity Center' (gold 'Xfinity Center')
+    [ 52/500] ok      single-session-user      What book am I currently reading?                    -> 'The Seven Husbands of Evelyn Hugo' (gold 'The Seven Husbands of Evelyn H')
+    [ 53/500] ok      single-session-user      What did I bake for my niece's birthday party?       -> 'lemon blueberry cake' (gold 'a lemon blueberry cake')
+    [ 54/500] ok      single-session-user      What time do I stop checking work emails and message -> '7 pm' (gold '7 pm')
+    [ 55/500] ok      single-session-user      How long did I wait for the decision on my asylum ap -> 'over a year' (gold 'over a year')
+    [ 56/500] ok      single-session-user      What time do I usually get home from work on weeknig -> '6:30 pm' (gold '6:30 pm')
+    [ 57/500] ok      single-session-user      Where did I buy my new bookshelf from?               -> 'IKEA' (gold 'IKEA')

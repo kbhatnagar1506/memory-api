@@ -57,10 +57,41 @@ def test_an_id_skips_the_lookup_entirely(client: Mapi) -> None:
 
 
 @respx.mock
-def test_an_unknown_slug_says_how_to_fix_it(client: Mapi) -> None:
+def test_an_unknown_space_is_created_rather_than_refused(client: Mapi) -> None:
+    """Writing to a space that does not exist yet is the first write.
+
+    This used to raise "no space with slug X, create it first" -- ceremony
+    that existed only because the server keeps spaces in a table.
+    """
     respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json={"items": []}))
-    with pytest.raises(MapiError, match="spaces.create"):
-        client.memories.add("hi", space="typo")
+    created = respx.post(f"{BASE}/v1/spaces").mock(
+        httpx.Response(201, json={"id": "spc_new", "slug": "fresh", "name": "fresh"})
+    )
+    write = respx.post(f"{BASE}/v1/spaces/spc_new/memories").mock(
+        httpx.Response(201, json={"memory": {"id": "mem_1", "content": "hi"}})
+    )
+
+    client.memories.add("hi", space="fresh")
+
+    assert created.call_count == 1
+    assert write.call_count == 1
+
+
+@respx.mock
+def test_a_created_space_is_cached_like_any_other(client: Mapi) -> None:
+    """One creation per process, not one per write."""
+    respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json={"items": []}))
+    created = respx.post(f"{BASE}/v1/spaces").mock(
+        httpx.Response(201, json={"id": "spc_new", "slug": "fresh", "name": "fresh"})
+    )
+    respx.post(f"{BASE}/v1/spaces/spc_new/memories").mock(
+        httpx.Response(201, json={"memory": {"id": "mem_1", "content": "hi"}})
+    )
+
+    client.memories.add("one", space="fresh")
+    client.memories.add("two", space="fresh")
+
+    assert created.call_count == 1
 
 
 @respx.mock

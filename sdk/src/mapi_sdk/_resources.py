@@ -20,7 +20,6 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from ._errors import MapiError
 from ._models import Memory, MemoryContext, SearchResult, Space
 
 T = TypeVar("T")
@@ -363,18 +362,9 @@ class Graph(_Resource):
         return result
 
 
-def resolve_slug(spaces: builtins.list[Space], slug: str, cache: dict[str, str]) -> str:
-    for space in spaces:
-        cache[space.slug] = space.id
-    if slug not in cache:
-        raise MapiError(
-            f"no space with slug {slug!r}. Create it first: "
-            f"client.spaces.create({slug!r})"
-        )
-    return cache[slug]
-
-
-
+#: `resolve_slug` used to live here and raised "no space with slug X, create
+#: it first". Both clients now create the space instead -- writing to a space
+#: that does not exist yet is the first write, not a mistake.
 
 
 # -- async --------------------------------------------------------------------
@@ -627,5 +617,4 @@ __all__ = [
     "Relation",
     "Search",
     "Spaces",
-    "resolve_slug",
 ]

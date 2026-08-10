@@ -31,7 +31,6 @@ from ._resources import (
     Memories,
     Search,
     Spaces,
-    resolve_slug,
 )
 
 DEFAULT_BASE_URL = "https://memory-api-7b178bde9ecc.herokuapp.com"
@@ -164,11 +163,27 @@ class Mapi:
         raise last or MapiError("request failed")
 
     def _space_id(self, space: str) -> str:
+        """Resolve a slug to an id, CREATING the space if it does not exist.
+
+        Writing to a space that has not been created yet is not an error, it
+        is the first write. Making the caller create one first is ceremony
+        that exists only because the server keeps spaces in a table -- an
+        implementation detail nobody should have to know about to store their
+        first memory.
+
+        Resolved once per process and cached, so the readable name costs one
+        extra request on a cold client and nothing afterwards.
+        """
         if space.startswith("spc_"):
             return space
         if space in self._space_cache:
             return self._space_cache[space]
-        return resolve_slug(self.spaces.list(), space, self._space_cache)
+        for existing in self.spaces.list():
+            self._space_cache[existing.slug] = existing.id
+        if space not in self._space_cache:
+            created = self.spaces.create(space)
+            self._space_cache[created.slug] = created.id
+        return self._space_cache[space]
 
     # -- convenience -------------------------------------------------------
     # The two calls that make up most usage, without reaching through a
@@ -237,13 +252,19 @@ class AsyncMapi:
         raise last or MapiError("request failed")
 
     async def _space_id(self, space: str) -> str:
+        """Resolve a slug to an id, creating the space if it does not exist."""
         if space.startswith("spc_"):
             return space
         if space in self._space_cache:
             return self._space_cache[space]
         payload = await self.request("GET", "/v1/spaces")
-        spaces = [Space.parse(s) for s in (payload or {}).get("items", [])]
-        return resolve_slug(spaces, space, self._space_cache)
+        for item in (payload or {}).get("items", []):
+            existing = Space.parse(item)
+            self._space_cache[existing.slug] = existing.id
+        if space not in self._space_cache:
+            created = await self.spaces.create(space)
+            self._space_cache[created.slug] = created.id
+        return self._space_cache[space]
 
     async def add(self, content: str, *, space: str, **kw: Any) -> Any:
         return await self.memories.add(content, space=space, **kw)

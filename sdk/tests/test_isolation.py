@@ -92,9 +92,11 @@ def test_the_built_artifacts_contain_no_server_code() -> None:
     forbidden = ("mapi/", "service", "pipeline", "harness", "consolidation", "bench")
     for artifact in artifacts:
         if artifact.suffix == ".whl":
-            names = zipfile.ZipFile(artifact).namelist()
+            with zipfile.ZipFile(artifact) as archive:
+                names = archive.namelist()
         else:
-            names = tarfile.open(artifact).getnames()
+            with tarfile.open(artifact) as archive:
+                names = archive.getnames()
         assert names, f"{artifact.name} is empty"
         for name in names:
             leaf = name.split("/")[-1]

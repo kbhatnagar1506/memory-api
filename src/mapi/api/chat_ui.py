@@ -79,9 +79,38 @@ PAGE = """<!doctype html>
   textarea { flex:1; padding:12px 14px; border:1px solid var(--line); border-radius:11px;
              background:var(--panel); resize:none; min-height:52px; max-height:180px }
 
-  aside { position:sticky; top:22px }
+  aside { position:sticky; top:22px; max-height:calc(100vh - 44px); display:flex;
+          flex-direction:column }
   aside h2 { font-size:12px; letter-spacing:.11em; text-transform:uppercase; color:var(--dim);
              font-weight:600; margin:0 0 12px }
+  /* Three panels, one column. The sources for an answer, everything in the
+     space, and one memory's relation neighbourhood are three views of the
+     same data, and stacking them would push the thread off screen. */
+  .tabs { display:flex; gap:2px; padding:3px; background:var(--hair); border-radius:10px;
+          margin-bottom:14px }
+  .tabs button { flex:1; padding:7px 6px; border:0; border-radius:8px; background:transparent;
+                 color:var(--dim); font-size:13px; font-weight:600; cursor:pointer }
+  .tabs button.on { background:var(--panel); color:var(--text); box-shadow:var(--shadow) }
+  .panel { overflow-y:auto; flex:1; min-height:0 }
+  .panel[hidden] { display:none }
+  .addrow { display:flex; gap:8px; margin-bottom:12px }
+  .addrow input { flex:1; min-width:0; font-size:13.5px }
+  .mem { border:1px solid var(--line); background:var(--panel); border-radius:11px;
+         padding:11px 12px; margin-bottom:9px; font-size:13.5px; line-height:1.55;
+         cursor:pointer }
+  .mem:hover { border-color:#d6d3cd }
+  .mem .kind { font-size:11px; font-weight:700; letter-spacing:.04em; color:var(--dim) }
+  .mem .kind.derived { color:#2f6f9e }
+  .rel { border-left:2px solid var(--line); padding:2px 0 2px 11px; margin:8px 0 8px 3px;
+         font-size:13px; line-height:1.5 }
+  .rel .what { font-size:11px; font-weight:700; letter-spacing:.04em; color:var(--dim);
+               display:block; margin-bottom:3px }
+  .rel.supersedes .what { color:var(--warn) }
+  .rel.contradicts .what { color:#c2352a }
+  .rel.derived_from .what { color:#2f6f9e }
+  .back { border:0; background:none; color:var(--dim); font-size:12.5px; cursor:pointer;
+          padding:0; margin-bottom:10px }
+  .back:hover { color:var(--text) }
   .src { border:1px solid var(--line); background:var(--panel); border-radius:11px;
          padding:12px 13px; margin-bottom:10px; font-size:13.5px; line-height:1.55 }
   .src.used { border-color:#cfcbc3; box-shadow:var(--shadow) }
@@ -133,8 +162,29 @@ cites the memories it used, and says so when it has nothing.</div>
   </main>
 
   <aside>
-    <h2>Memories used</h2>
-    <div id="sources"><div class="empty">Sources for the last answer appear here.</div></div>
+    <div class="tabs">
+      <button data-tab="sources" class="on">Sources</button>
+      <button data-tab="memories">Memories</button>
+      <button data-tab="context">Context</button>
+    </div>
+
+    <div class="panel" id="tab-sources">
+      <div id="sources"><div class="empty">Sources for the last answer appear here.</div></div>
+    </div>
+
+    <div class="panel" id="tab-memories" hidden>
+      <form class="addrow" id="addform">
+        <input id="addtext" placeholder="Remember something…" autocomplete="off">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <div id="memories"><div class="empty">Connect to see this space.</div></div>
+    </div>
+
+    <div class="panel" id="tab-context" hidden>
+      <div id="context"><div class="empty">Pick a memory to see what it
+      relates to — what replaced it, what it disagrees with, and what was
+      extracted from it.</div></div>
+    </div>
   </aside>
 </div>
 
@@ -171,9 +221,16 @@ async function connect() {
   const key = $('key').value.trim();
   if (!key) return fail('Paste an API key first.');
   try {
-    const data = await api('/v1/spaces');
-    const spaces = data.items || [];
-    if (!spaces.length) return fail('This key has no spaces yet. Create one first.');
+    let spaces = (await api('/v1/spaces')).items || [];
+    if (!spaces.length) {
+      // A key with no space is a new account, not an error. Make one rather
+      // than telling somebody to go somewhere else and come back.
+      await api('/v1/spaces', {
+        method: 'POST',
+        body: JSON.stringify({ slug: 'default', name: 'Default' }),
+      });
+      spaces = (await api('/v1/spaces')).items || [];
+    }
     const select = $('space');
     select.innerHTML = '';
     for (const s of spaces) {
@@ -290,9 +347,14 @@ async function ask(event) {
 
 $('connect').addEventListener('click', connect);
 $('form').addEventListener('submit', ask);
+$('addform').addEventListener('submit', addMemory);
+for (const button of document.querySelectorAll('.tabs button')) {
+  button.addEventListener('click', () => showTab(button.dataset.tab));
+}
 $('space').addEventListener('change', () => {
   localStorage.setItem(SPACE, $('space').value);
   history = [];
+  if (!$('tab-memories').hidden) loadMemories();
 });
 $('input').addEventListener('input', (e) => {
   e.target.style.height = 'auto';

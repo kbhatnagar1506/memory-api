@@ -174,3 +174,72 @@ def test_superseded_memories_are_not_adjudicated() -> None:
     old = _memory("I eat meat")
     old.status = MemoryStatus.SUPERSEDED
     assert unexplained_pairs(new, [1.0, 0.0, 0.0], [(old, [0.92, 0.39, 0.0])]) == []
+
+
+# -- lineage: claims never revise the passage they came from ---------------
+#
+# Extraction turns one paragraph into several claims, each near-identical to
+# the parent and to its siblings. Run through the revision checks unfiltered,
+# that produced real damage on real data: a claim was flagged as contradicting
+# its own parent, and "Krishna is affiliated with Reakon Labs" was applied as
+# SUPERSEDING "Principal Engineer and co-founder of Reakon Labs since May
+# 2026" -- a vague claim hiding the specific fact it was extracted from.
+
+
+def _claim(content: str, parent_id: str) -> Memory:
+    return Memory(
+        org_id=new_id("org"),
+        space_id=new_id("space"),
+        content=content,
+        metadata={"extracted_from": parent_id},
+    )
+
+
+def test_a_claim_shares_lineage_with_its_parent() -> None:
+    from mapi.domain.consolidation import same_lineage
+
+    parent = _memory("Krishna is on an F-1 visa and needs CPT during semesters.")
+    claim = _claim("Krishna is on an F-1 visa.", parent.id)
+    assert same_lineage(claim, parent)
+    assert same_lineage(parent, claim), "the relation is symmetric"
+
+
+def test_two_claims_from_one_passage_share_lineage() -> None:
+    from mapi.domain.consolidation import same_lineage
+
+    parent_id = new_id("memory")
+    a = _claim("Krishna's GitHub username is kbhatnagar1506.", parent_id)
+    b = _claim("Krishna made 1,612 contributions in the past year.", parent_id)
+    assert same_lineage(a, b)
+
+
+def test_unrelated_memories_do_not_share_lineage() -> None:
+    from mapi.domain.consolidation import same_lineage
+
+    a = _memory("Krishna is on an F-1 visa.")
+    b = _memory("Reakon runs on Next.js 15.")
+    assert not same_lineage(a, b)
+    # Claims of DIFFERENT parents must still be able to revise each other.
+    c = _claim("Krishna lives in Berlin.", new_id("memory"))
+    d = _claim("Krishna lives in Madrid.", new_id("memory"))
+    assert not same_lineage(c, d)
+
+
+def test_a_claim_is_never_proposed_as_superseding_its_parent() -> None:
+    from mapi.domain.consolidation import propose_supersessions
+
+    parent = _memory("Krishna is Principal Engineer and co-founder of Reakon Labs.")
+    claim = _claim("Krishna is affiliated with Reakon Labs.", parent.id)
+    vector, close = [1.0, 0.0, 0.0], [0.96, 0.28, 0.0]
+
+    assert propose_supersessions(claim, vector, [(parent, close)]) == []
+
+
+def test_a_claim_is_never_proposed_as_contradicting_its_parent() -> None:
+    from mapi.domain.consolidation import propose_contradictions
+
+    parent = _memory("Krishna is on an F-1 visa and does not hold a green card.")
+    claim = _claim("Krishna is on an F-1 visa.", parent.id)
+    vector, close = [1.0, 0.0, 0.0], [0.92, 0.39, 0.0]
+
+    assert propose_contradictions(claim, vector, [(parent, close)]) == []

@@ -179,7 +179,7 @@ def propose_supersessions(
 
     proposals: list[SupersessionProposal] = []
     for memory, vector in candidates:
-        if memory.id == new_memory.id:
+        if memory.id == new_memory.id or same_lineage(new_memory, memory):
             continue
         if memory.status is not MemoryStatus.ACTIVE:
             continue
@@ -297,6 +297,7 @@ __all__ = [
     "merge_duplicate",
     "propose_contradictions",
     "propose_supersessions",
+    "same_lineage",
     "unexplained_pairs",
 ]
 
@@ -370,6 +371,44 @@ def _figure_conflict(left: str, right: str) -> str | None:
     return None
 
 
+def same_lineage(left: Memory, right: Memory) -> bool:
+    """Whether two memories are facets of a single original statement.
+
+    Write-time extraction turns one paragraph into several atomic claims, and
+    every one of them is near-identical to its parent and to its siblings --
+    they are the same sentence viewed at different resolutions. Feeding those
+    pairs to the revision checks produces nonsense in both directions, and it
+    did, on real data:
+
+        "Krishna is on an F-1 visa."
+          flagged as CONTRADICTING
+        "Krishna is on an F-1 visa. He needs CPT authorization ..."
+
+        "Krishna is affiliated with Reakon Labs."
+          flagged as SUPERSEDING
+        "Krishna is Principal Engineer and co-founder of Reakon Labs since
+         May 2026."
+
+    The second is the dangerous one: a vaguer claim hid the specific fact it
+    was extracted from. Nothing about similarity can catch this, because the
+    similarity is real -- the pair genuinely IS about the same thing. What
+    disqualifies it is PROVENANCE, which the `extracted_from` metadata records
+    exactly.
+
+    A claim never contradicts or replaces the passage it came from, and two
+    claims from one passage never contradict or replace each other. They are
+    joined by `derived_from` and by association instead, which is what those
+    edges are for.
+    """
+    left_parent = (left.metadata or {}).get("extracted_from")
+    right_parent = (right.metadata or {}).get("extracted_from")
+    if left_parent and left_parent == right.id:
+        return True
+    if right_parent and right_parent == left.id:
+        return True
+    return bool(left_parent) and left_parent == right_parent
+
+
 def unexplained_pairs(
     new_memory: Memory,
     new_embedding: Vector,
@@ -397,7 +436,7 @@ def unexplained_pairs(
 
     out: list[tuple[Memory, float]] = []
     for memory, vector in candidates:
-        if memory.id == new_memory.id:
+        if memory.id == new_memory.id or same_lineage(new_memory, memory):
             continue
         if memory.status is not MemoryStatus.ACTIVE:
             continue
@@ -443,7 +482,7 @@ def propose_contradictions(
 
     proposals: list[ContradictionProposal] = []
     for memory, vector in candidates:
-        if memory.id == new_memory.id:
+        if memory.id == new_memory.id or same_lineage(new_memory, memory):
             continue
         if memory.status is not MemoryStatus.ACTIVE:
             continue

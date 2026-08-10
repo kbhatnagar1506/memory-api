@@ -8,17 +8,19 @@ a browser handed a JSON error is a dead end.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from ..config import Settings
-from ..core.errors import ConflictError
+from ..core.errors import ConflictError, NotFoundError
 from ..core.logging import get_logger
-from ..domain.models import User
+from ..core.security import build_api_key
+from ..domain.models import Scope, User
 from ..identity import MAX_ORGS_PER_USER, IdentityService
-from ..store.base import MemoryStore
+from ..store.base import MemoryFilter, MemoryStore
 from . import pages
 from .session import (
     COOKIE_NAME,
@@ -116,6 +118,77 @@ async def create_org(
 
         return RedirectResponse(f"/orgs?error={quote(str(exc))}", status_code=303)
     return RedirectResponse("/orgs", status_code=303)
+
+
+@router.get("/orgs/{org_id}", response_class=HTMLResponse)
+async def dashboard(request: Request, user: CurrentUser, org_id: str) -> Response:
+    if user is None:
+        return RedirectResponse("/auth/google/login", status_code=303)
+    identity = _identity(request)
+    # 404 for a non-member, same as everywhere else: a 403 would confirm the
+    # organization exists to anyone who can guess an id.
+    await identity.require_member(user, org_id)
+
+    store = request.app.state.store
+    org = await store.get_organization(org_id)
+    if org is None:
+        raise NotFoundError(f"organization {org_id} not found", field="org_id")
+
+    spaces = []
+    for space in await store.list_spaces(org_id):
+        count = await store.count_memories(org_id, space.id, filters=MemoryFilter())
+        spaces.append({"id": space.id, "name": space.name, "memories": count})
+
+    keys = [
+        {
+            "name": k.name,
+            "prefix": k.id[:12],
+            "created": k.created_at.date().isoformat(),
+        }
+        for k in await store.list_api_keys(org_id)
+    ]
+    # Shown once, then gone: the plaintext is never stored, so a page reload
+    # cannot reveal it again.
+    revealed = request.query_params.get("key", "")
+    return HTMLResponse(
+        pages.dashboard(org.name, org.id, user.email, spaces, keys, new_key=revealed)
+    )
+
+
+@router.post("/orgs/{org_id}/spaces")
+async def create_space(
+    request: Request, user: CurrentUser, org_id: str, name: Annotated[str, Form()]
+) -> Response:
+    if user is None:
+        return RedirectResponse("/auth/google/login", status_code=303)
+    await _identity(request).require_member(user, org_id)
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().casefold()).strip("-") or "space"
+    await request.app.state.service.create_space(
+        org_id, slug=slug[:64], name=name.strip()[:200]
+    )
+    return RedirectResponse(f"/orgs/{org_id}", status_code=303)
+
+
+@router.post("/orgs/{org_id}/keys")
+async def create_key(
+    request: Request, user: CurrentUser, org_id: str, name: Annotated[str, Form()]
+) -> Response:
+    if user is None:
+        return RedirectResponse("/auth/google/login", status_code=303)
+    await _identity(request).require_member(user, org_id)
+    settings = _settings(request)
+    record, plaintext = build_api_key(
+        org_id=org_id,
+        name=name.strip()[:120] or "key",
+        pepper=settings.api_key_pepper,
+        scopes=frozenset(Scope.all()),
+    )
+    await request.app.state.store.create_api_key(record)
+    # Carried in the redirect so it is shown exactly once. Not logged, and not
+    # recoverable afterwards -- only the hash is kept.
+    from urllib.parse import quote
+
+    return RedirectResponse(f"/orgs/{org_id}?key={quote(plaintext)}", status_code=303)
 
 
 # -- auth --------------------------------------------------------------------

@@ -1838,3 +1838,21 @@ Python(78018) MallocStackLogging: can't turn off malloc stack logging because it
     accuracy=0.711 [0.668,0.750] abstention=0.8621 errors=1 (910s)
 
 wrote /Users/krishnabhatnagar/mapi/bench/results/lme-v19-extract-add-cap2/report.md
+=== ALL DONE 06:03:55 ===
+=== ROUTING arm started 06:04:04 ===
+run lme-v20-extract-cap-routed
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+  extracting with gemini-2.5-flash ...
+    claim cache: 18464 hits, 0 to extract
+    224785 claims from 23601 documents (1 yielded none) in 0s
+  claim cache: {'rows': 33285, 'hits': 23601, 'misses': 0}
+    [1/500] 1684 chunks, 0s elapsed, ~249s left
+    [25/500] 41927 chunks, 9s elapsed, ~175s left
+    [50/500] 83820 chunks, 21s elapsed, ~193s left
+    [75/500] 125563 chunks, 39s elapsed, ~219s left
+    [100/500] 168153 chunks, 58s elapsed, ~233s left
+    [125/500] 210728 chunks, 138s elapsed, ~415s left
+    [150/500] 253245 chunks, 258s elapsed, ~603s left

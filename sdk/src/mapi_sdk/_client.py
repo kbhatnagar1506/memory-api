@@ -1,86 +1,46 @@
-"""The client. HTTP only — this package never imports the server.
+"""The clients. HTTP only — this package never imports the server.
 
-That separation is the point, not an accident of layout: publishing a client
-that imports the engine would publish the engine. There is a test asserting
-this module's import graph touches nothing named `mapi.*`, so the property
-survives someone reaching for a convenient shared helper later.
+That separation is the design, not an accident of layout: publishing a client
+that imports the engine would publish the engine. Tests assert the import
+graph, so the property survives someone reaching for a shared helper later.
+
+`Mapi` and `AsyncMapi` are the same surface. The resource classes are written
+once and handed a request callable, so URLs, bodies and parsing exist in one
+place -- two hand-written implementations drift, and the async one always
+drifts last and silently.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 import time
-from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Self
 
 import httpx
 
 from ._errors import ConnectionError_, MapiError, from_response
-from ._models import Memory, MemoryContext, SearchResult, Space
+from ._models import Space
+from ._resources import (
+    AsyncGraph,
+    AsyncMemories,
+    AsyncSearch,
+    AsyncSpaces,
+    Graph,
+    Memories,
+    Search,
+    Spaces,
+    resolve_slug,
+)
 
 DEFAULT_BASE_URL = "https://memory-api-7b178bde9ecc.herokuapp.com"
+__client_version__ = "0.1.0"
 
 #: Retried automatically. 429 and the gateway family are transient by
-#: definition; 500 is not on this list, because a request that made the
-#: server throw will usually make it throw again, and retrying hides it.
-_RETRY_STATUS = frozenset({429, 502, 503, 504})
-
-
-class _Transport:
-    """Shared request logic. Retries, error mapping, and nothing else."""
-
-    def __init__(
-        self,
-        api_key: str | None,
-        base_url: str,
-        timeout: float,
-        max_retries: int,
-    ) -> None:
-        key = api_key or os.getenv("MAPI_API_KEY", "")
-        if not key:
-            raise MapiError(
-                "no API key: pass api_key=... or set MAPI_API_KEY. "
-                "Create one in the dashboard under API keys."
-            )
-        self.api_key = key
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self.max_retries = max_retries
-
-    @property
-    def headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            # Version in the agent so a server-side log can tell which client
-            # produced a shape it did not expect.
-            "User-Agent": "mapi-sdk/0.1.0 (python)",
-        }
-
-    def backoff(self, attempt: int, retry_after: float | None) -> float:
-        if retry_after is not None:
-            return min(retry_after, 30.0)
-        # Jittered, so a fleet of clients retrying after one outage does not
-        # arrive back in lockstep and cause the next one.
-        delay: float = min(0.25 * (2**attempt), 8.0) * (0.5 + random.random())
-        return delay
-
-    def interpret(self, response: httpx.Response) -> Any:
-        if response.status_code == 204 or not response.content:
-            return None
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = {}
-        if response.is_success:
-            return payload
-        retry_after = _retry_after(response)
-        raise from_response(
-            response.status_code,
-            payload if isinstance(payload, dict) else {},
-            retry_after,
-        )
+#: definition. 500 is deliberately absent: a request that made the server
+#: throw will usually throw again, and retrying only hides it.
+RETRY_STATUS = frozenset({429, 502, 503, 504})
 
 
 def _retry_after(response: httpx.Response) -> float | None:
@@ -93,47 +53,67 @@ def _retry_after(response: httpx.Response) -> float | None:
         return None
 
 
-def _memory_body(
-    content: str,
-    *,
-    tags: list[str] | None,
-    metadata: dict[str, Any] | None,
-    source: str,
-    occurred_at: datetime | None,
-    extract: bool,
-    auto_supersede: bool,
-    detect_conflicts: bool,
-    dedupe: bool,
-) -> dict[str, Any]:
-    body: dict[str, Any] = {"content": content, "dedupe": dedupe}
-    if tags:
-        body["tags"] = tags
-    if metadata:
-        body["metadata"] = metadata
-    if source:
-        body["source"] = source
-    if occurred_at is not None:
-        body["occurred_at"] = occurred_at.isoformat()
-    if extract:
-        body["extract"] = True
-    if auto_supersede:
-        body["auto_supersede"] = True
-    if detect_conflicts:
-        body["detect_conflicts"] = True
-    return body
+def _backoff(attempt: int, retry_after: float | None) -> float:
+    if retry_after is not None:
+        return min(retry_after, 30.0)
+    # Jittered, so a fleet of clients retrying after one outage does not
+    # arrive back in lockstep and cause the next one.
+    delay: float = min(0.25 * (2**attempt), 8.0) * (0.5 + random.random())
+    return delay
+
+
+def _interpret(response: httpx.Response) -> Any:
+    if response.status_code == 204 or not response.content:
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        # Proxies return HTML 502s. Losing the status to a decode error would
+        # replace a legible failure with a confusing one.
+        payload = {}
+    if response.is_success:
+        return payload
+    raise from_response(
+        response.status_code,
+        payload if isinstance(payload, dict) else {},
+        _retry_after(response),
+    )
+
+
+def _resolve_key(api_key: str | None) -> str:
+    key = api_key or os.getenv("MAPI_API_KEY", "")
+    if not key:
+        raise MapiError(
+            "no API key: pass api_key=... or set MAPI_API_KEY. "
+            "Create one in the dashboard under API keys."
+        )
+    return key
+
+
+def _headers(api_key: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        # Version in the agent, so a server log can identify which client
+        # produced a shape it did not expect.
+        "User-Agent": f"mapi-sdk/{__client_version__} (python)",
+    }
 
 
 class Mapi:
     """Synchronous client.
 
-        mapi = Mapi(api_key="sm_...")
-        mapi.add("Prefers window seats", space="ada")
-        for hit in mapi.search("seating preference", space="ada"):
+        from mapi_sdk import Mapi
+
+        client = Mapi(api_key="sm_...")
+        client.spaces.get_or_create("ada")
+        client.memories.add("Prefers window seats", space="ada")
+
+        for hit in client.search.execute("seating", space="ada"):
             print(hit.score, hit.content)
 
-    `space` accepts a slug or an id. Slugs are resolved once and cached, so
-    passing the human-readable name costs one extra request per process
-    rather than one per call.
+    `space` accepts a slug or an id everywhere. Slugs resolve once and cache,
+    so the readable name costs one request per process rather than per call.
     """
 
     def __init__(
@@ -144,9 +124,16 @@ class Mapi:
         timeout: float = 30.0,
         max_retries: int = 3,
     ) -> None:
-        self._t = _Transport(api_key, base_url, timeout, max_retries)
-        self._http = httpx.Client(base_url=self._t.base_url, timeout=timeout)
-        self._spaces: dict[str, str] = {}
+        self.api_key = _resolve_key(api_key)
+        self.base_url = base_url.rstrip("/")
+        self.max_retries = max_retries
+        self._http = httpx.Client(base_url=self.base_url, timeout=timeout)
+        self._space_cache: dict[str, str] = {}
+
+        self.spaces = Spaces(self.request, self._space_cache)
+        self.memories = Memories(self.request, self._space_id)
+        self.search = Search(self.request, self._space_id)
+        self.graph = Graph(self.request, self._space_id)
 
     def __enter__(self) -> Self:
         return self
@@ -157,198 +144,112 @@ class Mapi:
     def close(self) -> None:
         self._http.close()
 
-    # -- plumbing ----------------------------------------------------------
-
-    def _request(self, method: str, path: str, **kw: Any) -> Any:
+    def request(self, method: str, path: str, **kw: Any) -> Any:
         last: Exception | None = None
-        for attempt in range(self._t.max_retries + 1):
+        for attempt in range(self.max_retries + 1):
             try:
                 response = self._http.request(
-                    method, path, headers=self._t.headers, **kw
+                    method, path, headers=_headers(self.api_key), **kw
                 )
             except httpx.HTTPError as exc:
-                last = ConnectionError_(f"could not reach {self._t.base_url}: {exc}")
-                if attempt < self._t.max_retries:
-                    time.sleep(self._t.backoff(attempt, None))
+                last = ConnectionError_(f"could not reach {self.base_url}: {exc}")
+                if attempt < self.max_retries:
+                    time.sleep(_backoff(attempt, None))
                     continue
                 raise last from exc
-            if response.status_code in _RETRY_STATUS and attempt < self._t.max_retries:
-                time.sleep(self._t.backoff(attempt, _retry_after(response)))
+            if response.status_code in RETRY_STATUS and attempt < self.max_retries:
+                time.sleep(_backoff(attempt, _retry_after(response)))
                 continue
-            return self._t.interpret(response)
+            return _interpret(response)
         raise last or MapiError("request failed")
 
     def _space_id(self, space: str) -> str:
-        """Resolve a slug to an id, or pass an id straight through."""
         if space.startswith("spc_"):
             return space
-        if space in self._spaces:
-            return self._spaces[space]
-        for item in self.spaces():
-            self._spaces[item.slug] = item.id
-        if space not in self._spaces:
-            raise MapiError(
-                f"no space with slug {space!r}. Create it first: "
-                f"client.create_space({space!r})"
-            )
-        return self._spaces[space]
+        if space in self._space_cache:
+            return self._space_cache[space]
+        return resolve_slug(self.spaces.list(), space, self._space_cache)
 
-    # -- spaces ------------------------------------------------------------
+    # -- convenience -------------------------------------------------------
+    # The two calls that make up most usage, without reaching through a
+    # namespace. Thin delegates, so there is still one implementation.
 
-    def spaces(self) -> list[Space]:
-        data = self._request("GET", "/v1/spaces")
-        return [Space.parse(s) for s in (data or {}).get("items", [])]
+    def add(self, content: str, *, space: str, **kw: Any) -> Any:
+        return self.memories.add(content, space=space, **kw)
 
-    def create_space(self, slug: str, name: str | None = None) -> Space:
-        data = self._request(
-            "POST", "/v1/spaces", json={"slug": slug, "name": name or slug}
-        )
-        space = Space.parse(data or {})
-        self._spaces[space.slug] = space.id
-        return space
+    def query(self, query: str, *, space: str, **kw: Any) -> Any:
+        return self.search.execute(query, space=space, **kw)
 
-    def get_or_create_space(self, slug: str, name: str | None = None) -> Space:
-        for item in self.spaces():
-            if item.slug == slug:
-                self._spaces[item.slug] = item.id
-                return item
-        return self.create_space(slug, name)
 
-    # -- memories ----------------------------------------------------------
+class AsyncMapi:
+    """Asynchronous client. Same surface as `Mapi`, awaited.
 
-    def add(
+        client = AsyncMapi(api_key="sm_...")
+        await client.memories.add("Prefers window seats", space="ada")
+        hits = await client.search.execute("seating", space="ada")
+    """
+
+    def __init__(
         self,
-        content: str,
+        api_key: str | None = None,
         *,
-        space: str,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
-        source: str = "",
-        occurred_at: datetime | None = None,
-        extract: bool = False,
-        auto_supersede: bool = False,
-        detect_conflicts: bool = False,
-        dedupe: bool = True,
-    ) -> Memory:
-        """Store one memory.
+        base_url: str = DEFAULT_BASE_URL,
+        timeout: float = 30.0,
+        max_retries: int = 3,
+    ) -> None:
+        self.api_key = _resolve_key(api_key)
+        self.base_url = base_url.rstrip("/")
+        self.max_retries = max_retries
+        self._http = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
+        self._space_cache: dict[str, str] = {}
 
-        `occurred_at` is when it HAPPENED, not when you are writing it. The
-        difference matters for anything asking "what order did these come
-        in", and defaulting to now quietly makes a backfill look like it all
-        happened today.
-        """
-        body = _memory_body(
-            content,
-            tags=tags,
-            metadata=metadata,
-            source=source,
-            occurred_at=occurred_at,
-            extract=extract,
-            auto_supersede=auto_supersede,
-            detect_conflicts=detect_conflicts,
-            dedupe=dedupe,
-        )
-        data = self._request(
-            "POST", f"/v1/spaces/{self._space_id(space)}/memories", json=body
-        )
-        payload = (data or {}).get("memory", data)
-        return Memory.parse(payload or {})
+        self.spaces = AsyncSpaces(self.request, self._space_cache)
+        self.memories = AsyncMemories(self.request, self._space_id)
+        self.search = AsyncSearch(self.request, self._space_id)
+        self.graph = AsyncGraph(self.request, self._space_id)
 
-    def add_many(self, items: list[dict[str, Any]], *, space: str) -> list[Memory]:
-        """Store up to 100 memories in one request."""
-        data = self._request(
-            "POST",
-            f"/v1/spaces/{self._space_id(space)}/memories/bulk",
-            json={"items": items},
-        )
-        results = (data or {}).get("items") or (data or {}).get("results") or []
-        return [Memory.parse(r.get("memory", r)) for r in results]
+    async def __aenter__(self) -> Self:
+        return self
 
-    def get(self, memory_id: str, *, space: str) -> Memory:
-        data = self._request(
-            "GET", f"/v1/spaces/{self._space_id(space)}/memories/{memory_id}"
-        )
-        return Memory.parse(data or {})
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()
 
-    def delete(self, memory_id: str, *, space: str) -> None:
-        self._request(
-            "DELETE", f"/v1/spaces/{self._space_id(space)}/memories/{memory_id}"
-        )
+    async def close(self) -> None:
+        await self._http.aclose()
 
-    # -- reading -----------------------------------------------------------
+    async def request(self, method: str, path: str, **kw: Any) -> Any:
+        last: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await self._http.request(
+                    method, path, headers=_headers(self.api_key), **kw
+                )
+            except httpx.HTTPError as exc:
+                last = ConnectionError_(f"could not reach {self.base_url}: {exc}")
+                if attempt < self.max_retries:
+                    await asyncio.sleep(_backoff(attempt, None))
+                    continue
+                raise last from exc
+            if response.status_code in RETRY_STATUS and attempt < self.max_retries:
+                await asyncio.sleep(_backoff(attempt, _retry_after(response)))
+                continue
+            return _interpret(response)
+        raise last or MapiError("request failed")
 
-    def search(
-        self,
-        query: str,
-        *,
-        space: str,
-        limit: int = 10,
-        tags: list[str] | None = None,
-        include_superseded: bool = False,
-        min_score: float = 0.0,
-        explain: bool = False,
-        **options: Any,
-    ) -> SearchResult:
-        """Hybrid search: vector and lexical, fused.
+    async def _space_id(self, space: str) -> str:
+        if space.startswith("spc_"):
+            return space
+        if space in self._space_cache:
+            return self._space_cache[space]
+        payload = await self.request("GET", "/v1/spaces")
+        spaces = [Space.parse(s) for s in (payload or {}).get("items", [])]
+        return resolve_slug(spaces, space, self._space_cache)
 
-        Superseded memories are excluded by default -- a fact that has been
-        replaced is still stored and still reachable, but returning it
-        alongside its replacement is how an agent states last month's answer
-        with this month's confidence.
-        """
-        body: dict[str, Any] = {"query": query, "limit": limit, **options}
-        if tags:
-            body["tags"] = tags
-        if include_superseded:
-            body["include_superseded"] = True
-        if min_score:
-            body["min_score"] = min_score
-        if explain:
-            body["explain"] = True
-        data = self._request(
-            "POST", f"/v1/spaces/{self._space_id(space)}/search", json=body
-        )
-        return SearchResult.parse(data or {})
+    async def add(self, content: str, *, space: str, **kw: Any) -> Any:
+        return await self.memories.add(content, space=space, **kw)
 
-    def context(self, memory_id: str, *, space: str) -> MemoryContext:
-        """One memory plus every typed relation touching it.
-
-        This is the call that answers "why does the system believe this":
-        what replaced it, what it replaced, what it was computed from, and
-        what disagrees with it.
-        """
-        data = self._request(
-            "GET",
-            f"/v1/spaces/{self._space_id(space)}/memories/{memory_id}/context",
-        )
-        return MemoryContext.parse(data or {})
-
-    def relate(
-        self,
-        memory_id: str,
-        *,
-        space: str,
-        target_id: str,
-        relation: Literal["supersedes", "contradicts", "derived_from", "references"],
-        reason: str = "",
-    ) -> dict[str, Any]:
-        edge: dict[str, Any] = (
-            self._request(
-                "POST",
-                f"/v1/spaces/{self._space_id(space)}/memories/{memory_id}/relations",
-                json={"target_id": target_id, "type": relation, "reason": reason},
-            )
-            or {}
-        )
-        return edge
-
-    def graph(self, *, space: str, limit: int = 300) -> dict[str, Any]:
-        """The space as memories plus the typed edges between them."""
-        result = self._request(
-            "GET", f"/v1/spaces/{self._space_id(space)}/graph", params={"limit": limit}
-        )
-        out: dict[str, Any] = dict(result or {})
-        return out
+    async def query(self, query: str, *, space: str, **kw: Any) -> Any:
+        return await self.search.execute(query, space=space, **kw)
 
 
-__all__ = ["DEFAULT_BASE_URL", "Mapi"]
+__all__ = ["DEFAULT_BASE_URL", "AsyncMapi", "Mapi"]

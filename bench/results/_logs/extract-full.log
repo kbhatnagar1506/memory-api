@@ -1872,3 +1872,5 @@ run lme-v20-extract-cap-routed
     [500/500] 846344 chunks, 2025s elapsed, ~0s left
   embedding cache: {'rows': 587848, 'hits': 755210, 'misses': 91134}
   ingested 317696 units (293829 of them extracted claims) / 846344 chunks in 2031s (120s embedding)
+    vector_only            FULL=0.948 hit=1.000 mrr=0.987 18984ms (302s)
+    lexical_only           FULL=0.826 hit=0.966 mrr=0.898 15059ms (244s)

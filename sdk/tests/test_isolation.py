@@ -9,8 +9,8 @@ the benchmark harness onto PyPI.
 
 from __future__ import annotations
 
+import ast
 import pathlib
-import re
 import sys
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "mapi_sdk"
@@ -22,10 +22,20 @@ ALLOWED_THIRD_PARTY = {"httpx"}
 
 
 def _imports(path: pathlib.Path) -> set[str]:
-    text = path.read_text()
-    found = set()
-    for match in re.finditer(r"^\s*(?:from|import)\s+([a-zA-Z_][\w.]*)", text, re.MULTILINE):
-        found.add(match.group(1).split(".")[0])
+    """Top-level module names this file imports.
+
+    Parsed, not grepped. A regex over the source also matches prose: a
+    docstring line beginning "from it, since..." reads as an import of a
+    module named `it`, and a test that cries wolf gets muted rather than
+    fixed.
+    """
+    tree = ast.parse(path.read_text())
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            found.add(node.module.split(".")[0])
     return found
 
 

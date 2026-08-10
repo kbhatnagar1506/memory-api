@@ -31,7 +31,7 @@ def test_an_api_key_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_the_key_can_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MAPI_API_KEY", "sm_from_env")
-    assert Mapi(base_url=BASE)._t.api_key == "sm_from_env"
+    assert Mapi(base_url=BASE).api_key == "sm_from_env"
 
 
 @respx.mock
@@ -40,8 +40,8 @@ def test_a_slug_is_resolved_to_an_id_once(client: Mapi) -> None:
     create = respx.post(f"{BASE}/v1/spaces/spc_ada/memories").mock(
         httpx.Response(201, json={"memory": {"id": "mem_1", "content": "hi"}})
     )
-    client.add("hi", space="ada")
-    client.add("again", space="ada")
+    client.memories.add("hi", space="ada")
+    client.memories.add("again", space="ada")
     assert spaces.call_count == 1, "the slug lookup must be cached"
     assert create.call_count == 2
 
@@ -52,15 +52,15 @@ def test_an_id_skips_the_lookup_entirely(client: Mapi) -> None:
     respx.post(f"{BASE}/v1/spaces/spc_direct/memories").mock(
         httpx.Response(201, json={"memory": {"id": "mem_1", "content": "hi"}})
     )
-    client.add("hi", space="spc_direct")
+    client.memories.add("hi", space="spc_direct")
     assert spaces.call_count == 0
 
 
 @respx.mock
 def test_an_unknown_slug_says_how_to_fix_it(client: Mapi) -> None:
     respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json={"items": []}))
-    with pytest.raises(MapiError, match="create_space"):
-        client.add("hi", space="typo")
+    with pytest.raises(MapiError, match="spaces.create"):
+        client.memories.add("hi", space="typo")
 
 
 @respx.mock
@@ -78,7 +78,7 @@ def test_search_returns_iterable_hits(client: Mapi) -> None:
             },
         )
     )
-    hits = client.search("seat", space="ada")
+    hits = client.search.execute("seat", space="ada")
     assert len(hits) == 2
     assert [h.id for h in hits] == ["mem_1", "mem_2"]
     assert hits[0].content == "window seats"
@@ -94,7 +94,7 @@ def test_errors_carry_the_request_id(client: Mapi) -> None:
         )
     )
     with pytest.raises(NotFoundError, match="req_9"):
-        client.spaces()
+        client.spaces.list()
 
 
 @respx.mock
@@ -103,7 +103,7 @@ def test_a_bad_key_raises_authentication_error(client: Mapi) -> None:
         httpx.Response(401, json={"code": "unauthorized", "detail": "bad key"})
     )
     with pytest.raises(AuthenticationError):
-        client.spaces()
+        client.spaces.list()
 
 
 @respx.mock
@@ -112,7 +112,7 @@ def test_rate_limits_are_retried_then_raised(client: Mapi) -> None:
         httpx.Response(429, headers={"retry-after": "0"}, json={"code": "rate_limited"})
     )
     with pytest.raises(RateLimitError):
-        client.spaces()
+        client.spaces.list()
     assert route.call_count == 3, "two retries then give up"
 
 
@@ -124,7 +124,7 @@ def test_a_transient_gateway_error_recovers(client: Mapi) -> None:
             httpx.Response(200, json=SPACES),
         ]
     )
-    assert [s.slug for s in client.spaces()] == ["ada"]
+    assert [s.slug for s in client.spaces.list()] == ["ada"]
 
 
 @respx.mock
@@ -132,7 +132,7 @@ def test_a_500_is_not_retried(client: Mapi) -> None:
     """A request that made the server throw will throw again; retrying hides it."""
     route = respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(500, json={}))
     with pytest.raises(MapiError):
-        client.spaces()
+        client.spaces.list()
     assert route.call_count == 1
 
 
@@ -143,7 +143,7 @@ def test_a_non_json_error_body_does_not_mask_the_status(client: Mapi) -> None:
         side_effect=[httpx.Response(502, text="<html>bad gateway</html>")] * 3
     )
     with pytest.raises(MapiError) as caught:
-        client.spaces()
+        client.spaces.list()
     assert caught.value.status == 502
 
 
@@ -155,7 +155,7 @@ def test_event_time_is_sent_when_given(client: Mapi) -> None:
     route = respx.post(f"{BASE}/v1/spaces/spc_ada/memories").mock(
         httpx.Response(201, json={"memory": {"id": "m", "content": "c"}})
     )
-    client.add(
+    client.memories.add(
         "ran a 5K",
         space="ada",
         occurred_at=datetime(2023, 5, 20, tzinfo=UTC),
@@ -180,7 +180,7 @@ def test_context_parses_the_whole_neighbourhood(client: Mapi) -> None:
             },
         )
     )
-    ctx = client.context("mem_1", space="ada")
+    ctx = client.memories.context("mem_1", space="ada")
     assert ctx.is_current is False
     assert ctx.current_head[0].content == "PB is 24:10"
     assert ctx.replaced[0].content == "PB is 27:12"
@@ -189,5 +189,62 @@ def test_context_parses_the_whole_neighbourhood(client: Mapi) -> None:
 @respx.mock
 def test_the_key_is_sent_as_a_bearer_token(client: Mapi) -> None:
     route = respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json=SPACES))
-    client.spaces()
+    client.spaces.list()
     assert route.calls[0].request.headers["authorization"] == "Bearer sm_test"
+
+
+# -- async: same surface, awaited ---------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_client_mirrors_the_sync_one() -> None:
+    from mapi_sdk import AsyncMapi
+
+    respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json=SPACES))
+    respx.post(f"{BASE}/v1/spaces/spc_ada/memories").mock(
+        httpx.Response(201, json={"memory": {"id": "mem_a", "content": "hi"}})
+    )
+    respx.post(f"{BASE}/v1/spaces/spc_ada/search").mock(
+        httpx.Response(
+            200,
+            json={"results": [{"memory": {"id": "mem_a", "content": "hi"}, "score": 0.7}]},
+        )
+    )
+    async with AsyncMapi(api_key="sm_test", base_url=BASE) as client:
+        memory = await client.memories.add("hi", space="ada")
+        assert memory.id == "mem_a"
+        hits = await client.search.execute("hi", space="ada")
+        assert hits[0].score == 0.7
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_errors_are_the_same_types() -> None:
+    from mapi_sdk import AsyncMapi
+
+    respx.get(f"{BASE}/v1/spaces").mock(
+        httpx.Response(401, json={"code": "unauthorized", "detail": "bad key"})
+    )
+    async with AsyncMapi(api_key="sm_test", base_url=BASE) as client:
+        with pytest.raises(AuthenticationError):
+            await client.spaces.list()
+
+
+def test_sync_and_async_expose_exactly_the_same_methods() -> None:
+    """A method on one and not the other is drift, and this is where it shows.
+
+    No allow-list: an exemption here is how the async client quietly falls a
+    release behind, which is the failure mode this whole split invites.
+    """
+    from mapi_sdk import _resources
+
+    for name in ("Memories", "Search", "Spaces", "Graph"):
+        sync = {n for n in dir(getattr(_resources, name)) if not n.startswith("_")}
+        asynchronous = {
+            n for n in dir(getattr(_resources, "Async" + name)) if not n.startswith("_")
+        }
+        assert sync == asynchronous, (
+            f"{name}: sync-only {sorted(sync - asynchronous)}, "
+            f"async-only {sorted(asynchronous - sync)}"
+        )

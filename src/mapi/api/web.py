@@ -9,6 +9,7 @@ a browser handed a JSON error is a dead end.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -18,7 +19,7 @@ from ..config import Settings
 from ..core.errors import ConflictError, NotFoundError
 from ..core.logging import get_logger
 from ..core.security import build_api_key
-from ..domain.models import Scope, User
+from ..domain.models import Memory, Scope, User
 from ..identity import MAX_ORGS_PER_USER, IdentityService
 from ..store.base import MemoryFilter, MemoryStore
 from . import pages
@@ -120,39 +121,162 @@ async def create_org(
     return RedirectResponse("/orgs", status_code=303)
 
 
+# -- dashboard JSON, cookie-authenticated ------------------------------------
+#
+# Deliberately NOT the versioned API. That surface takes a bearer key and
+# belongs to programs; these belong to a signed-in person and take a cookie.
+# Keeping them apart means the public API never has to learn about sessions,
+# and a browser bug cannot widen what a key can do.
+
+
+async def _member_or_404(request: Request, user: User | None, org_id: str) -> User:
+    if user is None:
+        raise NotFoundError(f"organization {org_id} not found", field="org_id")
+    await _identity(request).require_member(user, org_id)
+    return user
+
+
+@router.get("/orgs/{org_id}/api/spaces")
+async def api_spaces(request: Request, user: CurrentUser, org_id: str) -> dict[str, object]:
+    await _member_or_404(request, user, org_id)
+    store = request.app.state.store
+    items = []
+    for space in await store.list_spaces(org_id):
+        items.append(
+            {
+                "id": space.id,
+                "name": space.name,
+                "memory_count": await store.count_memories(
+                    org_id, space.id, filters=MemoryFilter()
+                ),
+                "metadata": space.metadata,
+            }
+        )
+    return {"items": items}
+
+
+@router.get("/orgs/{org_id}/api/graph")
+async def api_graph(
+    request: Request, user: CurrentUser, org_id: str, space: str, limit: int = 400
+) -> dict[str, object]:
+    await _member_or_404(request, user, org_id)
+    graph = await request.app.state.service.get_graph(org_id, space, limit=limit)
+    return {
+        "space_id": graph.space_id,
+        "nodes": [
+            {
+                "id": m.id,
+                "content": m.content[:400],
+                "kind": m.kind.value,
+                "status": m.status.value,
+                "occurred_at": m.occurred_at.isoformat(),
+                "tags": m.tags,
+                "degree": graph.degree.get(m.id, 0),
+            }
+            for m in graph.memories
+        ],
+        "edges": [
+            {
+                "source": e.source_id,
+                "target": e.target_id,
+                "type": e.type.value,
+                "reason": e.reason,
+                "confidence": e.confidence,
+            }
+            for e in graph.edges
+        ],
+        "counts": graph.counts,
+    }
+
+
+@router.get("/orgs/{org_id}/api/context/{memory_id}")
+async def api_context(
+    request: Request, user: CurrentUser, org_id: str, memory_id: str, space: str
+) -> dict[str, object]:
+    await _member_or_404(request, user, org_id)
+    ctx = await request.app.state.service.get_memory_context(org_id, space, memory_id)
+
+    def brief(items: Sequence[Memory]) -> list[dict[str, str]]:
+        return [
+            {
+                "id": m.id,
+                "content": m.content[:400],
+                "status": m.status.value,
+                "occurred_at": m.occurred_at.isoformat(),
+            }
+            for m in items
+        ]
+
+    return {
+        "memory": {
+            "id": ctx.memory.id,
+            "content": ctx.memory.content,
+            "status": ctx.memory.status.value,
+            "kind": ctx.memory.kind.value,
+            "occurred_at": ctx.memory.occurred_at.isoformat(),
+        },
+        "is_current": ctx.is_current,
+        "current_head": brief(ctx.current_head),
+        "replaced": brief(ctx.replaced),
+        "derived_from": brief(ctx.derived_from),
+        "derivatives": brief(ctx.derivatives),
+        "references": brief(ctx.references),
+        "contradicts": brief(ctx.contradicts),
+    }
+
+
+@router.get("/orgs/{org_id}/api/keys")
+async def api_keys(request: Request, user: CurrentUser, org_id: str) -> dict[str, object]:
+    await _member_or_404(request, user, org_id)
+    return {
+        "items": [
+            {
+                "id": k.id,
+                "name": k.name,
+                "created_at": k.created_at.isoformat(),
+                "scopes": sorted(s.value for s in k.scopes),
+            }
+            for k in await request.app.state.store.list_api_keys(org_id)
+        ]
+    }
+
+
 @router.get("/orgs/{org_id}", response_class=HTMLResponse)
 async def dashboard(request: Request, user: CurrentUser, org_id: str) -> Response:
+    """The organization's dashboard: graph, replay and keys in one shell.
+
+    Serves the same document as the standalone viewer. It reads the org from
+    the path and authenticates with the session cookie, so no key appears in
+    a URL -- a key in a query string ends up in history, referrers and logs.
+    """
     if user is None:
         return RedirectResponse("/auth/google/login", status_code=303)
-    identity = _identity(request)
-    # 404 for a non-member, same as everywhere else: a 403 would confirm the
+    # 404 for a non-member, as everywhere else: a 403 confirms the
     # organization exists to anyone who can guess an id.
-    await identity.require_member(user, org_id)
+    await _identity(request).require_member(user, org_id)
+    from .graph_ui import PAGE
 
-    store = request.app.state.store
-    org = await store.get_organization(org_id)
-    if org is None:
-        raise NotFoundError(f"organization {org_id} not found", field="org_id")
+    return HTMLResponse(PAGE)
 
-    spaces = []
-    for space in await store.list_spaces(org_id):
-        count = await store.count_memories(org_id, space.id, filters=MemoryFilter())
-        spaces.append({"id": space.id, "name": space.name, "memories": count})
 
-    keys = [
-        {
-            "name": k.name,
-            "prefix": k.id[:12],
-            "created": k.created_at.date().isoformat(),
-        }
-        for k in await store.list_api_keys(org_id)
-    ]
-    # Shown once, then gone: the plaintext is never stored, so a page reload
-    # cannot reveal it again.
-    revealed = request.query_params.get("key", "")
-    return HTMLResponse(
-        pages.dashboard(org.name, org.id, user.email, spaces, keys, new_key=revealed)
+@router.post("/orgs/{org_id}/keys.json")
+async def create_key_json(
+    request: Request, user: CurrentUser, org_id: str
+) -> dict[str, str]:
+    """Mint a key for the dashboard's own use. Returns the plaintext ONCE."""
+    await _member_or_404(request, user, org_id)
+    payload = await request.json()
+    name = str(payload.get("name") or "key").strip()[:120] or "key"
+    record, plaintext = build_api_key(
+        org_id=org_id,
+        name=name,
+        pepper=_settings(request).api_key_pepper,
+        scopes=frozenset(Scope.all()),
     )
+    await request.app.state.store.create_api_key(record)
+    # Never logged and never stored: only the hash is kept, so this response
+    # is the single opportunity to see it.
+    return {"key": plaintext, "name": name}
 
 
 @router.post("/orgs/{org_id}/spaces")
@@ -167,28 +291,6 @@ async def create_space(
         org_id, slug=slug[:64], name=name.strip()[:200]
     )
     return RedirectResponse(f"/orgs/{org_id}", status_code=303)
-
-
-@router.post("/orgs/{org_id}/keys")
-async def create_key(
-    request: Request, user: CurrentUser, org_id: str, name: Annotated[str, Form()]
-) -> Response:
-    if user is None:
-        return RedirectResponse("/auth/google/login", status_code=303)
-    await _identity(request).require_member(user, org_id)
-    settings = _settings(request)
-    record, plaintext = build_api_key(
-        org_id=org_id,
-        name=name.strip()[:120] or "key",
-        pepper=settings.api_key_pepper,
-        scopes=frozenset(Scope.all()),
-    )
-    await request.app.state.store.create_api_key(record)
-    # Carried in the redirect so it is shown exactly once. Not logged, and not
-    # recoverable afterwards -- only the hash is kept.
-    from urllib.parse import quote
-
-    return RedirectResponse(f"/orgs/{org_id}?key={quote(plaintext)}", status_code=303)
 
 
 # -- auth --------------------------------------------------------------------

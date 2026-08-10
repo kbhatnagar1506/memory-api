@@ -1856,3 +1856,6 @@ run lme-v20-extract-cap-routed
     [100/500] 168153 chunks, 58s elapsed, ~233s left
     [125/500] 210728 chunks, 138s elapsed, ~415s left
     [150/500] 253245 chunks, 258s elapsed, ~603s left
+    [175/500] 295876 chunks, 405s elapsed, ~753s left
+    [200/500] 338115 chunks, 419s elapsed, ~628s left
+    [225/500] 380661 chunks, 615s elapsed, ~751s left

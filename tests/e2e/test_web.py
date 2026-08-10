@@ -57,6 +57,7 @@ async def test_orgs_requires_sign_in(app_and_client) -> None:
 
 
 async def test_a_member_sees_their_dashboard(app_and_client) -> None:
+    """The dashboard is the three-section shell: graph, replay, keys."""
     app, client = app_and_client
     identity = IdentityService(app.state.store)
     user = await identity.sign_in_with_google(CLAIMS)
@@ -64,8 +65,42 @@ async def test_a_member_sees_their_dashboard(app_and_client) -> None:
 
     r = await client.get(f"/orgs/{org.id}", cookies=_as(user.id))
     assert r.status_code == 200
-    assert "Acme" in r.text
-    assert "API keys" in r.text
+    for section in ("Memory graph", "Memory replay", "API keys"):
+        assert section in r.text
+    # The org comes from the path and auth from the cookie -- a key in a query
+    # string would end up in history, referrers and logs.
+    assert "Bearer" not in r.text
+
+
+async def test_dashboard_data_is_cookie_authenticated(app_and_client) -> None:
+    app, client = app_and_client
+    identity = IdentityService(app.state.store)
+    user = await identity.sign_in_with_google(CLAIMS)
+    org = await identity.create_organization(user, "Acme")
+    await client.post(f"/orgs/{org.id}/spaces", data={"name": "Ada"}, cookies=_as(user.id))
+
+    spaces = await client.get(f"/orgs/{org.id}/api/spaces", cookies=_as(user.id))
+    assert spaces.status_code == 200
+    assert [s["name"] for s in spaces.json()["items"]] == ["Ada"]
+
+    space_id = spaces.json()["items"][0]["id"]
+    graph = await client.get(f"/orgs/{org.id}/api/graph?space={space_id}", cookies=_as(user.id))
+    assert graph.status_code == 200
+    assert graph.json()["nodes"] == []
+
+
+async def test_dashboard_data_is_refused_to_outsiders(app_and_client) -> None:
+    app, client = app_and_client
+    identity = IdentityService(app.state.store)
+    owner = await identity.sign_in_with_google(CLAIMS)
+    org = await identity.create_organization(owner, "Private")
+    outsider = await identity.sign_in_with_google(OTHER)
+
+    for path in (f"/orgs/{org.id}/api/spaces", f"/orgs/{org.id}/api/keys"):
+        r = await client.get(path, cookies=_as(outsider.id))
+        assert r.status_code == 404, path
+        anon = await client.get(path)
+        assert anon.status_code == 404, path
 
 
 async def test_a_non_member_gets_404_not_403(app_and_client) -> None:
@@ -87,19 +122,22 @@ async def test_a_forged_cookie_does_not_sign_you_in(app_and_client) -> None:
     assert r.status_code == 303
 
 
-async def test_a_created_key_is_revealed_once(app_and_client) -> None:
+async def test_a_created_key_is_returned_once_and_never_again(app_and_client) -> None:
     app, client = app_and_client
     identity = IdentityService(app.state.store)
     user = await identity.sign_in_with_google(CLAIMS)
     org = await identity.create_organization(user, "Acme")
 
-    r = await client.post(f"/orgs/{org.id}/keys", data={"name": "sdk"}, cookies=_as(user.id))
-    assert r.status_code == 303
-    assert "key=" in r.headers["location"]
+    r = await client.post(
+        f"/orgs/{org.id}/keys.json", json={"name": "sdk"}, cookies=_as(user.id)
+    )
+    assert r.status_code == 200
+    plaintext = r.json()["key"]
 
-    # and a plain reload never shows it again
-    again = await client.get(f"/orgs/{org.id}", cookies=_as(user.id))
-    assert "Copy this key now" not in again.text
+    # Only the hash is stored, so no later read can reproduce the plaintext.
+    listing = await client.get(f"/orgs/{org.id}/api/keys", cookies=_as(user.id))
+    assert [k["name"] for k in listing.json()["items"]] == ["sdk"]
+    assert plaintext not in listing.text
 
 
 async def test_a_non_member_cannot_mint_a_key(app_and_client) -> None:
@@ -110,7 +148,7 @@ async def test_a_non_member_cannot_mint_a_key(app_and_client) -> None:
     outsider = await identity.sign_in_with_google(OTHER)
 
     r = await client.post(
-        f"/orgs/{org.id}/keys", data={"name": "theirs"}, cookies=_as(outsider.id)
+        f"/orgs/{org.id}/keys.json", json={"name": "theirs"}, cookies=_as(outsider.id)
     )
     assert r.status_code == 404
     assert await app.state.store.list_api_keys(org.id) == []
@@ -125,5 +163,5 @@ async def test_spaces_created_from_the_dashboard_appear(app_and_client) -> None:
     await client.post(
         f"/orgs/{org.id}/spaces", data={"name": "Ada Lovelace"}, cookies=_as(user.id)
     )
-    page = await client.get(f"/orgs/{org.id}", cookies=_as(user.id))
-    assert "Ada Lovelace" in page.text
+    listing = await client.get(f"/orgs/{org.id}/api/spaces", cookies=_as(user.id))
+    assert "Ada Lovelace" in [s["name"] for s in listing.json()["items"]]

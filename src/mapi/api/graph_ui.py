@@ -176,6 +176,7 @@ PAGE = """<!doctype html>
     <div class="brand">mapi</div>
     <button class="nav on" data-view="graph"><span class="ico">◍</span>Memory graph</button>
     <button class="nav" data-view="replay"><span class="ico">◷</span>Memory replay</button>
+    <button class="nav" data-view="keys"><span class="ico">⌁</span>API keys</button>
     <div class="railfoot"><button id="picker"><span class="who">loading…</span><span class="caret">▾</span></button></div>
   </nav>
 
@@ -210,6 +211,19 @@ PAGE = """<!doctype html>
       <div id="stats"></div>
     </div>
 
+    <div class="view" data-view="keys" hidden>
+      <h1>API keys</h1>
+      <p class="sub">A key authorises requests for this organization. It does not
+      identify a person &mdash; that is what your Google account is for.</p>
+      <div id="keylist"></div>
+      <form id="keyform" style="display:flex;gap:8px;margin-top:16px">
+        <input id="keyname" placeholder="Key name" required maxlength="120"
+               style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--bg)">
+        <button class="b pri" type="submit">Create</button>
+      </form>
+      <div id="newkey" hidden></div>
+    </div>
+
     <div class="view" data-view="replay" hidden>
       <h1>What entered memory</h1>
       <p class="sub">Scrub the timeline to see the graph as of a moment. Newest first.</p>
@@ -241,7 +255,11 @@ PAGE = """<!doctype html>
 </div>
 <script>
 const qs = new URLSearchParams(location.search);
-const KEY = qs.get('key');
+// The dashboard is reached as /orgs/{id}, so provenance comes from the path
+// and authentication from the session cookie. No key in the URL: a key in a
+// query string ends up in history, referrers and logs.
+const ORG = location.pathname.split('/')[2] || '';
+const BASE = `/orgs/${ORG}/api`;
 let SPACE = qs.get('space');
 
 const EDGE_COLOR = { supersedes:'#b8860b', contradicts:'#c2352a',
@@ -264,8 +282,8 @@ let camera = { x:0, y:0, k:1 };
 const esc = s => (s||'').replace(/[&<>"]/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-async function api(path) {
-  const r = await fetch(path, { headers: KEY ? { Authorization:'Bearer '+KEY } : {} });
+async function api(path, options) {
+  const r = await fetch(path, { credentials:'same-origin', ...(options || {}) });
   if (!r.ok) throw new Error(path + ' -> ' + r.status);
   return r.json();
 }
@@ -451,6 +469,40 @@ function renderReplay(fraction) {
 
 document.getElementById('time').oninput = e => renderReplay(e.target.value / 100);
 
+// -- api keys ----------------------------------------------------------
+async function renderKeys() {
+  const el = document.getElementById('keylist');
+  try {
+    const data = await api(`${BASE}/keys`);
+    el.innerHTML = (data.items || []).map(k =>
+      `<div class="stat" style="padding:9px 0;border-bottom:1px solid var(--hair)">
+         <span>${esc(k.name)}</span>
+         <span class="mono" style="font-size:11px">${esc(k.created_at.slice(0,10))}</span>
+       </div>`).join('') || '<p class="empty">No keys yet.</p>';
+  } catch (err) {
+    el.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+  }
+}
+
+document.getElementById('keyform').onsubmit = async e => {
+  e.preventDefault();
+  const name = document.getElementById('keyname').value.trim();
+  if (!name) return;
+  const r = await fetch(`/orgs/${ORG}/keys.json`, {
+    method:'POST', credentials:'same-origin',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({name}),
+  });
+  const data = await r.json();
+  const box = document.getElementById('newkey');
+  box.hidden = false;
+  // Shown once. Only the hash is stored, so a reload cannot recover it.
+  box.innerHTML = `<h1 class="sec">Copy this now</h1>
+    <div id="content" class="mono" style="word-break:break-all">${esc(data.key || data.detail || '')}</div>
+    <p class="empty">It is stored hashed and will not be shown again.</p>`;
+  document.getElementById('keyname').value = '';
+  renderKeys();
+};
+
 // -- view switching ----------------------------------------------------
 document.querySelectorAll('.nav').forEach(btn => btn.onclick = () => {
   view = btn.dataset.view;
@@ -460,9 +512,12 @@ document.querySelectorAll('.nav').forEach(btn => btn.onclick = () => {
   document.getElementById('hint').hidden = view === 'replay';
   if (view === 'replay') {
     renderReplay(document.getElementById('time').value / 100);
+  } else if (view === 'keys') {
+    renderKeys();
   } else {
     cutoff = null; applyFilters();
   }
+  document.getElementById('stage').hidden = view === 'keys';
 });
 
 // -- detail ------------------------------------------------------------
@@ -482,7 +537,7 @@ async function show(id) {
   try {
     // The context endpoint resolves the whole neighbourhood in one call --
     // currency, what it replaced, provenance, derivatives, contradictions.
-    const ctx = await api(`/v1/spaces/${SPACE}/memories/${id}/context`);
+    const ctx = await api(`${BASE}/context/${id}?space=${SPACE}`);
     document.getElementById('content').textContent = ctx.memory.content;
     const groups = [
       // "current version", not "stale" -- stale is a distinct status in this
@@ -574,7 +629,7 @@ async function loadSpace() {
       `<div class="qa">answer: <b>${esc(meta.answer || '')}</b></div>`;
   } else ask.hidden = true;
 
-  const g = await api(`/v1/spaces/${SPACE}/graph?limit=400`);
+  const g = await api(`${BASE}/graph?space=${SPACE}&limit=400`);
   allNodes = g.nodes; allEdges = g.edges; sel = null;
   nodes = allNodes; edges = allEdges;
   byId = Object.fromEntries(nodes.map(n => [n.id, n]));
@@ -597,11 +652,11 @@ async function loadSpace() {
 
 (async function () {
   try {
-    const list = await api('/v1/spaces');
+    const list = await api(`${BASE}/spaces`);
     spaces = list.items || [];
   } catch (err) {
     document.getElementById('stats').innerHTML =
-      `<p class="empty">Could not list spaces: ${esc(err.message)}. Add ?key=… to the URL.</p>`;
+      `<p class="empty">Could not load this organization: ${esc(err.message)}</p>`;
     return;
   }
   if (!spaces.length) {

@@ -40,6 +40,8 @@ from ...core.logging import get_logger
 from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
 from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
+from ..synthesis.classify import QuestionKind, classify
+from ..synthesis.understand import QueryIntent, QueryUnderstanding
 from .confidence import RetrievalConfidence, assess
 from .decay import apply_decay
 from .entities import salient_entities
@@ -50,6 +52,13 @@ from .rerank import RerankCandidate, Reranker
 from .routing import allocate, apply_allocation
 
 log = get_logger(__name__)
+
+#: Hard ceilings on what a comprehensive question may ask the store for.
+#: "Everything" is a shape of question, not a licence to scan a space: past
+#: these numbers a search stops being a search and becomes an export, which
+#: is what the list endpoint is for.
+_MAX_COVERAGE_LIMIT = 200
+_MAX_CANDIDATE_FETCH = 600
 
 
 def _mean_unit_vector(vectors: list[Vector]) -> Vector:
@@ -157,6 +166,24 @@ class SearchRequest:
     #: cannot serve both, and the `only` arm proved it -- better retrieval
     #: (0.950 vs 0.948) and worse answers (0.762 vs 0.781).
     route_by_kind: bool = False
+    #: Answer comprehensive questions by COVERAGE rather than by rank.
+    #:
+    #: "What is our entire infrastructure" is not asking which memory is most
+    #: relevant -- it is asking what the whole territory contains, and
+    #: relevance ranking has no opinion on completeness. Measured on 25 stored
+    #: facts, that question returned an arbitrary 10 with every score inside a
+    #: 2% band (0.0143-0.0164), omitting the database, the cache and the
+    #: runtime. An agent answering from that describes an infrastructure with
+    #: no database in it.
+    #:
+    #: None means decide from the question's shape; True and False force it.
+    #: Detection is by SHAPE, never by score spread: similarity scores are
+    #: flat enough across conversational corpora that a ratio rule admits
+    #: nearly everything, which was measured and discarded once already.
+    coverage: bool | None = None
+    #: How many results a comprehensive question may return. Bounded because
+    #: "everything" still has to fit in somebody's context window.
+    coverage_limit: int = 100
     #: Return memories that a newer memory has superseded.
     include_superseded: bool = False
     candidate_multiplier: int = 6
@@ -202,6 +229,12 @@ class SearchResponse:
     #: Entities the bridging stage expanded on. Part of the explain surface:
     #: "why is this result here" must be answerable for bridged hits too.
     entities_used: list[str] = field(default_factory=list)
+    #: What the question was read as asking for, and who read it that way
+    #: ("llm", "cache", "rules", "explicit"). Part of the explain surface:
+    #: a comprehensive question returns a different-shaped result set, and
+    #: the caller should be able to see that decision rather than infer it
+    #: from the count.
+    intent: QueryIntent | None = None
     #: Pairs of returned memory ids joined by a CONTRADICTS edge. Surfaced,
     #: not resolved: every competitor picks a winner invisibly (newest
     #: timestamp), which is indistinguishable from there being no conflict at
@@ -224,11 +257,41 @@ class RetrievalPipeline:
         embedder: EmbeddingProvider,
         reranker: Reranker,
         expander: QueryExpander | None = None,
+        understanding: QueryUnderstanding | None = None,
     ) -> None:
         self.store = store
         self.embedder = embedder
         self.reranker = reranker
         self.expander = expander or NoopExpander()
+        # None means regex-only, which is the whole product minus this one
+        # enhancement -- the pipeline never requires a model to answer.
+        self.understanding = understanding
+
+    async def _intent(self, request: SearchRequest) -> QueryIntent:
+        """What the question is asking for, and who decided.
+
+        An explicit `coverage` flag from the caller wins over both the model
+        and the regex: an API that asks for the complete set and is told
+        "your question did not look comprehensive" is an API arguing with its
+        user.
+        """
+        if request.coverage is True:
+            return QueryIntent(QuestionKind.LIST_ALL, "explicit")
+        if request.coverage is False:
+            # Forced off: still classify, because the KIND feeds routing and
+            # evidence budgeting too. Just never widen the window.
+            kind = await self._classify(request.query)
+            return QueryIntent(
+                QuestionKind.DIRECT if kind is QuestionKind.LIST_ALL else kind, "explicit"
+            )
+        if self.understanding is not None:
+            return await self.understanding.intent(request.query)
+        return QueryIntent(classify(request.query), "rules")
+
+    async def _classify(self, query: str) -> QuestionKind:
+        if self.understanding is not None:
+            return (await self.understanding.intent(query)).kind
+        return classify(query)
 
     async def _embed_query(self, query: str, *, expand: bool = False) -> Vector | None:
         """Query-side embedding. A provider failure degrades to lexical-only.
@@ -341,12 +404,37 @@ class RetrievalPipeline:
                 [], request.query, 0, timings, False, [], confidence=assess([])
             )
 
-        fetch = max(request.limit * max(request.candidate_multiplier, 1), request.limit)
-
-        # -- stage 1: candidate generation, concurrent -----------------------
+        # -- stage 0: what is this question asking for? ----------------------
+        # Before the fetch, not after it. Widening the window at the end only
+        # widens a set that was already cut to size at the start -- a
+        # comprehensive question needs the bigger candidate pool from the
+        # first query, so the decision has to come first.
+        #
+        # It runs CONCURRENTLY with the query embedding, which is the reason
+        # a model call on the read path is affordable: both are one round
+        # trip, so understanding costs the difference between them rather
+        # than its own full latency.
         t0 = loop.time()
-        embedding = await self._embed_query(query, expand=request.use_expansion)
+        embedding, intent = await asyncio.gather(
+            self._embed_query(query, expand=request.use_expansion),
+            self._intent(request),
+        )
         timings["embed_ms"] = (loop.time() - t0) * 1000
+
+        effective_limit = request.limit
+        if intent.comprehensive:
+            effective_limit = min(
+                max(request.limit, request.coverage_limit), _MAX_COVERAGE_LIMIT
+            )
+
+        fetch = max(effective_limit * max(request.candidate_multiplier, 1), effective_limit)
+        # A comprehensive question already asks for most of what comes back,
+        # so the usual 6x overfetch would page the space rather than shortlist
+        # it. Cap the pool: the multiplier exists to give the reranker
+        # choices, and past a point extra candidates are just extra I/O.
+        fetch = min(fetch, _MAX_CANDIDATE_FETCH)
+
+        t0 = loop.time()
 
         t0 = loop.time()
         vector_task = (
@@ -535,8 +623,8 @@ class RetrievalPipeline:
         # may contribute, routing decides how the surviving window splits
         # between episodes and claims. Both shape membership; MMR then orders.
         if request.route_by_kind:
-            allocation = allocate(request.query, request.limit)
-            scored = apply_allocation(scored, allocation, request.limit)
+            allocation = allocate(request.query, effective_limit, kind=intent.kind)
+            scored = apply_allocation(scored, allocation, effective_limit)
 
         # -- stage 7: MMR diversification ----------------------------------------
         t0 = loop.time()
@@ -551,7 +639,7 @@ class RetrievalPipeline:
                 for s in scored
             ]
             selection = maximal_marginal_relevance(
-                mmr_candidates, limit=request.limit, lambda_=request.mmr_lambda
+                mmr_candidates, limit=effective_limit, lambda_=request.mmr_lambda
             )
             ordered = []
             for sel in selection:
@@ -561,7 +649,7 @@ class RetrievalPipeline:
                 ordered.append(s)
             scored = ordered
         else:
-            scored = scored[: request.limit]
+            scored = scored[:effective_limit]
         timings["mmr_ms"] = (loop.time() - t0) * 1000
 
         if request.min_score > 0.0:
@@ -574,7 +662,10 @@ class RetrievalPipeline:
                 )
             scored = kept
 
-        final = scored[: request.limit]
+        final = scored[:effective_limit]
+        if intent.comprehensive:
+            for hit in final:
+                hit.explain.append(f"coverage window {effective_limit} ({intent.source})")
         conflicts = await self._find_conflicts(final, request)
         confidence = assess([s.score for s in final], has_conflicts=bool(conflicts))
         return SearchResponse(
@@ -587,6 +678,7 @@ class RetrievalPipeline:
             entities_used=entities,
             conflicts=conflicts,
             confidence=confidence,
+            intent=intent,
         )
 
     async def _find_conflicts(

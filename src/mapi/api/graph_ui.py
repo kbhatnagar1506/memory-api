@@ -33,7 +33,10 @@ from __future__ import annotations
 PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>mapi · memory graph</title>
+<link rel="icon" type="image/png" href="/static/mapi-icon.png">
+<link rel="apple-touch-icon" href="/static/mapi-icon.png">
 <style>
   :root {
     --bg:#fbfbfa; --panel:#fff; --line:#e6e4e0; --text:#1b1b19; --dim:#75726c;
@@ -51,8 +54,11 @@ PAGE = """<!doctype html>
   /* left rail */
   #rail { width:210px; flex:none; border-right:1px solid var(--line); background:var(--panel);
           padding:18px 12px; display:flex; flex-direction:column; gap:4px }
-  .brand { font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.02em;
-           padding:4px 10px 16px; color:var(--text) }
+  /* The wordmark, not the word. The dashboard is the surface people spend
+     the most time on, so it is the one place the brand should not be a
+     monospace string that happens to spell the product name. */
+  .brand { display:block; padding:6px 10px 20px }
+  .brand img { height:34px; width:auto; display:block }
   .nav { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px;
          border:0; border-radius:8px; background:transparent; color:var(--dim);
          font:inherit; font-weight:500; cursor:pointer; text-align:left }
@@ -173,7 +179,7 @@ PAGE = """<!doctype html>
 </style>
 <div id="wrap">
   <nav id="rail">
-    <div class="brand">mapi</div>
+    <a class="brand" href="/"><img src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255"></a>
     <button class="nav on" data-view="graph"><span class="ico">◍</span>Memory graph</button>
     <button class="nav" data-view="replay"><span class="ico">◷</span>Memory replay</button>
     <button class="nav" data-view="keys"><span class="ico">⌁</span>API keys</button>

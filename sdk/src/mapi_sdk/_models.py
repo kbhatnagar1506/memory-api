@@ -85,6 +85,13 @@ class SearchResult:
     #: than resolved: either side may be the true one, and an agent told
     #: "these disagree" can ask, where one handed a winner cannot.
     conflicts: list[tuple[str, str]] = field(default_factory=list)
+    #: How the question was read: "direct", "list_all", "count", and so on.
+    #: Empty when the server did not report one.
+    intent: str = ""
+    #: True when the window was widened to return a complete set rather than
+    #: a ranked few -- so a short result list means "that is all there is",
+    #: not "here are the top ten".
+    comprehensive: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
 
     def __iter__(self):  # type: ignore[no-untyped-def]
@@ -101,6 +108,8 @@ class SearchResult:
         return cls(
             hits=[SearchHit.parse(h) for h in (data.get("results") or [])],
             query=str(data.get("query", "")),
+            intent=str((data.get("intent") or {}).get("kind", "")),
+            comprehensive=bool((data.get("intent") or {}).get("comprehensive", False)),
             conflicts=[
                 (str(a), str(b))
                 for a, b in (data.get("conflicts") or [])

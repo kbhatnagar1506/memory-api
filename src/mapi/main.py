@@ -26,8 +26,8 @@ from .config import (
 from .core.errors import (
     CONTENT_TYPE,
     ConfigurationError,
+    MapiError,
     NotFoundError,
-    SupermemoryError,
     ValidationError,
 )
 from .core.gcp import materialize_adc
@@ -43,6 +43,37 @@ from .service import MemoryService
 from .store import build_store
 
 log = get_logger("mapi")
+
+#: Chrome injected above the generated Swagger UI. Inline rather than shared
+#: with `pages.STYLE`, because Swagger ships its own reset and pulling the
+#: product stylesheet in would restyle the reference itself.
+_REFERENCE_HEADER = """
+<meta name="color-scheme" content="light">
+<style>
+  /* Swagger UI declares no color-scheme, so a browser in dark mode
+     auto-inverts it -- grey-on-black, beside a light product header. Pinning
+     the scheme keeps the reference looking like the rest of the surface. */
+  :root { color-scheme: light }
+  body { background:#fff }
+  .mapi-bar { display:flex; align-items:center; justify-content:space-between;
+              height:84px; padding:0 28px; background:#fff;
+              border-bottom:1px solid #e6e4e0;
+              font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif }
+  .mapi-bar img { height:44px; width:auto; display:block }
+  .mapi-bar nav a { margin-left:22px; color:#75726c; text-decoration:none; font-size:14px }
+  .mapi-bar nav a:hover { color:#1b1b19 }
+  .swagger-ui .topbar { display:none }
+  @media (max-width:640px) {
+    .mapi-bar { height:68px; padding:0 18px }
+    .mapi-bar img { height:34px }
+  }
+</style>
+<div class="mapi-bar">
+  <a href="/"><img src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255"></a>
+  <nav><a href="/chat">Chat</a><a href="/docs">Docs</a>
+  <a href="/reference">Reference</a><a href="/orgs">Dashboard</a></nav>
+</div>
+"""
 
 #: The public blurb. Describes what the API DOES and what a caller can rely
 #: on, never how it is built: the retrieval strategy, the consolidation rules
@@ -114,7 +145,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.store = store
     app.state.embedder = embedder
     app.state.reranker = reranker
-    from .domain.synthesis.completer import build_completer, build_extractor
+    from .domain.synthesis.completer import (
+        build_completer,
+        build_extractor,
+        build_understander,
+    )
 
     app.state.service = MemoryService(
         store,
@@ -123,6 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings,
         completer=build_completer(settings),
         extractor=build_extractor(settings),
+        understander=build_understander(settings),
     )
     app.state.rate_limiter = build_rate_limiter(
         per_minute=settings.rate_limit_per_minute,
@@ -188,7 +224,7 @@ async def _seed_bootstrap(app: FastAPI, settings: Settings) -> None:
     )
 
 
-def _problem(request: Request, exc: SupermemoryError) -> JSONResponse:
+def _problem(request: Request, exc: MapiError) -> JSONResponse:
     settings: Settings = request.app.state.settings
     payload = exc.to_problem(instance=str(request.url.path))
     request_id = getattr(request.state, "request_id", None)
@@ -207,8 +243,8 @@ def _problem(request: Request, exc: SupermemoryError) -> JSONResponse:
 
 
 def register_error_handlers(app: FastAPI) -> None:
-    @app.exception_handler(SupermemoryError)
-    async def _handle(request: Request, exc: SupermemoryError) -> JSONResponse:
+    @app.exception_handler(MapiError)
+    async def _handle(request: Request, exc: MapiError) -> JSONResponse:
         if exc.status_code >= 500:
             log.error("request_failed", code=exc.slug, detail=exc.detail)
         return _problem(request, exc)
@@ -235,11 +271,11 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        mapped: SupermemoryError
+        mapped: MapiError
         if exc.status_code == 404:
             mapped = NotFoundError(str(exc.detail))
         else:
-            mapped = SupermemoryError(str(exc.detail))
+            mapped = MapiError(str(exc.detail))
             mapped.status_code = exc.status_code
             mapped.slug = f"http_{exc.status_code}"
             mapped.title = str(exc.detail)
@@ -249,7 +285,7 @@ def register_error_handlers(app: FastAPI) -> None:
     async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         # Anything reaching here is a bug. Log it fully, tell the client nothing.
         log.exception("unhandled_exception", error=str(exc)[:500])
-        return _problem(request, SupermemoryError("an unexpected error occurred"))
+        return _problem(request, MapiError("an unexpected error occurred"))
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -265,7 +301,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description=DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
-        docs_url="/reference",
+        # The Swagger page is served by hand below so it can carry the brand
+        # and a route back to the written documentation. FastAPI's built-in
+        # one is unbranded and is a dead end.
+        docs_url=None,
         redoc_url="/redoc",
         openapi_url="/openapi.json",
         contact={"name": "Mapi"},
@@ -324,11 +363,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return PAGE
 
+    @app.get("/chat", include_in_schema=False, response_class=HTMLResponse)
+    async def chat_ui() -> str:
+        """Chat with a space, showing what was retrieved and what was cited.
+
+        A pure client of the public API: it holds the key in localStorage and
+        calls /v1 like any customer's own code would, so there is no
+        privileged path here that the documented endpoints do not have.
+        """
+        from .api.chat_ui import PAGE
+
+        return PAGE
+
+    @app.get("/reference", include_in_schema=False, response_class=HTMLResponse)
+    async def reference() -> str:
+        """The generated API reference, wearing the product's own chrome.
+
+        FastAPI's default Swagger page has no logo, no title bar and no link
+        back to anything -- a caller who lands on it has left the product.
+        This is the same Swagger UI with a header bolted on top.
+        """
+        from fastapi.openapi.docs import get_swagger_ui_html
+
+        response = get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="API reference — mapi",
+            swagger_favicon_url="/static/mapi-icon.png",
+        )
+        page = bytes(response.body).decode()
+        return page.replace("<body>", f"<body>{_REFERENCE_HEADER}", 1)
+
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon() -> FileResponse:
         """Browsers ask for this on every page; without it the logs fill with
         404s that look like real misses."""
-        return FileResponse(Path(__file__).parent / "api" / "static" / "mapi-logo.png")
+        return FileResponse(Path(__file__).parent / "api" / "static" / "mapi-icon.png")
 
     @app.get("/meta", include_in_schema=False)
     async def meta() -> dict[str, Any]:

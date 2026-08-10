@@ -2396,3 +2396,9 @@ run lme-v21-episodes-only
     [50/500] 83820 chunks, 56s elapsed, ~501s left
     [75/500] 125563 chunks, 226s elapsed, ~1279s left
     [100/500] 168153 chunks, 447s elapsed, ~1786s left
+    [125/500] 210728 chunks, 617s elapsed, ~1851s left
+    [150/500] 253245 chunks, 788s elapsed, ~1838s left
+=== ALL ARMS DONE 07:38:50 ===
+    [175/500] 295876 chunks, 972s elapsed, ~1805s left
+    [200/500] 338115 chunks, 986s elapsed, ~1478s left
+    [225/500] 380661 chunks, 1179s elapsed, ~1442s left

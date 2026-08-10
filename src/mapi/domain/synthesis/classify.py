@@ -116,7 +116,19 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
     (
         QuestionKind.LIST_ALL,
         re.compile(
-            r"\blist (all|the|every)|what are (all|the .+s i)|which ones\b",
+            # Comprehensiveness markers, added for the PRODUCT rather than for
+            # any benchmark: "what is our entire infrastructure" read as a
+            # lookup and returned an arbitrary ten of twenty-five facts. These
+            # are generic English -- entire, whole, everything, all of our --
+            # and carry none of the eval-set fitting the ADVICE rule above
+            # warns about.
+            r"\blist (all|the|every)|what are (all|the .+s i)|which ones\b"
+            r"|\b(the )?(entire|whole|complete|full)\s+\w+"
+            r"|\beverything (about|we|i|you|they)\b"
+            r"|\ball (of )?(our|my|the|their)\b"
+            r"|\bwhat (all|else)\b"
+            r"|\bgive me (a rundown|an overview|the full)\b"
+            r"|\b(overview|rundown|summary) of\b",
             re.IGNORECASE,
         ),
     ),

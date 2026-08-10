@@ -81,11 +81,66 @@ _EXPLICIT_MONTH_YEAR = re.compile(
 _EXPLICIT_YEAR = re.compile(r"\bin\s+(\d{4})\b")
 _BARE_MONTH = re.compile(r"\b(?:in|during)\s+(" + "|".join(_MONTHS) + r")\b", re.IGNORECASE)
 _LAST_N = re.compile(
-    r"\b(?:in|over|during|within)?\s*the\s+(?:last|past)\s+(\d+|a|one)\s+"
-    r"(day|week|month|year)s?\b",
+    r"\b(?:in|over|during|within)?\s*the\s+(?:last|past)\s+(\d+|a|an|one)?\s*"
+    r"(day|week|fortnight|month|quarter|year|decade)s?\b",
     re.IGNORECASE,
 )
 _UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
+
+#: Everything below widens the same idea: a question can name its window in
+#: more ways than "in March 2023" and "the last 6 months". Each pattern here
+#: was a question shape that previously produced an UNBOUNDED window, which
+#: is the failure that hides: the answer is computed over all of history and
+#: looks perfectly confident.
+
+#: "since January", "since 2021", "since the move" -- an open-ended window
+#: running to today. Only the datable forms are handled; "since the move"
+#: needs an event lookup and correctly falls through to unbounded.
+_SINCE = re.compile(
+    r"\bsince\s+(?:(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?|(\d{4}))\b",
+    re.IGNORECASE,
+)
+#: "before 2022", "after March 2021", "up to 2020", "until June".
+_BEFORE_AFTER = re.compile(
+    r"\b(before|after|prior to|up to|until|through)\s+"
+    r"(?:(" + "|".join(_MONTHS) + r")\s+)?(\d{4})\b",
+    re.IGNORECASE,
+)
+#: "between March and June", "from January to April", with an optional year
+#: on either side.
+_BETWEEN = re.compile(
+    r"\b(?:between|from)\s+(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?"
+    r"\s+(?:and|to|through|-|until)\s+(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?\b",
+    re.IGNORECASE,
+)
+#: Calendar quarters, which is how anything with a finance or planning
+#: vocabulary names a window: "in Q3", "Q4 2023", "this quarter".
+_QUARTER = re.compile(r"\bq([1-4])(?:\s+(\d{4}))?\b", re.IGNORECASE)
+#: Northern-hemisphere seasons. Approximate by construction -- a season is a
+#: three-month band, and a question saying "last summer" is not asking for
+#: astronomical precision.
+_SEASONS = {
+    "winter": (12, 2),
+    "spring": (3, 5),
+    "summer": (6, 8),
+    "fall": (9, 11),
+    "autumn": (9, 11),
+}
+_SEASON = re.compile(
+    r"\b(last|this|past)\s+(" + "|".join(_SEASONS) + r")\b", re.IGNORECASE
+)
+#: "in the last quarter", "over the past fortnight", and the two units the
+#: numeric pattern above cannot express.
+_UNIT_DAYS_EXTRA = {"quarter": 91, "fortnight": 14, "decade": 3650}
+
+
+def _quarter_window(year: int, quarter: int) -> tuple[date, date]:
+    first_month = (quarter - 1) * 3 + 1
+    last_month = first_month + 2
+    return (
+        date(year, first_month, 1),
+        date(year, last_month, monthrange(year, last_month)[1]),
+    )
 
 
 def extract_scope(question: str, reference: date) -> DateRange | None:
@@ -110,9 +165,10 @@ def extract_scope(question: str, reference: date) -> DateRange | None:
 
     match = _LAST_N.search(question)
     if match:
-        raw = match.group(1).lower()
-        count = 1 if raw in {"a", "one"} else int(raw)
-        days = count * _UNIT_DAYS[match.group(2).lower()]
+        raw = (match.group(1) or "one").lower()
+        count = 1 if raw in {"a", "an", "one"} else int(raw)
+        unit = match.group(2).lower()
+        days = count * (_UNIT_DAYS.get(unit) or _UNIT_DAYS_EXTRA[unit])
         return DateRange(reference - timedelta(days=days), reference, match.group(0).strip())
 
     lowered = question.lower()
@@ -133,6 +189,92 @@ def extract_scope(question: str, reference: date) -> DateRange | None:
         return DateRange(date(year, 1, 1), date(year, 12, 31), "last year")
     if "this year" in lowered:
         return DateRange(date(reference.year, 1, 1), reference, "this year")
+
+    match = _BETWEEN.search(question)
+    if match:
+        start_month = _MONTHS[match.group(1).lower()]
+        end_month = _MONTHS[match.group(3).lower()]
+        # A year stated on EITHER side governs both unless both state one:
+        # "from January to April 2023" is 2023 throughout, and defaulting the
+        # start to the current year produced a range running backwards.
+        start_year = int(match.group(2)) if match.group(2) else 0
+        end_year = int(match.group(4)) if match.group(4) else 0
+        if not start_year and not end_year:
+            start_year = end_year = reference.year
+        else:
+            start_year = start_year or end_year
+            end_year = end_year or start_year
+        # "between November and February" crosses a new year when no years
+        # are stated. Reading it as a backwards range would produce an empty
+        # window and a confident zero.
+        if end_year == start_year and end_month < start_month:
+            end_year += 1
+        start = _month_window(start_year, start_month)[0]
+        end = _month_window(end_year, end_month)[1]
+        return DateRange(start, end, match.group(0).strip())
+
+    match = _SINCE.search(question)
+    if match:
+        month_name, month_year, bare_year = match.groups()
+        if bare_year:
+            start = date(int(bare_year), 1, 1)
+        else:
+            month = _MONTHS[month_name.lower()]
+            year = int(month_year) if month_year else reference.year
+            if not month_year and month > reference.month:
+                # "since November", asked in March, means last November.
+                year -= 1
+            start = _month_window(year, month)[0]
+        if start <= reference:
+            return DateRange(start, reference, match.group(0).strip())
+
+    match = _BEFORE_AFTER.search(question)
+    if match:
+        direction, month_name, year_text = match.groups()
+        year = int(year_text)
+        month = _MONTHS[month_name.lower()] if month_name else 0
+        if direction.lower() == "after":
+            start = _month_window(year, month)[0] if month else date(year, 1, 1)
+            return DateRange(start, reference, match.group(0).strip())
+        boundary = _month_window(year, month)[1] if month else date(year, 12, 31)
+        # An open START is unrepresentable, so anchor it far enough back that
+        # nothing real falls outside. `date.min` would be honest but makes
+        # every downstream span calculation absurd.
+        return DateRange(date(1900, 1, 1), boundary, match.group(0).strip())
+
+    match = _QUARTER.search(question)
+    if match:
+        quarter = int(match.group(1))
+        year = int(match.group(2)) if match.group(2) else reference.year
+        start, end = _quarter_window(year, quarter)
+        if start <= reference:
+            return DateRange(start, min(end, reference), match.group(0).strip())
+
+    match = _SEASON.search(question)
+    if match:
+        which, season = match.group(1).lower(), match.group(2).lower()
+        first_month, last_month = _SEASONS[season]
+        year = reference.year
+        if which in {"last", "past"} or first_month > reference.month:
+            year -= 1
+        if first_month > last_month:
+            # Winter straddles the new year.
+            start = date(year, first_month, 1)
+            end = date(year + 1, last_month, monthrange(year + 1, last_month)[1])
+        else:
+            start = date(year, first_month, 1)
+            end = date(year, last_month, monthrange(year, last_month)[1])
+        return DateRange(start, min(end, reference), match.group(0).strip())
+
+    if "this quarter" in lowered:
+        quarter = (reference.month - 1) // 3 + 1
+        start, end = _quarter_window(reference.year, quarter)
+        return DateRange(start, min(end, reference), "this quarter")
+    if "last quarter" in lowered:
+        quarter = (reference.month - 1) // 3 + 1
+        year = reference.year if quarter > 1 else reference.year - 1
+        start, end = _quarter_window(year, quarter - 1 if quarter > 1 else 4)
+        return DateRange(start, end, "last quarter")
 
     match = _BARE_MONTH.search(question)
     if match:

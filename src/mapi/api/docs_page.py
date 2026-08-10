@@ -390,12 +390,17 @@ PAGE = (
     "<!doctype html>\n"
     '<meta charset="utf-8">\n'
     '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+    '<meta name="color-scheme" content="light">\n'
     "<title>Documentation — mapi</title>\n"
-    '<link rel="icon" href="/static/mapi-logo.png">\n'
+    '<link rel="icon" type="image/png" href="/static/mapi-icon.png">\n'
+    '<link rel="apple-touch-icon" href="/static/mapi-icon.png">\n'
+    '<meta property="og:image" content="/static/mapi-og.png">\n'
+    '<meta name="twitter:card" content="summary_large_image">\n'
     f"<style>{STYLE}{_EXTRA}</style>\n"
     '<header><div class="wrap">'
-    '<a href="/"><img class="logo" src="/static/mapi-logo.png" alt="mapi"></a>'
-    '<nav><a href="/docs">Docs</a><a href="/reference">Reference</a>'
+    '<a href="/"><img class="logo" src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255"></a>'
+    '<nav><a href="/chat">Chat</a><a href="/docs">Docs</a>'
+    '<a href="/reference">Reference</a>'
     '<a href="/orgs">Dashboard</a></nav>'
     "</div></header>\n"
     f'<div class="doc">{_TOC}{_BODY}</div>\n'

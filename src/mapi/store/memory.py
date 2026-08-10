@@ -37,7 +37,15 @@ from ..domain.models import (
     utcnow,
 )
 from ..domain.text import analyze, analyze_query
-from .base import EraseReport, LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
+from .base import (
+    EraseReport,
+    LexicalHit,
+    MemoryFilter,
+    MemoryStore,
+    Page,
+    TenantUsage,
+    VectorHit,
+)
 
 # BM25 parameters. k1 controls term-frequency saturation, b the strength of
 # length normalization. These are the standard defaults.
@@ -656,6 +664,51 @@ class InMemoryStore(MemoryStore):
 
         hits = sorted(best_per_memory.values(), key=lambda h: (-h.score, h.memory_id))
         return hits[:limit]
+
+    async def tenant_usage(self, org_id: str, *, since: datetime) -> TenantUsage:
+        memories = bytes_stored = writes = 0
+        for memory in self._memories.values():
+            if memory.org_id != org_id or memory.status is MemoryStatus.ARCHIVED:
+                continue
+            memories += 1
+            bytes_stored += len(memory.content.encode("utf-8"))
+            if memory.created_at >= since:
+                writes += 1
+        return TenantUsage(memories=memories, bytes_stored=bytes_stored, writes_today=writes)
+
+    async def neighbours(
+        self,
+        org_id: str,
+        space_id: str,
+        embedding: Vector,
+        *,
+        limit: int,
+        exclude_id: str = "",
+    ) -> list[tuple[Memory, Vector]]:
+        """Brute force, which is what this backend is for.
+
+        No index and no approximation: the reference implementation is the
+        one the conformance suite checks Postgres against, so it computes the
+        exact answer and lets the ANN backend be the thing that approximates.
+        """
+        if not embedding or limit <= 0:
+            return []
+        scored: list[tuple[float, Memory, Vector]] = []
+        for memory in self._space_memories(org_id, space_id):
+            if memory.id == exclude_id or memory.status is MemoryStatus.ARCHIVED:
+                continue
+            best: tuple[float, Vector] | None = None
+            for chunk in memory.chunks:
+                if chunk.embedding is None or len(chunk.embedding) != len(embedding):
+                    continue
+                score = cosine_similarity(embedding, chunk.embedding)
+                if best is None or score > best[0]:
+                    best = (score, chunk.embedding)
+            if best is not None:
+                scored.append((best[0], memory, best[1]))
+        # Tie-break on id so a page of equal scores is stable across calls.
+        scored.sort(key=lambda row: (-row[0], row[1].id))
+        return [(memory, vector) for _, memory, vector in scored[:limit]]
 
     async def sample_embeddings(
         self, org_id: str, space_id: str, *, limit: int

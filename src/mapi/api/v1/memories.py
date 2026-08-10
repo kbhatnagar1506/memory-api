@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from ...core.errors import ValidationError
 from ...core.ids import is_valid
-from ...domain.models import MemoryStatus, Scope
+from ...domain.models import MemoryKind, MemoryStatus, Scope
 from ...service import IngestResult
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
@@ -68,6 +68,7 @@ async def create_memory(
     space_id: str,
     body: CreateMemoryRequest,
     service: ServiceDep,
+    settings: SettingsDep,
     response: Response,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> CreateMemoryResponse:
@@ -81,10 +82,6 @@ async def create_memory(
         tags=body.tags,
         source=body.source,
         occurred_at=body.occurred_at,
-        dedupe=body.dedupe,
-        extract=body.extract,
-        auto_supersede=body.auto_supersede,
-        detect_conflicts=body.detect_conflicts,
     )
     # A deduplicated write did not create anything; 200 says so honestly.
     if not result.created:
@@ -119,9 +116,6 @@ async def bulk_create(
             tags=item.tags,
             source=item.source,
             occurred_at=item.occurred_at,
-            dedupe=item.dedupe,
-            auto_supersede=item.auto_supersede,
-            detect_conflicts=item.detect_conflicts,
         )
         items.append(_to_response(result))
     return BulkCreateMemoryResponse(
@@ -142,11 +136,13 @@ async def list_memories(
     tag: Annotated[list[str] | None, Query()] = None,
     source: str | None = None,
     status_filter: Annotated[list[MemoryStatus] | None, Query(alias="status")] = None,
+    kind: Annotated[list[MemoryKind] | None, Query()] = None,
 ) -> MemoryListResponse:
     _validate_space_id(space_id)
     limit = min(limit, settings.max_limit)
     filters = MemoryFilter(
         statuses=frozenset(status_filter or [MemoryStatus.ACTIVE]),
+        kinds=frozenset(kind or []),
         tags=tuple(t.casefold() for t in (tag or [])),
         source=source,
     )

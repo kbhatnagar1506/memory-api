@@ -75,21 +75,24 @@ class CreateMemoryRequest(Request):
     )
     source: Annotated[str, StringConstraints(max_length=500)] = ""
     occurred_at: datetime | None = None
-    #: Collapse exact and near duplicates into the existing memory.
-    dedupe: bool = True
-    #: Let a newer conflicting memory mark older ones superseded. Off by
-    #: default: hiding a user's data on a heuristic is not a safe default.
-    #: Decompose this document into the atomic claims it makes, stored
-    #: ALONGSIDE it with `derived_from` edges back to it. Additive: the
-    #: original is never replaced, so a claim extraction missed costs
-    #: nothing. Off by default -- it spends a model call per write, and
-    #: measured on LongMemEval it helps semantic questions and hurts
-    #: episodic ones, so it is a choice rather than an upgrade.
-    extract: bool = False
-    auto_supersede: bool = False
-    #: Detect memories this write CONTRADICTS. Costs a candidate scan on the
-    #: write path, so it is opt-in; it never hides anything.
-    detect_conflicts: bool = False
+
+    # There are no consolidation flags on this body, and that is the design.
+    #
+    # Deduplication, supersession, contradiction detection and claim
+    # extraction all run on every write. A memory API whose graph is empty
+    # unless the caller knew to ask for it is a memory API that does nothing
+    # by default -- and nobody reads the docs to discover that the feature
+    # they are paying for has an off switch that is on.
+    #
+    # These were opt-in for one reason: each needed a candidate scan, and a
+    # cheap write path was the architectural bet. That cost is gone. The scan
+    # was a page of the 256 newest memories with every embedding pulled
+    # across the wire; it is now a bounded nearest-neighbour lookup over the
+    # ANN index, and the same lookup serves all three checks at once.
+    #
+    # Cost control belongs at the account level, metered on what a tenant
+    # actually consumes -- not as a per-request flag that makes the product
+    # worse for everyone who leaves it alone.
 
     @field_validator("metadata")
     @classmethod
@@ -409,6 +412,14 @@ class SearchRequestBody(Request):
     occurred_after: datetime | None = None
     occurred_before: datetime | None = None
     statuses: list[MemoryStatus] = Field(default_factory=lambda: [MemoryStatus.ACTIVE])
+    #: Restrict to episodic or derived memories. Empty means both.
+    #:
+    #: The distinction is worth exposing because it is the one that
+    #: measurably changes answers: EPISODIC memories are what happened,
+    #: DERIVED memories are what is true. A question about a preference wants
+    #: claims; a question about an event wants the episode it came from, and
+    #: a single ranked list mixing them serves whichever is lexically luckier.
+    kinds: list[MemoryKind] = Field(default_factory=list, max_length=4)
     include_superseded: bool = False
     #: 1.0 = pure relevance, 0.0 = maximum diversity.
     mmr_lambda: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -419,6 +430,14 @@ class SearchRequestBody(Request):
     min_score: float = Field(default=0.0, ge=0.0)
     vector_weight: float = Field(default=1.0, ge=0.0, le=10.0)
     lexical_weight: float = Field(default=1.0, ge=0.0, le=10.0)
+    #: Return the complete set rather than the best few.
+    #:
+    #: Leave unset and the question decides for itself: "what is our entire
+    #: infrastructure" is asking what the territory contains, and a ranked
+    #: top-10 answers a different question. Set it explicitly when you know
+    #: better than the question does -- true widens the window to
+    #: `coverage_limit`, false pins it to `limit`.
+    coverage: bool | None = None
     #: Include per-stage score provenance on every hit.
     explain: bool = False
 
@@ -429,6 +448,18 @@ class SearchRequestBody(Request):
         if v is not None and after is not None and v < after:
             raise ValueError("occurred_before must not precede occurred_after")
         return v
+
+
+class IntentBlock(Response):
+    """What the question was read as asking for, and who read it that way."""
+
+    kind: str
+    #: "llm", "cache", "rules" or "explicit". A comprehensive question comes
+    #: back a different shape, and that decision should be visible rather
+    #: than inferred from the result count.
+    source: str
+    #: True when the window was widened to return a complete set.
+    comprehensive: bool
 
 
 class SearchHit(Response):
@@ -485,6 +516,55 @@ class SearchResponseBody(Response):
     #: property of its tone. `refusal_reason` distinguishes correct silence
     #: ("no_relevant_memory") from a real gap ("weak_evidence").
     confidence: ConfidenceBlock | None = None
+    #: How the question was read. Present whenever a search ran.
+    intent: IntentBlock | None = None
+
+
+# -- chat ---------------------------------------------------------------------
+
+
+class ChatTurn(Request):
+    role: Literal["user", "assistant"]
+    content: Annotated[str, StringConstraints(min_length=1, max_length=8000)]
+
+
+class ChatRequest(Request):
+    message: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+    #: Prior turns, oldest first. Bounded server-side -- the memories are the
+    #: point, and an unbounded transcript crowds out the retrieval it exists
+    #: to support.
+    history: list[ChatTurn] = Field(default_factory=list, max_length=40)
+    #: Memories retrieved as context for the answer.
+    k: int = Field(default=8, ge=1, le=50)
+    #: Store the message as a memory too. Off by default: a chat that records
+    #: every question turns questions into facts, and "is he on an F-1 visa?"
+    #: stored as a memory is a claim nobody made.
+    remember: bool = False
+
+
+class ChatCitation(Response):
+    id: str
+    content: str
+    score: float
+    occurred_at: datetime
+    tags: list[str] = Field(default_factory=list)
+    #: True when the answer actually cited this memory, false when it was
+    #: retrieved and passed over. Both are worth showing.
+    cited: bool = False
+    #: From the memory's own metadata. "unverified" means the answer built on
+    #: it should be read with the same caveat.
+    confidence: str = ""
+
+
+class ChatResponse(Response):
+    reply: str
+    #: Cited memories first, in citation order, then the rest.
+    citations: list[ChatCitation] = Field(default_factory=list)
+    #: True when the answer rests on a memory marked unverified.
+    used_unverified: bool = False
+    #: How the question was read: direct, list_all, count, order, ...
+    intent: str | None = None
+    conflicts: list[list[str]] = Field(default_factory=list)
 
 
 # -- keys ---------------------------------------------------------------------

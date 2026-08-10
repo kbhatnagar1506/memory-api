@@ -53,94 +53,37 @@ _PROPER = re.compile(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,3})\b")
 _ACRONYM = re.compile(r"\b([A-Z]{2,6}\d{0,5})\b")
 #: Years and numeric identifiers, which anchor temporal and order questions.
 _NUMERIC = re.compile(r"\b(\d{4}|\d{3,})\b")
+#: Identifiers that name a thing without being capitalised.
+#:
+#: The capitalisation patterns above encode an assumption -- that a name is
+#: a capitalised word -- which holds for people and places and fails for
+#: everything a technical or commercial corpus is made of. `postgres`, `k8s`,
+#: `SKU-4471`, `eBay`, `pgvector`, `gpt-4o` and `v2.1.3` are all names, and
+#: not one of them matches `[A-Z][a-z]{2,}`. These three patterns cover the
+#: shapes that carry identity without carrying a capital letter:
+#:
+#:   * internal capitals   camelCase, eBay, PyPI, iPhone
+#:   * digit-bearing words k8s, gpt-4o, s3, utf8
+#:   * punctuated compounds  SKU-4471, text-embedding-004, v2.1.3
+_CAMEL = re.compile(r"\b([a-z]+[A-Z][A-Za-z]*|[A-Z][a-z]*[A-Z][A-Za-z]*)\b")
+_ALNUM_ID = re.compile(r"\b([a-z]+\d+[a-z\d]*|\d+[a-z]+[a-z\d]*)\b", re.IGNORECASE)
+_PUNCT_ID = re.compile(r"\b([A-Za-z][A-Za-z\d]*(?:[-_.][A-Za-z\d]+){1,4})\b")
 
-#: Words that are capitalised for grammatical reasons, not because they name
-#: anything. Without this the extractor "finds" an entity in every sentence
-#: that starts with "The" and every line that starts with a weekday.
-_NOT_ENTITIES = frozenset(
-    [
-        "the",
-        "this",
-        "that",
-        "these",
-        "those",
-        "there",
-        "their",
-        "they",
-        "then",
-        "than",
-        "and",
-        "but",
-        "for",
-        "with",
-        "from",
-        "into",
-        "over",
-        "under",
-        "about",
-        "after",
-        "before",
-        "during",
-        "while",
-        "when",
-        "where",
-        "what",
-        "which",
-        "who",
-        "whom",
-        "why",
-        "how",
-        "all",
-        "any",
-        "both",
-        "each",
-        "few",
-        "more",
-        "most",
-        "other",
-        "some",
-        "such",
-        "only",
-        "own",
-        "same",
-        "both",
-        "here",
-        "now",
-        "yes",
-        "okay",
-        "hey",
-        "hi",
-        "hello",
-        "thanks",
-        "thank",
-        "sure",
-        "yeah",
-        "yep",
-        "nope",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-        "january",
-        "february",
-        "march",
-        "april",
-        "may",
-        "june",
-        "july",
-        "august",
-        "september",
-        "october",
-        "november",
-        "december",
-        "user",
-        "assistant",
-        "speaker",
-    ]
-)
+#: There is no blocklist.
+#:
+#: There used to be one: 79 hand-picked words that "look like names but are
+#: not", which is a category that cannot be enumerated. It contained `may`,
+#: `march`, `monday`, `user` and `assistant`, so a memory about the company
+#: Monday.com, a product called March, or a person named May was invisible to
+#: this stage -- and every other word nobody thought of stayed invisible too.
+#:
+#: Two signals already present do the job without a list. `STOPWORDS` covers
+#: the grammatical openers ("The", "This", "And"), and `_is_sentence_initial`
+#: covers the rest by position: "Wow" and "Cool" are only ever capitalised
+#: because they start a sentence, and a real name eventually appears in the
+#: middle of one. That positional rule is why the blocklist was mostly
+#: redundant, and deleting it costs nothing the mid-sentence check was not
+#: already catching.
 #: A speaker prefix ("Caroline: ...") names the speaker, not a topic entity —
 #: but in a two-person dialogue every turn carries one, so treating them as
 #: salient would make every turn "match" every other. Stripped before extraction.
@@ -181,12 +124,24 @@ def scan(text: str) -> tuple[Counter[str], set[str]]:
             if len(candidate) < 3:
                 continue
             head = candidate.split()[0].casefold()
-            if head in _NOT_ENTITIES or head in STOPWORDS:
+            if head in STOPWORDS:
                 continue
             key = candidate.casefold()
             counts[key] += 1
             if not _is_sentence_initial(body, match.start(1)):
                 mid_sentence.add(key)
+
+    for pattern in (_CAMEL, _ALNUM_ID, _PUNCT_ID):
+        for match in pattern.finditer(body):
+            candidate = match.group(1).strip()
+            key = candidate.casefold()
+            if len(candidate) < 3 or key in STOPWORDS:
+                continue
+            counts[key] += 1
+            # Shape, not position, is the evidence here: `gpt-4o` is an
+            # identifier wherever it appears in the sentence, so these are
+            # confirmed on sight rather than needing a mid-sentence sighting.
+            mid_sentence.add(key)
 
     for match in _NUMERIC.findall(body):
         # A bare small integer is noise; a year or a long identifier is not.

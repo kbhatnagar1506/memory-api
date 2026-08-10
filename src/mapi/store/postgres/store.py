@@ -45,7 +45,15 @@ from ...domain.models import (
     User,
     utcnow,
 )
-from ..base import EraseReport, LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
+from ..base import (
+    EraseReport,
+    LexicalHit,
+    MemoryFilter,
+    MemoryStore,
+    Page,
+    TenantUsage,
+    VectorHit,
+)
 from .models import (
     ApiKeyRow,
     Base,
@@ -132,6 +140,30 @@ class PostgresStore(MemoryStore):
             connect_args={"server_settings": {"statement_timeout": str(statement_timeout_ms)}},
         )
         self._session = async_sessionmaker(self._engine, expire_on_commit=False)
+
+    @staticmethod
+    async def _scope(session: Any, org_id: str) -> None:
+        """Bind this transaction to one tenant, for the database's benefit.
+
+        Row-level security policies (migration 0005) compare `org_id` against
+        the `app.org_id` setting. Unset, `current_setting(..., true)` is NULL,
+        every comparison is NULL, and every row is filtered out -- so a store
+        method that forgets this call sees an empty database rather than
+        somebody else's.
+
+        `set_config(..., true)` is TRANSACTION-local, which is the only safe
+        scope here: sessions come from a connection pool, and a session-level
+        setting would outlive the request and greet whichever tenant checked
+        the connection out next.
+
+        This does not replace the `WHERE org_id = ...` clauses in the queries
+        below. Both state the same predicate on purpose -- the application
+        filter is the behaviour, this is the backstop for the day someone
+        writes a query that forgets it.
+        """
+        await session.execute(
+            text("SELECT set_config('app.org_id', :org, true)"), {"org": org_id}
+        )
 
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
@@ -313,6 +345,7 @@ class PostgresStore(MemoryStore):
 
     async def get_membership(self, user_id: str, org_id: str) -> Membership | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = (
                 await session.execute(
                     select(MembershipRow).where(
@@ -325,11 +358,13 @@ class PostgresStore(MemoryStore):
 
     async def create_organization(self, org: Organization) -> Organization:
         async with self._session() as session, session.begin():
+            await self._scope(session, org.id)
             session.add(OrganizationRow(id=org.id, name=org.name, created_at=org.created_at))
         return org
 
     async def get_organization(self, org_id: str) -> Organization | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.get(OrganizationRow, org_id)
             if row is None:
                 return None
@@ -340,6 +375,7 @@ class PostgresStore(MemoryStore):
 
         try:
             async with self._session() as session, session.begin():
+                await self._scope(session, space.org_id)
                 session.add(
                     SpaceRow(
                         id=space.id,
@@ -373,6 +409,7 @@ class PostgresStore(MemoryStore):
 
     async def get_space(self, org_id: str, space_id: str) -> Space | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(SpaceRow).where(SpaceRow.id == space_id, SpaceRow.org_id == org_id)
             )
@@ -380,6 +417,7 @@ class PostgresStore(MemoryStore):
 
     async def get_space_by_slug(self, org_id: str, slug: str) -> Space | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(SpaceRow).where(SpaceRow.org_id == org_id, SpaceRow.slug == slug)
             )
@@ -387,6 +425,7 @@ class PostgresStore(MemoryStore):
 
     async def list_spaces(self, org_id: str) -> list[Space]:
         async with self._session() as session:
+            await self._scope(session, org_id)
             rows = await session.scalars(
                 select(SpaceRow).where(SpaceRow.org_id == org_id).order_by(SpaceRow.id)
             )
@@ -394,6 +433,7 @@ class PostgresStore(MemoryStore):
 
     async def delete_space(self, org_id: str, space_id: str) -> bool:
         async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
             result = await session.execute(
                 delete(SpaceRow).where(SpaceRow.id == space_id, SpaceRow.org_id == org_id)
             )
@@ -406,6 +446,7 @@ class PostgresStore(MemoryStore):
 
         try:
             async with self._session() as session, session.begin():
+                await self._scope(session, key.org_id)
                 session.add(
                     ApiKeyRow(
                         id=key.id,
@@ -444,6 +485,7 @@ class PostgresStore(MemoryStore):
 
     async def list_api_keys(self, org_id: str) -> list[ApiKey]:
         async with self._session() as session:
+            await self._scope(session, org_id)
             rows = await session.scalars(
                 select(ApiKeyRow).where(ApiKeyRow.org_id == org_id).order_by(ApiKeyRow.id)
             )
@@ -451,6 +493,7 @@ class PostgresStore(MemoryStore):
 
     async def revoke_api_key(self, org_id: str, key_id: str) -> bool:
         async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(ApiKeyRow).where(ApiKeyRow.id == key_id, ApiKeyRow.org_id == org_id)
             )
@@ -473,6 +516,7 @@ class PostgresStore(MemoryStore):
     async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
         when = _require_aware(now or utcnow())
         async with self._session() as session, session.begin():
+            await self._scope(session, memory.org_id)
             row = await session.get(MemoryRow, memory.id)
             if row is None:
                 row = MemoryRow(id=memory.id)
@@ -564,6 +608,7 @@ class PostgresStore(MemoryStore):
 
     async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(MemoryRow).where(
                     MemoryRow.id == memory_id,
@@ -579,6 +624,7 @@ class PostgresStore(MemoryStore):
         if not memory_ids:
             return {}
         async with self._session() as session:
+            await self._scope(session, org_id)
             rows = await session.scalars(
                 select(MemoryRow).where(
                     MemoryRow.id.in_(list(memory_ids)),
@@ -635,7 +681,15 @@ class PostgresStore(MemoryStore):
             return 0
         rows = [
             {
-                "id": new_id("rel"),
+                # "edge", not "rel". `new_id` validates its kind against
+                # PREFIXES and raises, so this line made every supersession
+                # bridge throw ValueError -- which is to say, deleting or
+                # erasing any memory in the middle of a revision chain was a
+                # 500, and the chain-preservation this function exists to do
+                # never happened on Postgres. The in-memory store bridges
+                # correctly, so nothing caught it until the conformance suite
+                # ran against a real database for the first time.
+                "id": new_id("edge"),
                 "org_id": org_id,
                 "space_id": space_id,
                 "source_id": upstream.source_id,
@@ -660,6 +714,7 @@ class PostgresStore(MemoryStore):
 
     async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> bool:
         async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
             # Bridge BEFORE the row delete: the FK cascade on relation_edges
             # destroys this memory's edges in the same statement as the row.
             await self._bridge_supersession(session, org_id, space_id, memory_id)
@@ -677,6 +732,7 @@ class PostgresStore(MemoryStore):
         # leaves the system claiming content is gone while as_of still serves
         # it, which is worse than failing outright.
         async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
             chunk_count = (
                 await session.scalar(
                     select(func.count())
@@ -742,6 +798,7 @@ class PostgresStore(MemoryStore):
         if limit <= 0:
             return Page(items=[])
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = select(MemoryRow).where(
                 MemoryRow.org_id == org_id, MemoryRow.space_id == space_id
             )
@@ -764,6 +821,7 @@ class PostgresStore(MemoryStore):
 
     async def count_memories(self, org_id: str, space_id: str, *, filters: MemoryFilter) -> int:
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = select(MemoryRow.id).where(
                 MemoryRow.org_id == org_id, MemoryRow.space_id == space_id
             )
@@ -774,6 +832,7 @@ class PostgresStore(MemoryStore):
         self, org_id: str, space_id: str, digest: str
     ) -> Memory | None:
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(MemoryRow)
                 .where(
@@ -805,6 +864,7 @@ class PostgresStore(MemoryStore):
 
     async def create_relation(self, edge: RelationEdge) -> RelationEdge:
         async with self._session() as session, session.begin():
+            await self._scope(session, edge.org_id)
             existing = await session.scalar(
                 select(RelationEdgeRow).where(
                     RelationEdgeRow.space_id == edge.space_id,
@@ -843,6 +903,7 @@ class PostgresStore(MemoryStore):
             raise ValueError(f"direction must be 'out' or 'in', got {direction!r}")
         column = RelationEdgeRow.source_id if direction == "out" else RelationEdgeRow.target_id
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = select(RelationEdgeRow).where(
                 RelationEdgeRow.org_id == org_id,
                 RelationEdgeRow.space_id == space_id,
@@ -867,6 +928,7 @@ class PostgresStore(MemoryStore):
         if not ids:
             return []
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = select(RelationEdgeRow).where(
                 RelationEdgeRow.org_id == org_id,
                 RelationEdgeRow.space_id == space_id,
@@ -905,6 +967,7 @@ class PostgresStore(MemoryStore):
     ) -> Memory | None:
         moment = _require_aware(as_of)
         async with self._session() as session:
+            await self._scope(session, org_id)
             row = await session.scalar(
                 select(MemoryVersionRow).where(
                     MemoryVersionRow.org_id == org_id,
@@ -940,6 +1003,7 @@ class PostgresStore(MemoryStore):
         self, org_id: str, space_id: str, memory_id: str
     ) -> list[MemoryVersion]:
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = (
                 select(MemoryVersionRow)
                 .where(
@@ -970,6 +1034,7 @@ class PostgresStore(MemoryStore):
                 f"index expects {self.dimensions}"
             )
         async with self._session() as session:
+            await self._scope(session, org_id)
             await self._enable_iterative_scan(session)
             # `<=>` is cosine DISTANCE; the retrieval layer works in similarity.
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
@@ -998,6 +1063,89 @@ class PostgresStore(MemoryStore):
             hits = sorted(best.values(), key=lambda h: (-h.score, h.memory_id))
             return hits[:limit]
 
+    async def tenant_usage(self, org_id: str, *, since: datetime) -> TenantUsage:
+        """One aggregate over the org's memories, on the tenant index.
+
+        `octet_length` on the stored content rather than a Python len(): the
+        point of the byte limit is what is on disk, and reading every row
+        back to measure it would make the quota check cost more than the
+        write it guards.
+        """
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            row = (
+                await session.execute(
+                    select(
+                        func.count(MemoryRow.id),
+                        func.coalesce(func.sum(func.octet_length(MemoryRow.content)), 0),
+                        func.count(MemoryRow.id).filter(MemoryRow.created_at >= since),
+                    ).where(
+                        MemoryRow.org_id == org_id,
+                        MemoryRow.status != MemoryStatus.ARCHIVED.value,
+                    )
+                )
+            ).one()
+            return TenantUsage(
+                memories=int(row[0]), bytes_stored=int(row[1]), writes_today=int(row[2])
+            )
+
+    async def neighbours(
+        self,
+        org_id: str,
+        space_id: str,
+        embedding: Vector,
+        *,
+        limit: int,
+        exclude_id: str = "",
+    ) -> list[tuple[Memory, Vector]]:
+        """Nearest memories with the chunk embedding that matched.
+
+        One statement, ordered by the HNSW index. The chunk embedding comes
+        back with the row because the consolidation functions compute their
+        own similarity -- see the interface docstring for why that is worth
+        the extra column rather than trusting a score from here.
+        """
+        if not embedding or limit <= 0:
+            return []
+        if len(embedding) != self.dimensions:
+            raise StoreError(
+                f"query embedding has {len(embedding)} dimensions, "
+                f"index expects {self.dimensions}"
+            )
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            await self._enable_iterative_scan(session)
+            distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
+            stmt = (
+                select(MemoryRow, ChunkRow.embedding, distance)
+                .join(ChunkRow, ChunkRow.memory_id == MemoryRow.id)
+                .where(
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
+                    ChunkRow.embedding.is_not(None),
+                    MemoryRow.status != MemoryStatus.ARCHIVED.value,
+                )
+                # Over-fetch, because one memory can own several chunks and
+                # only its best one should count toward the limit.
+                .order_by(distance)
+                .limit(limit * 4)
+            )
+            if exclude_id:
+                stmt = stmt.where(MemoryRow.id != exclude_id)
+
+            best: dict[str, tuple[float, Memory, Vector]] = {}
+            for row, chunk_embedding, dist in await session.execute(stmt):
+                similarity = 1.0 - float(dist)
+                current = best.get(row.id)
+                if current is None or similarity > current[0]:
+                    best[row.id] = (
+                        similarity,
+                        self._to_memory(row),
+                        list(chunk_embedding),
+                    )
+            ordered = sorted(best.values(), key=lambda t: (-t[0], t[1].id))
+            return [(memory, vector) for _, memory, vector in ordered[:limit]]
+
     async def lexical_search(
         self,
         org_id: str,
@@ -1010,6 +1158,7 @@ class PostgresStore(MemoryStore):
         if not query.strip() or limit <= 0:
             return []
         async with self._session() as session:
+            await self._scope(session, org_id)
             # websearch_to_tsquery tolerates arbitrary user input; plainto_ and
             # to_tsquery raise on characters a user will absolutely type.
             tsquery = func.websearch_to_tsquery("english", query)
@@ -1038,6 +1187,7 @@ class PostgresStore(MemoryStore):
         self, org_id: str, space_id: str, *, limit: int
     ) -> list[tuple[str, Vector]]:
         async with self._session() as session:
+            await self._scope(session, org_id)
             stmt = (
                 select(ChunkRow.memory_id, ChunkRow.embedding)
                 .join(MemoryRow, MemoryRow.id == ChunkRow.memory_id)

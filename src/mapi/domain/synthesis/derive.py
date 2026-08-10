@@ -256,6 +256,25 @@ _DURATION = re.compile(
     re.IGNORECASE,
 )
 
+#: A quantity with ANY unit attached, not only a duration.
+#:
+#: `_DURATION` exists for DATE_ARITH and is correctly time-only. But
+#: `_states_quantity` -- which decides whether a fact carries the number the
+#: question asked for -- was reading the same time-only list, so "I ran 12 km"
+#: and "the shipment weighed 40 kg" and "it cost $1,200" all looked like
+#: facts stating no quantity. Any corpus that is not a personal calendar is
+#: mostly made of those.
+#:
+#: The unit is deliberately unconstrained: enumerating units is the same
+#: mistake as enumerating negations, and a memory system does not get to
+#: decide which domains its users work in. A number followed by a short word,
+#: or preceded by a currency symbol, is a quantity.
+_QUANTITY = re.compile(
+    r"(?:[$£€¥₹]\s?\d[\d,]*(?:\.\d+)?)"
+    r"|\b\d[\d,]*(?:\.\d+)?\s*%"
+    r"|\b\d[\d,]*(?:\.\d+)?\s*[a-zA-Z]{1,12}\b"
+)
+
 
 #: Cardinal words, because a quantity written out is still stated. Bounded at
 #: twenty plus round numbers: past that, prose uses digits.
@@ -312,6 +331,8 @@ def _states_quantity(fact: str) -> bool:
     """
     lowered = fact.casefold()
     if any(word in lowered.split() for word in _NUMBER_WORDS):
+        return True
+    if _QUANTITY.search(fact):
         return True
     return any(not _YEARISH.match(m.replace(",", "")) for m in _DIGITS.findall(fact))
 

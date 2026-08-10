@@ -557,3 +557,72 @@ def test_undated_rows_are_reported_not_silently_dropped() -> None:
     assert result is not None
     assert result.undated_dropped == 1
     assert result.filtered_out == 1
+
+
+# -- extraction input bounds ----------------------------------------------
+#
+# There was no upper bound on extraction input at all, and max_content_bytes
+# is 1MB: a 129,000-character document went into one prompt and came back
+# with a handful of claims about its first page, presented as the facts of
+# the whole thing. Under-extraction that looks like a sparse document is the
+# worst failure shape available, so the input is windowed now.
+
+
+def test_a_short_document_is_one_window() -> None:
+    from mapi.domain.synthesis.extract import _windows
+
+    assert _windows("a short passage about one thing") == [
+        "a short passage about one thing"
+    ]
+
+
+def test_an_oversized_document_is_split() -> None:
+    from mapi.domain.synthesis.extract import MAX_CHARS, _windows
+
+    doc = ("A paragraph stating a fact. " * 40 + "\n\n") * 40
+    windows = _windows(doc)
+    assert len(windows) > 1
+    assert all(len(w) <= MAX_CHARS for w in windows)
+
+
+def test_windows_split_on_paragraph_boundaries_where_possible() -> None:
+    """A claim split across a boundary has a quote in neither half."""
+    from mapi.domain.synthesis.extract import MAX_CHARS, _windows
+
+    paragraph = "Facts about the system. " * 100
+    doc = "\n\n".join([paragraph] * 20)
+    for window in _windows(doc):
+        assert len(window) <= MAX_CHARS
+        # No window should end mid-sentence when paragraphs were available.
+        assert window.rstrip().endswith((".", "!", "?"))
+
+
+def test_prose_with_no_paragraph_breaks_still_gets_split() -> None:
+    from mapi.domain.synthesis.extract import MAX_CHARS, _windows
+
+    doc = "One sentence stating something. " * 2000
+    windows = _windows(doc)
+    assert len(windows) > 1
+    assert all(len(w) <= MAX_CHARS for w in windows)
+
+
+def test_a_single_unbroken_run_is_hard_cut_rather_than_dropped() -> None:
+    from mapi.domain.synthesis.extract import MAX_CHARS, _windows
+
+    windows = _windows("x" * (MAX_CHARS * 3))
+    assert windows
+    assert all(len(w) <= MAX_CHARS for w in windows)
+
+
+async def test_extraction_calls_once_per_window() -> None:
+    from mapi.domain.synthesis.extract import extract_claims
+
+    prompts: list[str] = []
+
+    async def complete(prompt: str) -> str:
+        prompts.append(prompt)
+        return "[]"
+
+    doc = ("A paragraph stating a fact. " * 40 + "\n\n") * 40
+    await extract_claims(doc, complete)
+    assert len(prompts) > 1, "the whole document went into one prompt"

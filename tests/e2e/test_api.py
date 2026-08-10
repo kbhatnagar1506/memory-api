@@ -205,12 +205,32 @@ async def test_exact_duplicate_is_merged_not_duplicated(client, space_id) -> Non
     assert listing.json()["total"] == 1
 
 
-async def test_dedupe_can_be_disabled(client, space_id) -> None:
-    payload = {"content": "Repeated on purpose", "dedupe": False}
-    await client.post(f"/v1/spaces/{space_id}/memories", json=payload)
+async def test_consolidation_cannot_be_switched_off(client, space_id) -> None:
+    """The write body carries no behaviour flags, and unknown fields are rejected.
+
+    Deduplication, supersession, contradiction detection and extraction all
+    run on every write. They used to be opt-in, which meant the graph was
+    empty for anyone who did not know to ask -- a memory API whose headline
+    features have an off switch that defaults to off is a memory API that
+    does nothing.
+    """
+    for removed in ("dedupe", "extract", "auto_supersede", "detect_conflicts"):
+        response = await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={"content": "a memory", removed: False},
+        )
+        assert response.status_code == 422, f"{removed} is still accepted"
+
+
+async def test_an_exact_duplicate_is_always_collapsed(client, space_id) -> None:
+    payload = {"content": "Repeated on purpose"}
+    first = await client.post(f"/v1/spaces/{space_id}/memories", json=payload)
     second = await client.post(f"/v1/spaces/{space_id}/memories", json=payload)
-    assert second.status_code == 201
-    assert second.json()["created"] is True
+    assert first.status_code == 201
+    # 200, not 201: the second write created nothing, and the status says so.
+    assert second.status_code == 200
+    assert second.json()["created"] is False
+    assert second.json()["memory"]["id"] == first.json()["memory"]["id"]
 
 
 async def test_bulk_ingest(client, space_id) -> None:
@@ -487,7 +507,7 @@ async def test_mmr_reduces_near_duplicate_results(client, space_id) -> None:
     for content in variants:
         await client.post(
             f"/v1/spaces/{space_id}/memories",
-            json={"content": content, "dedupe": False},
+            json={"content": content},
         )
     diverse = (
         await client.post(
@@ -1114,7 +1134,6 @@ async def test_conflicting_writes_are_detected_and_surfaced_in_search(client, sp
         f"/v1/spaces/{space_id}/memories",
         json={
             "content": "The quarterly planning meeting is on Thursday at 3pm",
-            "detect_conflicts": True,
         },
     )
     assert second.status_code == 201
@@ -1149,7 +1168,6 @@ async def test_contradiction_is_visible_from_both_sides(client, space_id) -> Non
             f"/v1/spaces/{space_id}/memories",
             json={
                 "content": "The API rate limit is 500 requests per minute",
-                "detect_conflicts": True,
             },
         )
     ).json()["memory"]
@@ -1216,7 +1234,6 @@ async def test_conflicting_results_lower_confidence(client, space_id) -> None:
         f"/v1/spaces/{space_id}/memories",
         json={
             "content": "The retention window is 90 days for all customers",
-            "detect_conflicts": True,
         },
     )
     body = (
@@ -1358,7 +1375,6 @@ async def test_graph_reports_contradictions_once_not_twice(client, space_id) -> 
         f"/v1/spaces/{space_id}/memories",
         json={
             "content": "The retention window is 90 days for all customers",
-            "detect_conflicts": True,
         },
     )
     g = (await client.get(f"/v1/spaces/{space_id}/graph")).json()

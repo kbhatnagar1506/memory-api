@@ -39,7 +39,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ...core.logging import get_logger
-from ..text import analyze
+from ..text import STOPWORDS, analyze
 
 log = get_logger(__name__)
 
@@ -47,50 +47,11 @@ _WORD_RE = re.compile(r"\w+", re.UNICODE)
 #: Characters used to fence documents in the prompt; stripped from their text.
 _FENCE_CHARS = re.compile("[`\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]")
 _MAX_DOC_CHARS = 1200
-_STOPWORDS = frozenset(
-    [
-        "a",
-        "an",
-        "and",
-        "are",
-        "as",
-        "at",
-        "be",
-        "but",
-        "by",
-        "for",
-        "if",
-        "in",
-        "into",
-        "is",
-        "it",
-        "no",
-        "not",
-        "of",
-        "on",
-        "or",
-        "such",
-        "that",
-        "the",
-        "their",
-        "then",
-        "there",
-        "these",
-        "they",
-        "this",
-        "to",
-        "was",
-        "will",
-        "with",
-        "what",
-        "which",
-        "who",
-        "when",
-        "where",
-        "how",
-        "why",
-    ]
-)
+#: The heuristic reranker scores lexical overlap, so it needs the same idea
+#: of a worthless term as the index does -- and exactly the same one. Two
+#: hand-maintained lists drift, and the drift shows up as a reranker that
+#: rewards a word the index never stored.
+_STOPWORDS = STOPWORDS
 
 
 @dataclass(frozen=True, slots=True)

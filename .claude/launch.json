@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "mapi-graph",
-      "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "scripts.demo_server"],
-      "port": 8077
+      "name": "mapi",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "set -a; . ./.env.local; set +a; exec .venv/bin/uvicorn mapi.main:app --factory --port 8099"],
+      "port": 8099
     }
   ]
 }

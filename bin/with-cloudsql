@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Run a command with a Cloud SQL Auth Proxy listening on localhost.
+#
+#   bin/with-cloudsql uvicorn mapi.main:app --factory ...
+#   bin/with-cloudsql alembic upgrade head
+#
+# WHY A PROXY, and not simply an authorized network.
+#
+# Heroku dynos do not have stable outbound addresses. Reaching a Cloud SQL
+# instance from one over its public IP therefore means authorizing
+# 0.0.0.0/0 -- the entire internet -- and relying on TLS and the password
+# alone. That is defensible (it is what a managed Postgres add-on does) but
+# it is strictly weaker than the alternative, and the alternative is not
+# hard.
+#
+# The Auth Proxy authenticates with the service account's IAM identity, opens
+# a TLS tunnel to the instance, and listens on 127.0.0.1. The database keeps
+# an EMPTY authorized-networks list: there is no address on the internet from
+# which it accepts a connection. A leaked password is not sufficient to reach
+# it, which is the property an authorized-network setup cannot give you.
+#
+# Runs in front of BOTH the web process and the release phase, because a
+# release dyno is a separate container and `alembic upgrade head` needs the
+# database just as much as the app does.
+set -euo pipefail
+
+: "${CLOUD_SQL_INSTANCE:?CLOUD_SQL_INSTANCE is required (project:region:instance)}"
+
+PROXY="${CLOUD_SQL_PROXY_PATH:-/app/bin/cloud-sql-proxy}"
+PORT="${CLOUD_SQL_PROXY_PORT:-5433}"
+
+# The proxy authenticates through ADC, and it starts before Python does -- so
+# the credentials file the application normally materializes at boot does not
+# exist yet. Write it here, with the same 0600 handling.
+if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS_JSON:-}" && -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+  CREDS="${TMPDIR:-/tmp}/gcp-adc.json"
+  umask 077
+  printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$CREDS"
+  export GOOGLE_APPLICATION_CREDENTIALS="$CREDS"
+fi
+
+if [[ ! -x "$PROXY" ]]; then
+  echo "cloud-sql-proxy not found at $PROXY (bin/post_compile should have fetched it)" >&2
+  exit 1
+fi
+
+"$PROXY" --port "$PORT" --address 127.0.0.1 "$CLOUD_SQL_INSTANCE" &
+PROXY_PID=$!
+
+# Kill the proxy when this process group goes away, so a crashed web process
+# does not leave a tunnel open behind it.
+trap 'kill "$PROXY_PID" 2>/dev/null || true' EXIT INT TERM
+
+# Wait for the listener rather than sleeping a fixed number of seconds: the
+# release phase runs `alembic upgrade head` immediately, and a migration that
+# starts one second early fails the deploy with a connection error that looks
+# like a configuration problem.
+for _ in $(seq 1 60); do
+  if (echo > "/dev/tcp/127.0.0.1/$PORT") >/dev/null 2>&1; then
+    exec "$@"
+  fi
+  # If the proxy died, fail now with its exit status rather than after a
+  # minute of polling a port nothing will ever bind.
+  if ! kill -0 "$PROXY_PID" 2>/dev/null; then
+    wait "$PROXY_PID"
+    echo "cloud-sql-proxy exited before accepting connections" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+echo "cloud-sql-proxy did not accept connections within 30s" >&2
+exit 1

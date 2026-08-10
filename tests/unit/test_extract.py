@@ -221,10 +221,15 @@ async def test_claims_carry_their_quote_and_parent() -> None:
     assert claim.metadata["quote"] in PASSAGE
 
 
-async def test_extraction_is_off_by_default() -> None:
+async def test_extraction_runs_without_being_asked() -> None:
+    """No flag, no setting, no ceremony -- a write decomposes itself.
+
+    The opposite assertion used to live here, and it was the reason a live
+    space held 55 whole-paragraph memories and zero derived facts.
+    """
     service, org_id, space_id = await _wired()
     result = await service.ingest(org_id=org_id, space_id=space_id, content=PASSAGE)
-    assert result.extracted == []
+    assert result.extracted, "the passage was stored as one undivided blob"
 
 
 async def test_no_completer_means_no_extraction() -> None:

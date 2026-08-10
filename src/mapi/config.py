@@ -128,6 +128,28 @@ class Settings(BaseSettings):
     #: Extraction is closer to transcription than reasoning; a large thinking
     #: budget spends latency on every write to restate a passage.
     extraction_thinking_budget: int = Field(default=0, ge=0, le=32_768)
+    #: Query understanding: one sentence in, one word out, on the read path.
+    #: The smallest model on offer, because the task is reading comprehension
+    #: of a single sentence and a bigger model would buy latency rather than
+    #: accuracy. Fails open to the regex classifier, so this being wrong or
+    #: unreachable costs ranking quality and never availability.
+    understand_queries: bool = Field(
+        default=True,
+        description=(
+            "Classify each search's question shape with a small model before "
+            "retrieving. Needs synthesis_backend; inert without one."
+        ),
+    )
+    understanding_model: str = "gemini-2.5-flash-lite"
+    #: One label. The allowance is small enough that a model which starts
+    #: writing prose gets cut off and falls back rather than billing for it.
+    understanding_max_output_tokens: int = Field(default=16, ge=1, le=256)
+    understanding_thinking_budget: int = Field(default=0, ge=0, le=1024)
+    #: Hard ceiling on how long search will wait for the label. Past this the
+    #: regex decides and the search proceeds -- a slow vendor makes search
+    #: dumber, never slower.
+    understanding_timeout_s: float = Field(default=2.0, gt=0, le=30)
+
     rerank_model: str = "gemini-2.5-flash"
     rerank_candidates: int = Field(default=32, ge=1, le=256)
     rerank_timeout_s: float = Field(default=12.0, gt=0)
@@ -164,10 +186,49 @@ class Settings(BaseSettings):
             "'what is true', episodes answer 'what happened'."
         ),
     )
+    #: Results a comprehensive question may return. "What is our entire
+    #: infrastructure" is not asking which memory ranks highest -- it is
+    #: asking what the territory contains, and a ranked top-10 answers a
+    #: different question. Measured on 25 stored facts: 10 came back, every
+    #: score inside a 2% band, with the database and the cache missing.
+    coverage_limit: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description=(
+            "Window for questions asking for a complete set rather than a best "
+            "match. Still bounded -- 'everything' has to fit in a context window."
+        ),
+    )
+    #: Nearest existing memories compared against a new write when
+    #: supersession or conflict detection is on. Bounded because every
+    #: candidate costs an embedding across the wire and a cosine in Python;
+    #: unbounded it becomes a table scan on every write.
+    #:
+    #: 64 rather than the 256 this replaced: the proposers' own similarity
+    #: floor is 0.72, and on real corpora the count of memories above that
+    #: floor is in the single digits. The extra rows were being fetched and
+    #: discarded.
+    consolidation_candidates: int = Field(default=64, ge=1, le=512)
     half_life_days: float = Field(
         default=180.0,
         gt=0,
         description="Recency half-life. Older memories decay toward this schedule.",
+    )
+
+    # -- per-tenant quotas ------------------------------------------------
+    # All zero = unlimited, which is the shipped default. Rate limiting caps
+    # how FAST a tenant calls; these cap how MUCH they accumulate, and the
+    # third one is the only thing standing between one enthusiastic customer
+    # and an unbounded embedding bill.
+    max_memories_per_org: int = Field(
+        default=0, ge=0, description="Memories one organization may hold. 0 is unlimited."
+    )
+    max_bytes_per_org: int = Field(
+        default=0, ge=0, description="Stored content bytes per organization. 0 is unlimited."
+    )
+    max_writes_per_day: int = Field(
+        default=0, ge=0, description="Non-duplicate writes per org per day. 0 is unlimited."
     )
 
     # -- ingestion --------------------------------------------------------

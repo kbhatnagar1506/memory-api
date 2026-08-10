@@ -54,6 +54,10 @@ packages = ["src/mapi"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Session-scoped async fixtures need a session-scoped loop, or every test
+# gets a fresh loop and a pool bound to a closed one.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-q --strict-markers"
 markers = [
     "postgres: requires a live PostgreSQL with pgvector (skipped when absent)",

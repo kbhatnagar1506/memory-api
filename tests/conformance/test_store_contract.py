@@ -1,7 +1,15 @@
 """Storage conformance.
 
 One suite, parametrized over every backend. The in-memory backend always runs;
-Postgres runs when MAPI_TEST_DATABASE_URL is set (CI sets it).
+Postgres runs when MAPI_TEST_DATABASE_URL is set.
+
+POINT IT AT A NEARBY DATABASE. Each test issues a few hundred statements, so
+the suite's runtime is round-trip latency times a large constant: against a
+managed instance in another region that is ~17 seconds PER TEST, and against
+a Postgres on the same host it is a fraction of a second. CI should run a
+`pgvector/pgvector:pg16` service container, not the production instance --
+the point of this suite is that it runs on every change, and a 20-minute
+suite is a suite people learn to skip.
 
 This is the file that makes two implementations safe to have. Without it, the
 backends drift — a filter that means one thing in Python and another in SQL,
@@ -33,21 +41,49 @@ from mapi.domain.models import (
 from mapi.store.base import MemoryFilter
 from mapi.store.memory import InMemoryStore
 
-DIMENSIONS = 128
+#: Must match the vector width of the database under test. The in-memory
+#: backend does not care; a real one has a fixed-width column, and a mismatch
+#: fails as an opaque type error rather than a useful assertion.
+DIMENSIONS = int(os.getenv("MAPI_TEST_DIMENSIONS", "128"))
 NOW = datetime.now(UTC)
 
 
+#: One Postgres store for the whole process, built on first use.
+#:
+#: Every test used to construct its own and call `initialize()` -- `create_all`
+#: plus the HNSW DDL, dozens of round trips before the test body runs. Against
+#: a managed instance over a WAN link that measured ~45 SECONDS PER TEST, or
+#: 50 minutes for the suite, which is another way of saying the suite never
+#: runs. It had in fact never run.
+#:
+#: A module-level cache rather than a session-scoped fixture because the
+#: memory backend must stay runnable with no database at all: a session
+#: fixture is set up for every parametrization, so its `pytest.skip` would
+#: skip the in-memory half too.
+#:
+#: Sharing is safe because tests do not share tenants -- each creates its own
+#: organization and space, and isolation by `org_id` is the property under
+#: test anyway.
+_POSTGRES_STORE = None
+
+
 async def _make_store(kind: str):
+    global _POSTGRES_STORE
     if kind == "memory":
+        # Fresh per test: cheap, and a shared dict would make these tests
+        # order-dependent in a way the Postgres path is not.
         return InMemoryStore(), None
     url = os.getenv("MAPI_TEST_DATABASE_URL")
     if not url:
         pytest.skip("MAPI_TEST_DATABASE_URL is not set")
-    from mapi.store.postgres.store import PostgresStore
+    if _POSTGRES_STORE is None:
+        from mapi.store.postgres.store import PostgresStore
 
-    store = PostgresStore(url, dimensions=DIMENSIONS)
-    await store.initialize()
-    return store, store.aclose
+        _POSTGRES_STORE = PostgresStore(url, dimensions=DIMENSIONS)
+        await _POSTGRES_STORE.initialize()
+    # Not closed per test -- the pool outlives any one of them and the
+    # process exit disposes it.
+    return _POSTGRES_STORE, None
 
 
 @pytest.fixture(params=["memory", "postgres"])
@@ -388,18 +424,36 @@ async def test_sample_embeddings_returns_one_vector_per_memory(tenant) -> None:
 # -- api keys ------------------------------------------------------------------
 
 
+def _key_hash(org, suffix: str) -> str:
+    """A hash unique to this test AND this run.
+
+    `key_hash` is globally unique (`uq_api_keys_hash`) rather than unique per
+    tenant, because authentication looks a key up by hash BEFORE it knows
+    which organization the key belongs to. So a fixed literal here passes the
+    first time the suite runs against a database and raises ConflictError on
+    every run after -- which is what happened the first time these tests met
+    a database that was not thrown away afterwards.
+
+    Every other fixture in this file already derives its identifiers from the
+    org id for exactly this reason; these two did not, because until now no
+    Postgres had ever survived to a second run.
+    """
+    return f"{suffix}{org.id}".ljust(64, "0")[:64]
+
+
 async def test_api_key_lookup_by_hash(tenant) -> None:
     store, org, _ = tenant
+    digest = _key_hash(org, "a")
     key = await store.create_api_key(
         ApiKey(
             org_id=org.id,
             name="k",
-            key_hash="a" * 64,
+            key_hash=digest,
             prefix="sm_aaaa",
             scopes=frozenset({Scope.SEARCH}),
         )
     )
-    found = await store.get_api_key_by_hash("a" * 64)
+    found = await store.get_api_key_by_hash(digest)
     assert found is not None
     assert found.id == key.id
     assert Scope.SEARCH in found.scopes
@@ -407,17 +461,18 @@ async def test_api_key_lookup_by_hash(tenant) -> None:
 
 async def test_revoked_key_reports_inactive(tenant) -> None:
     store, org, _ = tenant
+    digest = _key_hash(org, "b")
     key = await store.create_api_key(
         ApiKey(
             org_id=org.id,
             name="k",
-            key_hash="b" * 64,
+            key_hash=digest,
             prefix="sm_bbbb",
             scopes=frozenset({Scope.SEARCH}),
         )
     )
     assert await store.revoke_api_key(org.id, key.id) is True
-    found = await store.get_api_key_by_hash("b" * 64)
+    found = await store.get_api_key_by_hash(digest)
     assert found is not None
     assert not found.is_active()
     assert await store.revoke_api_key(org.id, key.id) is False
@@ -960,3 +1015,90 @@ async def test_kind_survives_point_in_time_reads(tenant) -> None:
         org.id, space.id, derived.id, versions[-1].valid_from
     )
     assert historical is not None and historical.kind is MemoryKind.DERIVED
+
+
+# -- neighbours: the write path's candidate lookup ------------------------
+#
+# Every consolidation check on the write path -- near-duplicate, supersession,
+# contradiction -- asks the same question: which existing memories are close
+# enough to this one to be about the same thing. This replaced a scan of the
+# 256 NEWEST memories, which was both expensive and a silent scale ceiling.
+
+
+async def test_neighbours_returns_nearest_first(tenant) -> None:
+    """"What is close to this", not "what is recent"."""
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    near = await _add(store, org, space, "the cat sat on the mat")
+    far = await _add(store, org, space, "quarterly revenue reconciliation")
+
+    probe = await embedder.embed_one("the cat sat on the mat")
+    ids = [m.id for m, _ in await store.neighbours(org.id, space.id, probe, limit=10)]
+    assert ids.index(near.id) < ids.index(far.id)
+
+
+async def test_neighbours_returns_the_matching_embedding(tenant) -> None:
+    """Consolidation recomputes similarity itself, so it needs the vector."""
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    await _add(store, org, space, "hello world")
+
+    probe = await embedder.embed_one("hello world")
+    rows = await store.neighbours(org.id, space.id, probe, limit=1)
+    assert rows
+    _, vector = rows[0]
+    assert len(vector) == DIMENSIONS
+
+
+async def test_neighbours_excludes_the_memory_being_written(tenant) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    written = await _add(store, org, space, "a statement about a thing")
+
+    probe = await embedder.embed_one("a statement about a thing")
+    rows = await store.neighbours(
+        org.id, space.id, probe, limit=10, exclude_id=written.id
+    )
+    assert written.id not in [m.id for m, _ in rows]
+
+
+async def test_neighbours_honours_the_limit(tenant) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    for i in range(6):
+        await _add(store, org, space, f"statement number {i}")
+
+    probe = await embedder.embed_one("statement number 0")
+    assert len(await store.neighbours(org.id, space.id, probe, limit=3)) == 3
+
+
+async def test_neighbours_never_crosses_a_tenant(tenant, backend) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    other_org = await backend.create_organization(Organization(name="Other"))
+    other_space = await backend.create_space(
+        Space(org_id=other_org.id, slug=f"o{other_org.id[-8:]}", name="Other")
+    )
+    await _add(store, other_org, other_space, "the other tenant's secret")
+
+    probe = await embedder.embed_one("the other tenant's secret")
+    assert await store.neighbours(org.id, space.id, probe, limit=10) == []
+
+
+async def test_neighbours_skips_archived_memories(tenant) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    archived = await _add(
+        store, org, space, "an archived fact", status=MemoryStatus.ARCHIVED
+    )
+
+    probe = await embedder.embed_one("an archived fact")
+    rows = await store.neighbours(org.id, space.id, probe, limit=10)
+    assert archived.id not in [m.id for m, _ in rows]
+
+
+async def test_neighbours_on_an_empty_space_is_empty(tenant) -> None:
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    probe = await embedder.embed_one("nothing here")
+    assert await store.neighbours(org.id, space.id, probe, limit=10) == []

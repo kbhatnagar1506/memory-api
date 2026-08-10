@@ -116,4 +116,27 @@ def build_extractor(settings: Settings) -> CompleteFn | None:
     raise ConfigurationError(f"unknown synthesis backend: {settings.synthesis_backend}")
 
 
-__all__ = ["build_completer"]
+def build_understander(settings: Settings) -> CompleteFn | None:
+    """The SEARCH-path completer: one sentence in, one word out.
+
+    The narrowest of the three and the only one on the read path, so it is
+    configured for latency above everything: the smallest model, thinking
+    off, and an output allowance of a few tokens. Its caller wraps it in a
+    timeout and a circuit breaker and falls back to regexes, which is what
+    makes putting a model in front of search defensible at all.
+    """
+    if not settings.understand_queries:
+        return None
+    if settings.synthesis_backend is SynthesisBackend.NONE:
+        return None
+    if settings.synthesis_backend is SynthesisBackend.GEMINI:
+        return _gemini(
+            settings,
+            model=settings.understanding_model,
+            thinking_budget=settings.understanding_thinking_budget,
+            max_output_tokens=settings.understanding_max_output_tokens,
+        )
+    raise ConfigurationError(f"unknown synthesis backend: {settings.synthesis_backend}")
+
+
+__all__ = ["build_completer", "build_extractor", "build_understander"]

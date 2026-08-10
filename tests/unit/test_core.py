@@ -6,9 +6,9 @@ import pytest
 
 from mapi.config import Settings
 from mapi.core.errors import (
+    MapiError,
     NotFoundError,
     RateLimitedError,
-    SupermemoryError,
     ValidationError,
 )
 from mapi.core.ids import PREFIXES, is_valid, kind_of, new_id
@@ -239,4 +239,4 @@ def test_validation_error_status() -> None:
 
 
 def test_base_error_defaults_to_500() -> None:
-    assert SupermemoryError().status_code == 500
+    assert MapiError().status_code == 500

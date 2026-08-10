@@ -41,12 +41,12 @@ def _memory_body(
     metadata: dict[str, Any] | None = None,
     source: str = "",
     occurred_at: datetime | None = None,
-    extract: bool = False,
+    dedupe: bool = True,
+    extract: bool | None = None,
     auto_supersede: bool = False,
     detect_conflicts: bool = False,
-    dedupe: bool = True,
 ) -> dict[str, Any]:
-    body: dict[str, Any] = {"content": content, "dedupe": dedupe}
+    body: dict[str, Any] = {"content": content}
     if summary:
         body["summary"] = summary
     if tags:
@@ -57,8 +57,16 @@ def _memory_body(
         body["source"] = source
     if occurred_at is not None:
         body["occurred_at"] = occurred_at.isoformat()
+    if not dedupe:
+        body["dedupe"] = False
+    # `extract` is tri-state, unlike the two flags below: the server has an
+    # account-level default, so None means "whatever the account says" and
+    # False is a real override that has to travel. Sending it only when truthy
+    # would make `extract=False` silently do nothing on an account that has
+    # extraction switched on.
+    if extract is not None:
+        body["extract"] = extract
     for flag, value in (
-        ("extract", extract),
         ("auto_supersede", auto_supersede),
         ("detect_conflicts", detect_conflicts),
     ):
@@ -75,9 +83,15 @@ def _search_body(
     include_superseded: bool = False,
     min_score: float = 0.0,
     explain: bool = False,
+    coverage: bool | None = None,
+    kinds: list[str] | None = None,
     **options: Any,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {"query": query, "limit": limit, **options}
+    if coverage is not None:
+        body["coverage"] = coverage
+    if kinds:
+        body["kinds"] = kinds
     if tags:
         body["tags"] = tags
     if include_superseded:
@@ -111,16 +125,26 @@ class Memories(_Resource):
         metadata: dict[str, Any] | None = None,
         source: str = "",
         occurred_at: datetime | None = None,
-        extract: bool = False,
+        dedupe: bool = True,
+        extract: bool | None = None,
         auto_supersede: bool = False,
         detect_conflicts: bool = False,
-        dedupe: bool = True,
     ) -> Memory:
         """Store one memory.
 
         `occurred_at` is when it HAPPENED, not when you are writing it. The
         difference matters for anything asking what order things came in, and
         defaulting to now makes a backfill look like it all happened today.
+
+        The three consolidation flags are what separate this from a vector
+        store, and all three are per-write because all three cost something:
+
+        * `extract` decomposes the text into atomic claims stored beside the
+          original. None means the account default; True and False override it.
+        * `auto_supersede` lets this write retire an older memory it replaces.
+        * `detect_conflicts` records a CONTRADICTS edge when this disagrees
+          with something already stored. Neither side is hidden — an agent
+          told two facts disagree can ask; one handed a winner cannot.
         """
         data = self._request(
             "POST",
@@ -132,10 +156,10 @@ class Memories(_Resource):
                 metadata=metadata,
                 source=source,
                 occurred_at=occurred_at,
+                dedupe=dedupe,
                 extract=extract,
                 auto_supersede=auto_supersede,
                 detect_conflicts=detect_conflicts,
-                dedupe=dedupe,
             ),
         )
         return Memory.parse((data or {}).get("memory", data) or {})
@@ -256,6 +280,8 @@ class Search(_Resource):
         include_superseded: bool = False,
         min_score: float = 0.0,
         explain: bool = False,
+        coverage: bool | None = None,
+        kinds: list[str] | None = None,
         **options: Any,
     ) -> SearchResult:
         """Search a space.
@@ -263,6 +289,11 @@ class Search(_Resource):
         Superseded memories are excluded by default. A replaced fact is still
         stored and still reachable, but returning it beside its replacement is
         how an agent states last month's answer with this month's confidence.
+
+        `coverage` decides whether the answer is the best few or the complete
+        set. Left unset, the question decides for itself -- "what is our
+        entire infrastructure" wants everything, and a ranked top-10 answers
+        a different question. Pass True or False to override that.
         """
         data = self._request(
             "POST",
@@ -274,6 +305,8 @@ class Search(_Resource):
                 include_superseded=include_superseded,
                 min_score=min_score,
                 explain=explain,
+                coverage=coverage,
+                kinds=kinds,
                 **options,
             ),
         )
@@ -370,10 +403,10 @@ class AsyncMemories:
         metadata: dict[str, Any] | None = None,
         source: str = "",
         occurred_at: datetime | None = None,
-        extract: bool = False,
+        dedupe: bool = True,
+        extract: bool | None = None,
         auto_supersede: bool = False,
         detect_conflicts: bool = False,
-        dedupe: bool = True,
     ) -> Memory:
         data = await self._request(
             "POST",
@@ -385,10 +418,10 @@ class AsyncMemories:
                 metadata=metadata,
                 source=source,
                 occurred_at=occurred_at,
+                dedupe=dedupe,
                 extract=extract,
                 auto_supersede=auto_supersede,
                 detect_conflicts=detect_conflicts,
-                dedupe=dedupe,
             ),
         )
         return Memory.parse((data or {}).get("memory", data) or {})
@@ -508,6 +541,8 @@ class AsyncSearch:
         include_superseded: bool = False,
         min_score: float = 0.0,
         explain: bool = False,
+        coverage: bool | None = None,
+        kinds: list[str] | None = None,
         **options: Any,
     ) -> SearchResult:
         data = await self._request(
@@ -520,6 +555,8 @@ class AsyncSearch:
                 include_superseded=include_superseded,
                 min_score=min_score,
                 explain=explain,
+                coverage=coverage,
+                kinds=kinds,
                 **options,
             ),
         )

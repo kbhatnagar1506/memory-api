@@ -46,6 +46,7 @@ prompt:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import re
@@ -53,13 +54,34 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from ...core.logging import get_logger
 from ..text import STOPWORDS
 from .derive import CompleteFn
+
+log = get_logger(__name__)
 
 #: Below this there is nothing to decompose, and a model call per one-line
 #: write is pure cost. "more" and "please continue" are real turns in the
 #: corpus; they hold no claim and must not become memories.
 MIN_CHARS = 80
+
+#: Most source text one extraction call may see.
+#:
+#: There was no upper bound at all, and `max_content_bytes` is 1MB -- so a
+#: single ingest could hand the model a 129,000-character document in one
+#: prompt and expect 24 claims back inside an 8,192-token output budget. That
+#: is the unexplained anomaly from the extraction run: a document two orders
+#: of magnitude past what one call can cover does not fail loudly. The model
+#: reads the opening, the completion hits MAX_TOKENS, the salvage recovers
+#: whatever objects are complete, and the result is a handful of claims about
+#: the first page presented as the facts of the whole document. A silent,
+#: plausible under-extraction -- the same failure shape the completer's
+#: truncation logging exists to catch, arriving through the input side.
+#:
+#: 12,000 characters is roughly 3,000 tokens of source against an 8,192-token
+#: output allowance, which leaves room for the claims a dense passage
+#: actually produces.
+MAX_CHARS = 12_000
 
 #: Jaccard over content tokens at or above which two claims are the same
 #: claim. Deliberately below the 0.8 used elsewhere, because extracted claims
@@ -73,6 +95,11 @@ _DUPLICATE_JACCARD = 0.75
 #: The cap bounds cost and stops a runaway completion from writing hundreds
 #: of memories against one document.
 MAX_CLAIMS = 24
+
+#: Window splitting, mirroring the chunker's descent: paragraphs, then
+#: sentences, then a blunt cut.
+_PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 #: Every rule here is traceable to a measured failure, and the prompt is the
 #: mechanism -- the retrieval unit is whatever this returns. Notes on the two
@@ -296,6 +323,45 @@ def parse_claims(raw: str, source: str) -> list[Claim]:
 DEFAULT_SUBJECT = "the user"
 
 
+def _windows(text: str) -> list[str]:
+    """Split oversized text into extraction-sized windows on paragraph edges.
+
+    Paragraph boundaries first, then sentence boundaries, then a hard cut --
+    the same descent the chunker makes, for the same reason: a claim split
+    across a window boundary is a claim whose quote appears in neither half,
+    and grounding drops it.
+    """
+    body = text.strip()
+    if len(body) <= MAX_CHARS:
+        return [body]
+
+    windows: list[str] = []
+    current = ""
+    for block in _PARAGRAPH_SPLIT.split(body):
+        piece = block.strip()
+        if not piece:
+            continue
+        if len(piece) > MAX_CHARS:
+            # A single paragraph over the limit: fall back to sentences, then
+            # to a blunt cut for text that contains neither.
+            for sentence in _SENTENCE_SPLIT.split(piece):
+                if len(current) + len(sentence) + 1 > MAX_CHARS and current:
+                    windows.append(current.strip())
+                    current = ""
+                while len(sentence) > MAX_CHARS:
+                    windows.append(sentence[:MAX_CHARS])
+                    sentence = sentence[MAX_CHARS:]
+                current = f"{current} {sentence}".strip()
+            continue
+        if len(current) + len(piece) + 2 > MAX_CHARS and current:
+            windows.append(current.strip())
+            current = ""
+        current = f"{current}\n\n{piece}".strip()
+    if current.strip():
+        windows.append(current.strip())
+    return [w for w in windows if len(w) >= MIN_CHARS] or [body[:MAX_CHARS]]
+
+
 async def extract_claims(
     text: str,
     complete: CompleteFn,
@@ -317,13 +383,31 @@ async def extract_claims(
     if len(text.strip()) < MIN_CHARS:
         return []
     when = (as_of or datetime.now(UTC)).strftime("%A %d %B %Y")
-    try:
-        raw = await complete(
-            EXTRACT_PROMPT.format(text=text, as_of=when, subject=subject or DEFAULT_SUBJECT)
-        )
-    except Exception:
-        return []
-    return parse_claims(raw, text)
+    windows = _windows(text)
+    if len(windows) > 1:
+        log.info("extraction_windowed", chars=len(text), windows=len(windows))
+
+    async def one(window: str) -> list[Claim]:
+        try:
+            raw = await complete(
+                EXTRACT_PROMPT.format(
+                    text=window, as_of=when, subject=subject or DEFAULT_SUBJECT
+                )
+            )
+        except Exception:
+            return []
+        # Ground against the WINDOW, not the whole document: a quote must come
+        # from the passage the model actually read, or grounding stops being a
+        # check and starts being a coincidence.
+        return parse_claims(raw, window)
+
+    if len(windows) == 1:
+        return await one(windows[0])
+
+    # Concurrent, because a long document is the case where serial calls turn
+    # one slow write into a timeout.
+    batches = await asyncio.gather(*(one(w) for w in windows))
+    return _dedupe([claim for batch in batches for claim in batch])[:MAX_CLAIMS]
 
 
 __all__ = [

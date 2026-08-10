@@ -32,12 +32,34 @@ from mapi.store.memory import InMemoryStore
 BASE = datetime(2024, 3, 1, tzinfo=UTC)
 
 
-async def _service(store: InMemoryStore, settings: Settings) -> MemoryService:
+async def _confirming(prompt: str) -> str:
+    """An adjudicator that agrees the first candidate was replaced.
+
+    Supersession is no longer decided by similarity. The cosine proposer
+    SHORTLISTS and a model confirms, because similarity cannot distinguish
+    "the standup moved to 10:15" from "the standup is in the main room" --
+    both are about the standup, only one replaces anything. Audited against
+    a real corpus, similarity alone hid four true memories out of five.
+    """
+    return '[{"n": 1, "reason": "restated with a new time", "confidence": 0.95}]'
+
+
+async def _refusing(prompt: str) -> str:
+    """An adjudicator that confirms nothing."""
+    return "[]"
+
+
+async def _service(
+    store: InMemoryStore,
+    settings: Settings,
+    adjudicator: object | None = None,
+) -> MemoryService:
     return MemoryService(
         store,
         DeterministicEmbedder(dimensions=128),
         HeuristicReranker(),
         settings,
+        extractor=adjudicator,  # type: ignore[arg-type]
     )
 
 
@@ -69,7 +91,7 @@ NEW = "The team standup is now at 10:15am every weekday in the main room."
 async def test_high_confidence_supersession_is_applied() -> None:
     store = InMemoryStore()
     org_id, space_id = await _space(store)
-    service = await _service(store, _settings(0.0))
+    service = await _service(store, _settings(0.0), _confirming)
 
     first = await service.ingest(
         org_id=org_id, space_id=space_id, content=OLD, occurred_at=BASE
@@ -162,12 +184,21 @@ async def test_declined_memory_stays_retrievable() -> None:
     assert first.memory.id in {r.memory.id for r in found.results}
 
 
-async def test_auto_supersede_off_proposes_nothing() -> None:
+async def test_without_an_adjudicator_nothing_is_ever_hidden() -> None:
+    """Fails closed. Similarity alone is not trusted to hide a memory.
+
+    This is the whole safety property: supersession is the only operation
+    that removes a memory from default search, so when the model that
+    decides is unavailable, the answer is no. A misconfigured or unreachable
+    backend costs a missed revision, never a deleted fact.
+    """
     store = InMemoryStore()
     org_id, space_id = await _space(store)
-    service = await _service(store, _settings(0.0))
+    service = await _service(store, _settings(0.0))  # no adjudicator
 
-    await service.ingest(org_id=org_id, space_id=space_id, content=OLD, occurred_at=BASE)
+    first = await service.ingest(
+        org_id=org_id, space_id=space_id, content=OLD, occurred_at=BASE
+    )
     result = await service.ingest(
         org_id=org_id,
         space_id=space_id,
@@ -175,7 +206,29 @@ async def test_auto_supersede_off_proposes_nothing() -> None:
         occurred_at=BASE + timedelta(days=7),
     )
     assert result.superseded == []
-    assert result.supersede_declined == []
+    survivor = await service.get_memory(org_id, space_id, first.memory.id)
+    assert survivor.status is MemoryStatus.ACTIVE
+
+
+async def test_the_adjudicator_can_refuse_a_shortlisted_supersession() -> None:
+    """Two memories about the same subject, neither replacing the other."""
+    store = InMemoryStore()
+    org_id, space_id = await _space(store)
+    service = await _service(store, _settings(0.0), _refusing)
+
+    first = await service.ingest(
+        org_id=org_id, space_id=space_id, content=OLD, occurred_at=BASE
+    )
+    result = await service.ingest(
+        org_id=org_id,
+        space_id=space_id,
+        content=NEW,
+        occurred_at=BASE + timedelta(days=7),
+    )
+    assert result.superseded == []
+    assert first.memory.id in result.supersede_declined
+    survivor = await service.get_memory(org_id, space_id, first.memory.id)
+    assert survivor.status is MemoryStatus.ACTIVE
 
 
 @pytest.mark.parametrize("floor", [-0.1, 1.1])

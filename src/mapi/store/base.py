@@ -45,6 +45,20 @@ class VectorHit:
 
 
 @dataclass(frozen=True, slots=True)
+class TenantUsage:
+    """What one organization is currently consuming.
+
+    One object because the three numbers are read together, by the quota
+    check, on writes -- three round trips to answer one question would make
+    the feature cost more than it saves.
+    """
+
+    memories: int
+    bytes_stored: int
+    writes_today: int
+
+
+@dataclass(frozen=True, slots=True)
 class LexicalHit:
     memory_id: str
     chunk_id: str
@@ -456,6 +470,49 @@ class MemoryStore(abc.ABC):
         """Full-text search over chunks, best first. Scores are backend-relative."""
 
     @abc.abstractmethod
+    async def tenant_usage(self, org_id: str, *, since: datetime) -> TenantUsage:
+        """Memory count, bytes stored, and writes since `since`, for one org.
+
+        Spans every space in the organization, because quotas are billed to
+        the organization and a per-space limit is trivially escaped by
+        creating another space.
+
+        Called only when a quota is actually configured -- see `Quota.enforced`
+        -- so a deployment with no limits pays nothing for this.
+        """
+
+    @abc.abstractmethod
+    async def neighbours(
+        self,
+        org_id: str,
+        space_id: str,
+        embedding: Vector,
+        *,
+        limit: int,
+        exclude_id: str = "",
+    ) -> list[tuple[Memory, Vector]]:
+        """Memories nearest `embedding`, with the embedding that matched.
+
+        The write path's consolidation checks -- near-duplicate, supersession,
+        contradiction -- all ask the same question: which existing memories
+        are close enough to this one to be about the same thing. This answers
+        it with the ANN index.
+
+        It replaces a `list_memories(limit=256)` scan that was wrong in two
+        directions at once. It fetched the 256 NEWEST memories and their full
+        embeddings on every write -- about 1.5MB of float32 across the wire
+        for a 768-dimension model -- and past 256 memories in a space, a fact
+        stated earlier could never again be superseded or contradicted, because
+        it was never among the rows compared. Nearest is both cheaper and the
+        question actually being asked.
+
+        Returns (memory, embedding) rather than (memory, score) so the pure
+        consolidation functions keep computing their own similarity. They are
+        the tested surface; making them trust a number from the store would
+        move that arithmetic into two backends that must then agree forever.
+        """
+
+    @abc.abstractmethod
     async def sample_embeddings(
         self, org_id: str, space_id: str, *, limit: int
     ) -> list[tuple[str, Vector]]:
@@ -468,5 +525,6 @@ __all__ = [
     "MemoryFilter",
     "MemoryStore",
     "Page",
+    "TenantUsage",
     "VectorHit",
 ]

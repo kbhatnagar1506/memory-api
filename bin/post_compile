@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Fetch the Cloud SQL Auth Proxy into the slug at build time.
+#
+# Build time, not boot time: a 30MB download on every dyno start adds latency
+# to every restart and makes boot depend on GitHub being reachable. The slug
+# is built once.
+set -euo pipefail
+
+VERSION="${CLOUD_SQL_PROXY_VERSION:-2.14.1}"
+TARGET="$(dirname "$0")/cloud-sql-proxy"
+
+echo "-----> Fetching cloud-sql-proxy ${VERSION}"
+curl -fsSL -o "$TARGET" \
+  "https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v${VERSION}/cloud-sql-proxy.linux.amd64"
+chmod +x "$TARGET"
+echo "-----> cloud-sql-proxy installed"

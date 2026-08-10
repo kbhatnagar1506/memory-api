@@ -17,7 +17,7 @@ CONTENT_TYPE = "application/problem+json"
 _DOC_BASE = "https://docs.mapi.dev/errors"
 
 
-class SupermemoryError(Exception):
+class MapiError(Exception):
     """Base for every expected failure. Unexpected ones become 500s."""
 
     status_code: int = 500
@@ -55,37 +55,37 @@ class SupermemoryError(Exception):
 # -- 4xx ---------------------------------------------------------------------
 
 
-class ValidationError(SupermemoryError):
+class ValidationError(MapiError):
     status_code = 422
     slug = "validation_error"
     title = "Request failed validation"
 
 
-class BadRequestError(SupermemoryError):
+class BadRequestError(MapiError):
     status_code = 400
     slug = "bad_request"
     title = "Malformed request"
 
 
-class UnauthorizedError(SupermemoryError):
+class UnauthorizedError(MapiError):
     status_code = 401
     slug = "unauthorized"
     title = "Missing or invalid credentials"
 
 
-class ForbiddenError(SupermemoryError):
+class ForbiddenError(MapiError):
     status_code = 403
     slug = "forbidden"
     title = "Insufficient scope for this operation"
 
 
-class NotFoundError(SupermemoryError):
+class NotFoundError(MapiError):
     status_code = 404
     slug = "not_found"
     title = "Resource not found"
 
 
-class ConflictError(SupermemoryError):
+class ConflictError(MapiError):
     status_code = 409
     slug = "conflict"
     title = "Resource conflict"
@@ -96,19 +96,19 @@ class IdempotencyConflictError(ConflictError):
     title = "Idempotency key reused with a different request body"
 
 
-class PayloadTooLargeError(SupermemoryError):
+class PayloadTooLargeError(MapiError):
     status_code = 413
     slug = "payload_too_large"
     title = "Request body exceeds the configured limit"
 
 
-class UnsupportedMediaTypeError(SupermemoryError):
+class UnsupportedMediaTypeError(MapiError):
     status_code = 415
     slug = "unsupported_media_type"
     title = "Unsupported content type"
 
 
-class RateLimitedError(SupermemoryError):
+class RateLimitedError(MapiError):
     status_code = 429
     slug = "rate_limited"
     title = "Rate limit exceeded"
@@ -121,7 +121,7 @@ class RateLimitedError(SupermemoryError):
 # -- 5xx ---------------------------------------------------------------------
 
 
-class ProviderError(SupermemoryError):
+class ProviderError(MapiError):
     """An upstream embedding or LLM provider failed."""
 
     status_code = 502
@@ -135,13 +135,13 @@ class ProviderTimeoutError(ProviderError):
     title = "Upstream provider timed out"
 
 
-class StoreError(SupermemoryError):
+class StoreError(MapiError):
     status_code = 503
     slug = "store_unavailable"
     title = "Storage backend unavailable"
 
 
-class ConfigurationError(SupermemoryError):
+class ConfigurationError(MapiError):
     status_code = 500
     slug = "configuration_error"
     title = "Service is misconfigured"
@@ -154,13 +154,13 @@ __all__ = [
     "ConflictError",
     "ForbiddenError",
     "IdempotencyConflictError",
+    "MapiError",
     "NotFoundError",
     "PayloadTooLargeError",
     "ProviderError",
     "ProviderTimeoutError",
     "RateLimitedError",
     "StoreError",
-    "SupermemoryError",
     "UnauthorizedError",
     "UnsupportedMediaTypeError",
     "ValidationError",

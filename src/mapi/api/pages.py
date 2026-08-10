@@ -19,6 +19,11 @@ from html import escape
 #: One place for the visual language, so the three pages cannot drift.
 STYLE = """
   :root {
+    /* The palette is a light one by design -- it matches the wordmark, which
+       is black ink with no dark-mode variant. Declaring the scheme stops a
+       browser in dark mode from auto-inverting it into something the logo
+       disappears into. */
+    color-scheme: light;
     --bg:#fbfbfa; --panel:#fff; --line:#e6e4e0; --hair:#f0eeea;
     --text:#1b1b19; --dim:#75726c; --accent:#1b1b19;
     --ok:#2f9e5e; --warn:#b8860b;
@@ -32,8 +37,19 @@ STYLE = """
   .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace }
   .wrap { max-width:980px; margin:0 auto; padding:0 28px }
   header { border-bottom:1px solid var(--line); background:var(--panel) }
-  header .wrap { display:flex; align-items:center; justify-content:space-between; height:66px }
-  .logo { height:26px; display:block }
+  header .wrap { display:flex; align-items:center; justify-content:space-between; height:84px }
+  /* The source wordmark is 65% x 41% ink inside its canvas, so at any CSS
+     height most of the box was empty padding and the mark read tiny however
+     large the element got. `mapi-wordmark.png` is cropped to the ink, which
+     is most of the size increase; the rest is this number. */
+  .logo { height:44px; width:auto; display:block }
+  .logo-hero { height:96px; width:auto; display:block; margin:0 0 34px }
+  .logo-foot { height:22px; width:auto; display:block; opacity:.5; margin-bottom:12px }
+  @media (max-width:640px) {
+    header .wrap { height:68px }
+    .logo { height:34px }
+    .logo-hero { height:62px; margin-bottom:26px }
+  }
   nav a { margin-left:22px; color:var(--dim); text-decoration:none; font-size:14px }
   nav a:hover { color:var(--text) }
   .btn { display:inline-flex; align-items:center; gap:10px; padding:11px 20px;
@@ -61,11 +77,27 @@ STYLE = """
          border-radius:0 8px 8px 0; margin-bottom:20px }
 """
 
+#: Every icon slot a browser or unfurler looks in, so the mark shows up in
+#: tab bars, bookmarks, home screens and link previews rather than only on the
+#: page itself.
+#:
+#: The icon is a light plate with the `m` on it, not a transparent glyph: a
+#: black mark on transparency disappears into a dark tab bar, which is where a
+#: favicon spends its entire life. The social image is flattened for the same
+#: family of reason -- unfurlers ignore alpha and fall back to black.
 _HEAD = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>{title}</title>
-<link rel="icon" href="/static/mapi-logo.png">
+<link rel="icon" type="image/png" href="/static/mapi-icon.png">
+<link rel="apple-touch-icon" href="/static/mapi-icon.png">
+<meta property="og:title" content="{title}">
+<meta property="og:site_name" content="mapi">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/static/mapi-og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/static/mapi-og.png">
 <style>{style}</style>
 """
 
@@ -75,11 +107,13 @@ def _shell(title: str, body: str, *, nav: str = "") -> str:
         _HEAD.format(title=escape(title), style=STYLE)
         + f"""
 <header><div class="wrap">
-  <a href="/"><img class="logo" src="/static/mapi-logo.png" alt="mapi"></a>
+  <a href="/"><img class="logo" src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255"></a>
   <nav>{nav}</nav>
 </div></header>
 {body}
-<footer><div class="wrap">mapi — memory for agents. <a href="/docs">Documentation</a> · <a href="/reference">API reference</a></div></footer>
+<footer><div class="wrap">
+  <img class="logo-foot" src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255">
+  memory for agents. <a href="/chat">Chat</a> · <a href="/docs">Documentation</a> · <a href="/reference">API reference</a></div></footer>
 """
     )
 
@@ -98,12 +132,14 @@ def landing(signed_in: bool, sign_in_available: bool) -> str:
     return _shell(
         "mapi — memory for agents",
         f"""
-<div class="wrap" style="padding-top:84px">
+<div class="wrap" style="padding-top:76px">
+  <img class="logo-hero" src="/static/mapi-wordmark.png" alt="mapi" width="720" height="255">
   <h1>Memory that knows what<br>it believes, and why.</h1>
   <p class="lead">A memory API for agents. Hybrid retrieval over episodes and extracted
   claims, with a graph of what replaced what, what disagrees with what, and what was
   computed from what.</p>
   <div style="display:flex;gap:12px;align-items:center">{cta}
+    <a class="btn" href="/chat">Try the chat</a>
     <a class="btn" href="/docs">Documentation</a></div>
 
   <div class="grid" style="margin-top:72px">

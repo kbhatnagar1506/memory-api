@@ -23,22 +23,26 @@ from typing import Any
 
 from .config import Settings
 from .core.errors import (
+    MapiError,
     NotFoundError,
     PayloadTooLargeError,
     ProviderError,
-    SupermemoryError,
     ValidationError,
 )
 from .core.logging import get_logger
 from .core.metrics import EMBEDDINGS, INGESTED, SEARCH_LATENCY, SEARCH_STAGE_LATENCY
+from .core.quota import Quota, check_bytes, check_memories, check_writes
+from .domain.association import propose_associations
 from .domain.chunking import chunk_text, normalize
 from .domain.consolidation import (
+    ContradictionProposal,
     DuplicateKind,
     apply_supersession,
     detect_near_duplicate,
     merge_duplicate,
     propose_contradictions,
     propose_supersessions,
+    unexplained_pairs,
 )
 from .domain.embeddings.base import EmbeddingProvider
 from .domain.models import (
@@ -56,8 +60,16 @@ from .domain.models import (
 from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchResponse
 from .domain.retrieval.rerank import Reranker
 from .domain.synthesis import classify
+from .domain.synthesis.adjudicate import (
+    adjudicate_contradictions,
+    adjudicate_supersessions,
+)
+from .domain.synthesis.chat import ChatAnswer
+from .domain.synthesis.chat import Turn as ChatTurn
+from .domain.synthesis.chat import answer as chat_answer
 from .domain.synthesis.derive import CompleteFn, DerivedAnswer, SourceDoc, derive_answer
 from .domain.synthesis.extract import DEFAULT_SUBJECT, Claim, extract_claims
+from .domain.synthesis.understand import QueryUnderstanding
 from .store.base import MemoryFilter, MemoryStore, Page
 
 log = get_logger(__name__)
@@ -122,6 +134,7 @@ class MemoryService:
         settings: Settings,
         completer: CompleteFn | None = None,
         extractor: CompleteFn | None = None,
+        understander: CompleteFn | None = None,
     ) -> None:
         self.store = store
         self.embedder = embedder
@@ -135,7 +148,16 @@ class MemoryService:
         #: extraction runs per document and derivation runs per question --
         #: different models, different budgets, tuned independently.
         self.extractor = extractor
-        self.pipeline = RetrievalPipeline(store, embedder, reranker)
+        #: Search-path completion: one sentence in, one label out. Shared
+        #: across requests so its cache and circuit breaker mean anything --
+        #: a per-request instance would call the vendor for every search and
+        #: would never trip a breaker.
+        self.understanding = QueryUnderstanding(
+            understander, timeout_s=settings.understanding_timeout_s
+        )
+        self.pipeline = RetrievalPipeline(
+            store, embedder, reranker, understanding=self.understanding
+        )
 
     # -- spaces ------------------------------------------------------------
 
@@ -171,6 +193,94 @@ class MemoryService:
 
     # -- ingestion ---------------------------------------------------------
 
+    def _quota(self) -> Quota:
+        return Quota(
+            max_memories_per_org=self.settings.max_memories_per_org,
+            max_bytes_per_org=self.settings.max_bytes_per_org,
+            max_writes_per_day=self.settings.max_writes_per_day,
+        )
+
+    async def _check_quota(self, org_id: str, incoming_bytes: int) -> None:
+        """Refuse a write that would take a tenant past its limits.
+
+        One usage query for three limits, and only when at least one is
+        configured -- the shipped default is unlimited, and a deployment that
+        has not opted in must not pay for a count on every write.
+        """
+        quota = self._quota()
+        if not quota.enforced:
+            return
+        # Calendar day in UTC. A rolling 24-hour window would be fairer and
+        # would need a per-write timestamp index; a day boundary is what
+        # people mean by "per day" and costs one comparison.
+        midnight = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        usage = await self.store.tenant_usage(org_id, since=midnight)
+        check_memories(quota, usage.memories)
+        check_bytes(quota, usage.bytes_stored, incoming_bytes)
+        check_writes(quota, usage.writes_today)
+
+    async def _confirm_supersessions(
+        self,
+        memory: Memory,
+        shortlist: Sequence[Any],
+    ) -> list[Any]:
+        """Keep only the shortlisted supersessions the model agrees with."""
+        if not shortlist:
+            return []
+        if self.extractor is None:
+            # No adjudicator, so nothing is confirmed. Cosine alone is not
+            # trusted to hide a memory -- that is the whole finding.
+            log.info("supersessions_unconfirmed", count=len(shortlist))
+            return []
+        by_id = {p.old_id: p for p in shortlist}
+        existing = await self.store.get_memories(
+            memory.org_id, memory.space_id, list(by_id)
+        )
+        pairs = [(mid, m.content) for mid, m in existing.items()]
+        verdicts = await adjudicate_supersessions(memory.content, pairs, self.extractor)
+        return [by_id[v.memory_id] for v in verdicts if v.memory_id in by_id]
+
+    async def _adjudicate_remaining(
+        self,
+        memory: Memory,
+        embedding: list[float],
+        pairs: Sequence[tuple[Memory, list[float]]],
+    ) -> list[ContradictionProposal]:
+        """Conflicts the lexical signals could not see, judged by a model.
+
+        Runs only over pairs that already cleared the similarity gate and
+        that the negation/antonym/figure checks left unexplained -- a handful
+        per write, not the corpus. Off entirely without an extraction
+        backend, which is the configuration this feature shipped with, so
+        turning a backend on can only ADD conflicts and never change the ones
+        already being found.
+
+        Reuses the extraction completer rather than adding a fourth: this is
+        a write-path judgement over a short passage, which is the job that
+        completer is already configured and budgeted for.
+        """
+        if self.extractor is None:
+            return []
+        remaining = unexplained_pairs(memory, embedding, pairs)
+        if not remaining:
+            return []
+        verdicts = await adjudicate_contradictions(
+            memory.content,
+            [(m.id, m.content) for m, _ in remaining],
+            self.extractor,
+        )
+        similarity_by_id = {m.id: score for m, score in remaining}
+        return [
+            ContradictionProposal(
+                left_id=memory.id,
+                right_id=v.memory_id,
+                similarity=similarity_by_id.get(v.memory_id, 0.0),
+                reason=v.reason,
+                confidence=v.confidence,
+            )
+            for v in verdicts
+        ]
+
     async def ingest(
         self,
         *,
@@ -182,10 +292,14 @@ class MemoryService:
         tags: Sequence[str] = (),
         source: str = "",
         occurred_at: datetime | None = None,
+        # Every consolidation step defaults ON. The API does not expose
+        # switches for these at all; the keyword arguments survive only so
+        # the benchmark harness can isolate one behaviour at a time, which is
+        # what an A/B arm is for.
         dedupe: bool = True,
-        auto_supersede: bool = False,
-        detect_conflicts: bool = False,
-        extract: bool = False,
+        auto_supersede: bool = True,
+        detect_conflicts: bool = True,
+        extract: bool = True,
         claims: Sequence[Claim] | None = None,
         kind: MemoryKind = MemoryKind.EPISODIC,
     ) -> IngestResult:
@@ -200,6 +314,11 @@ class MemoryService:
                 f"content is {size} bytes, limit is {self.settings.max_content_bytes}",
                 field="content",
             )
+
+        # Quotas before embedding, because embedding is where the money is.
+        # Checking after would let a tenant over their limit still spend the
+        # vendor call that the limit exists to prevent.
+        await self._check_quota(org_id, size)
 
         # -- exact duplicate: cheapest check, before any embedding ----------
         if dedupe:
@@ -309,14 +428,21 @@ class MemoryService:
         conflicts: list[str] = []
         declined: list[str] = []
         if chunks and (auto_supersede or detect_conflicts):
-            page = await self.store.list_memories(
-                org_id, space_id, filters=MemoryFilter(), limit=256, cursor=None
+            # NEAREST, not newest. This used to page the 256 most recent
+            # memories and pull every embedding across the wire -- roughly
+            # 1.5MB per write at 768 dimensions -- and then discard almost
+            # all of them, because both proposers immediately filter on
+            # cosine similarity anyway. Worse, it was a silent scale ceiling:
+            # in a space with more than 256 memories, anything older simply
+            # stopped being a supersession or contradiction candidate, so a
+            # fact stated last year could never be revised.
+            pairs = await self.store.neighbours(
+                org_id,
+                space_id,
+                chunks[0].embedding or [],
+                limit=self.settings.consolidation_candidates,
+                exclude_id=memory.id,
             )
-            pairs = [
-                (m, m.chunks[0].embedding)
-                for m in page.items
-                if m.chunks and m.chunks[0].embedding is not None
-            ]
             all_proposals = (
                 propose_supersessions(memory, chunks[0].embedding or [], pairs)
                 if auto_supersede
@@ -330,9 +456,24 @@ class MemoryService:
             # older memory to SUPERSEDED, which default retrieval hides, so a
             # topical coincidence silently deletes a true memory from every
             # answer. Declining costs far less -- both stay visible.
+            # The cosine proposer SHORTLISTS; the model decides.
+            #
+            # On its own it hid four true memories out of five on a real
+            # corpus -- "runs on Heroku with two dynos" replaced by "the
+            # Python runtime is 3.13", both true, similarity 0.87, same tag.
+            # Embedding distance can say two statements are about the same
+            # area; it cannot say one replaced the other, because that is a
+            # question about what changed and the geometry encodes no change.
+            #
+            # Supersession is the only operation here that HIDES a memory, so
+            # it is the one that gets a second opinion. Without an extraction
+            # backend nothing is confirmed and nothing is hidden, which is
+            # the safe direction.
             floor = self.settings.supersede_min_confidence
-            proposals = [p for p in all_proposals if p.confidence >= floor]
+            shortlist = [p for p in all_proposals if p.confidence >= floor]
             declined = [p.old_id for p in all_proposals if p.confidence < floor]
+            proposals = await self._confirm_supersessions(memory, shortlist)
+            declined += [p.old_id for p in shortlist if p not in proposals]
             if declined:
                 # Reported, never silent: a caller that wanted those merges
                 # needs to see that the system saw them and held back.
@@ -347,6 +488,20 @@ class MemoryService:
                 if detect_conflicts
                 else []
             )
+            # Reads the SAME neighbour set again, so the ordinary "these are
+            # about the same thing" relation costs no extra query. It is the
+            # only edge here that is not a claim about truth, and the only
+            # one most corpora produce in quantity -- without it a space of
+            # true, non-conflicting facts is a field of isolated dots.
+            association_proposals = propose_associations(
+                memory, chunks[0].embedding or [], pairs
+            )
+            if detect_conflicts:
+                conflict_proposals.extend(
+                    await self._adjudicate_remaining(
+                        memory, chunks[0].embedding or [], pairs
+                    )
+                )
             # The memory must exist before an edge can point at it: the edge
             # has a foreign key to both endpoints.
             memory = await self.store.upsert_memory(memory)
@@ -372,6 +527,22 @@ class MemoryService:
                         )
                     )
                 conflicts.append(conflict.right_id)
+
+            for association in association_proposals:
+                # One direction only. `references` is read through
+                # `list_relations` in both directions anyway, and writing
+                # both would double an already-dense edge type.
+                await self.store.create_relation(
+                    RelationEdge(
+                        org_id=org_id,
+                        space_id=space_id,
+                        source_id=memory.id,
+                        target_id=association.right_id,
+                        type=RelationType.REFERENCES,
+                        reason=association.reason,
+                        confidence=association.confidence,
+                    )
+                )
 
             for proposal in proposals:
                 old = await self.store.get_memory(org_id, space_id, proposal.old_id)
@@ -484,7 +655,7 @@ class MemoryService:
                     # the sentence.
                     extract=False,
                 )
-            except SupermemoryError:
+            except MapiError:
                 # One bad claim must not lose the parent write, which has
                 # already succeeded and is the thing the caller asked for.
                 continue
@@ -894,6 +1065,45 @@ class MemoryService:
             "erased_at": utcnow().isoformat(),
         }
 
+    async def chat(
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        message: str,
+        history: Sequence[ChatTurn] = (),
+        k: int = 8,
+        remember: bool = False,
+    ) -> tuple[ChatAnswer, SearchResponse]:
+        """Answer from this space's memories, with citations.
+
+        Retrieval first, then one grounded completion. The search is the
+        ordinary pipeline, not a special path -- so chat inherits question
+        classification, coverage for comprehensive questions, supersession
+        suppression and conflict surfacing, and improving any of those
+        improves this for free.
+
+        `remember` writes the user's message back as a memory. Off by default:
+        a chat that silently records every question turns a question into a
+        fact, and "is Krishna on an F-1 visa?" stored as a memory is a claim
+        nobody made.
+        """
+        if self.completer is None:
+            raise ProviderError(
+                "no synthesis backend configured; set synthesis_backend=gemini"
+            )
+        await self.get_space_or_raise(org_id, space_id)
+
+        response = await self.search(
+            SearchRequest(query=message, org_id=org_id, space_id=space_id, limit=k)
+        )
+        answer = await chat_answer(
+            message, response.results, self.completer, history=history
+        )
+        if remember:
+            await self.ingest(org_id=org_id, space_id=space_id, content=message)
+        return answer, response
+
     # -- derivation and profiles -------------------------------------------
 
     async def derive(
@@ -943,7 +1153,10 @@ class MemoryService:
             )
             for hit in response.results
         ]
-        kind = classify(question)
+        # The search already decided what this question is asking for -- reuse
+        # it rather than classifying twice. They would usually agree, and
+        # "usually" is exactly the kind of divergence nobody finds later.
+        kind = response.intent.kind if response.intent else classify(question)
         derived = await derive_answer(question, kind, docs, self.completer)
         if derived is None:
             derived = DerivedAnswer(

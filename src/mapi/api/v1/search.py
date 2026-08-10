@@ -14,6 +14,7 @@ from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import (
     ConfidenceBlock,
+    IntentBlock,
     SearchHit,
     SearchRequestBody,
     SearchResponseBody,
@@ -41,6 +42,7 @@ async def search(
 
     filters = MemoryFilter(
         statuses=frozenset(statuses),
+        kinds=frozenset(body.kinds),
         tags=tuple(t.casefold() for t in body.tags),
         metadata=tuple(sorted(body.metadata.items())),
         occurred_after=body.occurred_after,
@@ -65,6 +67,10 @@ async def search(
         vector_weight=body.vector_weight,
         lexical_weight=body.lexical_weight,
         min_score=body.min_score,
+        coverage=body.coverage,
+        coverage_limit=settings.coverage_limit,
+        max_per_source=settings.max_per_source,
+        route_by_kind=settings.route_by_kind,
     )
     result = await service.search(request)
     return SearchResponseBody(
@@ -76,6 +82,15 @@ async def search(
         rerank_degraded=result.rerank_degraded,
         timings_ms=result.timings_ms,
         conflicts=[list(pair) for pair in result.conflicts],
+        intent=(
+            IntentBlock(
+                kind=str(result.intent.kind),
+                source=result.intent.source,
+                comprehensive=result.intent.comprehensive,
+            )
+            if result.intent
+            else None
+        ),
         confidence=(
             ConfidenceBlock(
                 level=str(result.confidence.level),

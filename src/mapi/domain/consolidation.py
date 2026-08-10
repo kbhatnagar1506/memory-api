@@ -297,6 +297,7 @@ __all__ = [
     "merge_duplicate",
     "propose_contradictions",
     "propose_supersessions",
+    "unexplained_pairs",
 ]
 
 
@@ -367,6 +368,51 @@ def _figure_conflict(left: str, right: str) -> str | None:
     if left_days and right_days and not (left_days & right_days):
         return "same subject, different days"
     return None
+
+
+def unexplained_pairs(
+    new_memory: Memory,
+    new_embedding: Vector,
+    candidates: Sequence[tuple[Memory, Vector]],
+    *,
+    low: float = CONTRADICT_LOW,
+    high: float = SUPERSEDE_HIGH,
+) -> list[tuple[Memory, float]]:
+    """Pairs close enough to conflict that the lexical signals could not judge.
+
+    The same similarity gate as `propose_contradictions`, minus the memories
+    it already explained. These are the interesting ones: topically almost
+    identical, and yet no flipped negation, no antonym, no differing figure.
+    Either they agree -- which is the common case, and why the caller must
+    treat this as candidates rather than conflicts -- or they disagree in a
+    way seven strings cannot express.
+
+    Pure and synchronous like the rest of this module. Judging them needs a
+    model, and a model needs I/O, so that decision belongs to the caller.
+    """
+    if not new_embedding:
+        return []
+    if low > high:
+        raise ValueError("low must not exceed high")
+
+    out: list[tuple[Memory, float]] = []
+    for memory, vector in candidates:
+        if memory.id == new_memory.id:
+            continue
+        if memory.status is not MemoryStatus.ACTIVE:
+            continue
+        if len(vector) != len(new_embedding):
+            continue
+        similarity = cosine_similarity(new_embedding, vector)
+        if not (low <= similarity < high):
+            continue
+        if _polarity_conflict(new_memory.content, memory.content):
+            continue
+        if _figure_conflict(new_memory.content, memory.content):
+            continue
+        out.append((memory, similarity))
+    out.sort(key=lambda pair: (-pair[1], pair[0].id))
+    return out
 
 
 def propose_contradictions(

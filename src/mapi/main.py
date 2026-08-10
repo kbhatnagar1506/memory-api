@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -272,6 +273,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(api_router)
 
+    # The product surface: pages for a person, cookie-authenticated. Mounted
+    # after the API so a versioned route always wins a path collision.
+    from fastapi.staticfiles import StaticFiles
+
+    from .api.web import router as web_router
+
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(Path(__file__).parent / "api" / "static")),
+        name="static",
+    )
+    app.include_router(web_router)
+
     @app.get("/graph", include_in_schema=False, response_class=HTMLResponse)
     async def graph_ui() -> str:
         """Read-only viewer for a space's memory graph.
@@ -285,8 +299,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return PAGE
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict[str, Any]:
+    @app.get("/meta", include_in_schema=False)
+    async def meta() -> dict[str, Any]:
         return {
             "name": "mapi",
             "version": __version__,

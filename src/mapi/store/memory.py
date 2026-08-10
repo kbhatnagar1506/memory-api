@@ -124,6 +124,9 @@ class InMemoryStore(MemoryStore):
             self._users_by_sub[user.google_sub] = user
             return user
 
+    async def get_user(self, user_id: str) -> User | None:
+        return self._users.get(user_id)
+
     async def get_user_by_google_sub(self, google_sub: str) -> User | None:
         return self._users_by_sub.get(google_sub)
 

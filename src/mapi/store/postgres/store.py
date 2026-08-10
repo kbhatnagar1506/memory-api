@@ -267,6 +267,11 @@ class PostgresStore(MemoryStore):
             await session.flush()
             return _to_user(row)
 
+    async def get_user(self, user_id: str) -> User | None:
+        async with self._session() as session:
+            row = await session.get(UserRow, user_id)
+            return _to_user(row) if row is not None else None
+
     async def get_user_by_google_sub(self, google_sub: str) -> User | None:
         async with self._session() as session:
             row = (

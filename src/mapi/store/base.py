@@ -141,6 +141,9 @@ class MemoryStore(abc.ABC):
     async def upsert_user(self, user: User) -> User: ...
 
     @abc.abstractmethod
+    async def get_user(self, user_id: str) -> User | None: ...
+
+    @abc.abstractmethod
     async def get_user_by_google_sub(self, google_sub: str) -> User | None: ...
 
     @abc.abstractmethod

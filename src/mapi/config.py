@@ -194,6 +194,23 @@ class Settings(BaseSettings):
         ),
     )
 
+    # -- browser auth ------------------------------------------------------
+    #: Google OAuth. Absent means the dashboard offers no sign-in and the API
+    #: still works on bearer keys -- the two paths are independent.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    #: Signs the session cookie. Rotating it logs everyone out, which is the
+    #: correct emergency response and the reason it is separate from the API
+    #: key pepper: revoking sessions must not invalidate every API key.
+    session_secret: str | None = None
+    #: Absolute origin this app is reached at, used to build the OAuth
+    #: redirect. Cannot be inferred from the request: behind a proxy the Host
+    #: header is attacker-controlled, and a wrong redirect_uri is how an auth
+    #: code ends up somewhere else.
+    public_base_url: str | None = None
+    #: Days a browser session stays valid.
+    session_max_age_days: int = Field(default=14, ge=1, le=90)
+
     # -- providers --------------------------------------------------------
     google_cloud_project: str | None = None
     google_cloud_location: str = "global"

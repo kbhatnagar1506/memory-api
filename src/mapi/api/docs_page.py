@@ -149,17 +149,18 @@ what a conclusion rests on. Deleting evidence marks the conclusions drawn from
 it stale rather than leaving them standing.</p>
 
 <h2 id="numbers">Numbers</h2>
-<p>Measured on two public benchmarks. Both are run end to end — retrieve,
+<p>Measured on a public benchmark, run end to end — retrieve,
 answer, and grade — not retrieval-only, because retrieval quality that never
 becomes a correct answer is not worth reporting.</p>
 <table>
   <tr><th>benchmark</th><th>what it tests</th><th>questions</th><th>accuracy</th></tr>
   <tr><td>LongMemEval-S</td><td>recall across ~50 sessions of chat history per question</td><td>470</td><td><strong>82.6%</strong></td></tr>
-  <tr><td>LoCoMo</td><td>multi-session dialogue, evidence labelled per turn</td><td>1,540</td><td><strong>72.6%</strong></td></tr>
 </table>
 <p>Reported per capability, never as one blended score. A system can be
 excellent at recall and dangerous at knowing when a fact went stale, and one
-number hides exactly that:</p>
+number hides exactly that.</p>
+
+<h3>LongMemEval-S — 470 questions</h3>
 <table>
   <tr><th>capability</th><th>n</th><th>accuracy</th></tr>
   <tr><td>single-session assistant</td><td>56</td><td>94.6%</td></tr>
@@ -169,13 +170,34 @@ number hides exactly that:</p>
   <tr><td>multi-session</td><td>133</td><td>72.9%</td></tr>
   <tr><td>single-session preference</td><td>30</td><td>66.7%</td></tr>
 </table>
-<p>Retrieval delivers complete evidence for <strong>96.8%</strong> of questions,
-so most remaining errors are answering errors rather than recall errors. That is
-the honest reading and it is why the weakest rows above are the ones being
-worked on.</p>
+
+<h3>Finding the evidence</h3>
+<p>Accuracy above is the whole pipeline. These are the retrieval stage alone,
+scored against the evidence each benchmark labels — no model, no judge, so
+none of it carries grading variance:</p>
+<table>
+  <tr><th>what it measures</th><th>result</th></tr>
+  <tr><td><strong>Every piece of evidence delivered.</strong> The strict one: a question needing four sources counts only if all four arrive.</td><td>96.8%</td></tr>
+  <tr><td><strong>Some evidence delivered.</strong> At least one correct source in the window.</td><td>99.4%</td></tr>
+  <tr><td><strong>Correct evidence ranked first.</strong> How near the top the first right answer lands.</td><td>0.939</td></tr>
+  <tr><td><strong>Ranking quality.</strong> Credit for correct sources weighted by position.</td><td>0.937</td></tr>
+</table>
+<p>Complete evidence reaches the answer stage for 96.8% of
+questions, so most remaining errors are answering errors rather than recall
+errors — the honest reading, and the reason the weakest capability rows above
+are the ones being worked on.</p>
+
+<h3>Explainability</h3>
+<p>Every result can report why it is there. Ask for it with
+<code>explain=True</code> and each hit carries the reasons it survived to the
+top — which stage promoted it, and what moved its position. That is the
+difference between a ranking you can debug and a number you have to trust.</p>
+<pre><code>result = client.search.execute("allergies", space="ada", explain=True)
+for hit in result:
+    print(hit.score, hit.explain)</code></pre>
 <div class="note">
   <strong>How these were graded.</strong>
-  With LongMemEval's own published judge prompts, and by a model from a
+  With LongMemEval\'s own published judge prompts, and by a model from a
   different family than the one answering — a model grading its own output
   scores itself generously, and the size of that effect is published alongside
   the results rather than quietly absorbed into them.

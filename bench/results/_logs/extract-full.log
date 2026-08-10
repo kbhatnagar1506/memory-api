@@ -2395,3 +2395,4 @@ run lme-v21-episodes-only
     [25/500] 41927 chunks, 35s elapsed, ~668s left
     [50/500] 83820 chunks, 56s elapsed, ~501s left
     [75/500] 125563 chunks, 226s elapsed, ~1279s left
+    [100/500] 168153 chunks, 447s elapsed, ~1786s left

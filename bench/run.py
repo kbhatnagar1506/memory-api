@@ -214,6 +214,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             k=args.answer_k,
             max_per_source=args.max_per_source,
             route_by_kind=args.route_by_kind,
+            episodes_only=args.episodes_only,
             config=winner,
             answer_model=args.answer_model,
             judge_model=args.judge_model,
@@ -499,6 +500,16 @@ async def main() -> int:
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--episodes-only",
+        action="store_true",
+        help=(
+            "store extracted claims but retrieve only episodes. Four arms agree "
+            "the cost of extraction lands when claims are RETRIEVED, not stored: "
+            "`only` retrieved better (0.950 vs 0.948) and answered worse (0.762 "
+            "vs 0.781). This keeps the graph without paying at answer time."
+        ),
+    )
     parser.add_argument(
         "--route-by-kind",
         action="store_true",

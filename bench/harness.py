@@ -29,12 +29,13 @@ from typing import Any
 
 from mapi.domain.chunking import chunk_text, estimate_tokens
 from mapi.domain.embeddings.base import EmbeddingProvider
-from mapi.domain.models import Chunk, Memory, Organization, Space
+from mapi.domain.models import Chunk, Memory, MemoryKind, Organization, Space
 from mapi.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
 from mapi.domain.retrieval.rerank import Reranker
 from mapi.domain.synthesis import QuestionKind, classify
 from mapi.domain.synthesis.derive import SourceDoc, derive_answer
 from mapi.domain.synthesis.extract import DEFAULT_SUBJECT, extract_claims
+from mapi.store.base import MemoryFilter
 from mapi.store.memory import InMemoryStore
 
 from .cache import DiskClaimCache, DiskVectorCache, cache_key
@@ -984,6 +985,7 @@ async def evaluate_end_to_end(
     max_session_chars: int = 20_000,
     max_per_source: int = 0,
     route_by_kind: bool = False,
+    episodes_only: bool = False,
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,
@@ -1024,6 +1026,9 @@ async def evaluate_end_to_end(
                         known_speakers=ingested.speakers,
                         max_per_source=max_per_source,
                         route_by_kind=route_by_kind,
+                        filters=MemoryFilter(kinds=frozenset({MemoryKind.EPISODIC}))
+                        if episodes_only
+                        else MemoryFilter(),
                         **config,
                     )
                 )

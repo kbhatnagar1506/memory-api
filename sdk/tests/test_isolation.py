@@ -69,3 +69,36 @@ def test_no_server_source_is_packaged() -> None:
     assert names, "the package has no modules"
     for suspicious in ("service.py", "pipeline.py", "harness.py", "extract.py"):
         assert suspicious not in names, f"{suspicious} looks like server code"
+
+
+def test_the_built_artifacts_contain_no_server_code() -> None:
+    """The source check proves intent; this proves what actually ships.
+
+    Packaging config is its own failure surface -- a stray `packages` entry
+    or an over-broad include can put the engine in the wheel while every
+    source-level test still passes. Skipped when nothing is built, so a plain
+    checkout is not blocked.
+    """
+    import tarfile
+    import zipfile
+
+    dist = pathlib.Path(__file__).resolve().parent.parent / "dist"
+    artifacts = sorted(dist.glob("*.whl")) + sorted(dist.glob("*.tar.gz"))
+    if not artifacts:
+        import pytest
+
+        pytest.skip("nothing built; run `python -m build` first")
+
+    forbidden = ("mapi/", "service", "pipeline", "harness", "consolidation", "bench")
+    for artifact in artifacts:
+        if artifact.suffix == ".whl":
+            names = zipfile.ZipFile(artifact).namelist()
+        else:
+            names = tarfile.open(artifact).getnames()
+        assert names, f"{artifact.name} is empty"
+        for name in names:
+            leaf = name.split("/")[-1]
+            assert not any(
+                bad in leaf for bad in forbidden if bad != "mapi/"
+            ), f"{artifact.name} ships {name}"
+            assert "/mapi/" not in name, f"{artifact.name} ships the server package: {name}"

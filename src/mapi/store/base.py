@@ -25,6 +25,7 @@ from ..domain.models import (
     ApiKey,
     Membership,
     Memory,
+    MemoryKind,
     MemoryStatus,
     MemoryVersion,
     Organization,
@@ -83,6 +84,14 @@ class MemoryFilter:
     statuses: frozenset[MemoryStatus] = field(
         default_factory=lambda: frozenset({MemoryStatus.ACTIVE})
     )
+    #: Memory kinds to include. Empty means every kind.
+    #:
+    #: Measured need: write-time extraction stores claims alongside episodes,
+    #: and four LongMemEval arms agree the loss comes from claims being
+    #: RETRIEVED, not stored -- `only` retrieved better (0.950 vs 0.948) and
+    #: answered worse (0.762 vs 0.781). Excluding them from the window is the
+    #: configuration that keeps the graph without paying for it at answer time.
+    kinds: frozenset[MemoryKind] = frozenset()
     tags: tuple[str, ...] = ()
     #: Every key/value must match. Values compare as JSON equality.
     metadata: tuple[tuple[str, Any], ...] = ()
@@ -93,6 +102,8 @@ class MemoryFilter:
     def matches(self, memory: Memory) -> bool:
         """Reference semantics. SQL backends must reproduce this exactly."""
         if memory.status not in self.statuses:
+            return False
+        if self.kinds and memory.kind not in self.kinds:
             return False
         if self.tags and not set(self.tags).issubset(set(memory.tags)):
             return False

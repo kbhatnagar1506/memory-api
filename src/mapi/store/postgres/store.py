@@ -223,6 +223,8 @@ class PostgresStore(MemoryStore):
 
     def _apply_filters(self, stmt: Any, filters: MemoryFilter, model: Any = MemoryRow) -> Any:
         stmt = stmt.where(model.status.in_([s.value for s in filters.statuses]))
+        if filters.kinds:
+            stmt = stmt.where(model.kind.in_([k.value for k in filters.kinds]))
         if filters.tags:
             stmt = stmt.where(model.tags.contains(list(filters.tags)))
         for key, value in filters.metadata:

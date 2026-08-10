@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
@@ -298,6 +298,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from .api.graph_ui import PAGE
 
         return PAGE
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        """Browsers ask for this on every page; without it the logs fill with
+        404s that look like real misses."""
+        return FileResponse(Path(__file__).parent / "api" / "static" / "mapi-logo.png")
 
     @app.get("/meta", include_in_schema=False)
     async def meta() -> dict[str, Any]:

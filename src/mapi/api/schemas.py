@@ -79,6 +79,13 @@ class CreateMemoryRequest(Request):
     dedupe: bool = True
     #: Let a newer conflicting memory mark older ones superseded. Off by
     #: default: hiding a user's data on a heuristic is not a safe default.
+    #: Decompose this document into the atomic claims it makes, stored
+    #: ALONGSIDE it with `derived_from` edges back to it. Additive: the
+    #: original is never replaced, so a claim extraction missed costs
+    #: nothing. Off by default -- it spends a model call per write, and
+    #: measured on LongMemEval it helps semantic questions and hurts
+    #: episodic ones, so it is a choice rather than an upgrade.
+    extract: bool = False
     auto_supersede: bool = False
     #: Detect memories this write CONTRADICTS. Costs a candidate scan on the
     #: write path, so it is opt-in; it never hides anything.

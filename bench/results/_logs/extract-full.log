@@ -1859,3 +1859,16 @@ run lme-v20-extract-cap-routed
     [175/500] 295876 chunks, 405s elapsed, ~753s left
     [200/500] 338115 chunks, 419s elapsed, ~628s left
     [225/500] 380661 chunks, 615s elapsed, ~751s left
+    [250/500] 422562 chunks, 835s elapsed, ~835s left
+    [275/500] 465359 chunks, 849s elapsed, ~695s left
+    [300/500] 507781 chunks, 861s elapsed, ~574s left
+    [325/500] 550248 chunks, 1139s elapsed, ~614s left
+    [350/500] 592985 chunks, 1151s elapsed, ~493s left
+    [375/500] 635125 chunks, 1499s elapsed, ~500s left
+    [400/500] 677741 chunks, 1511s elapsed, ~378s left
+    [425/500] 720459 chunks, 1523s elapsed, ~269s left
+    [450/500] 762707 chunks, 1994s elapsed, ~222s left
+    [475/500] 804810 chunks, 2010s elapsed, ~106s left
+    [500/500] 846344 chunks, 2025s elapsed, ~0s left
+  embedding cache: {'rows': 587848, 'hits': 755210, 'misses': 91134}
+  ingested 317696 units (293829 of them extracted claims) / 846344 chunks in 2031s (120s embedding)

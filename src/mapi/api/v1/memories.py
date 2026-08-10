@@ -82,6 +82,7 @@ async def create_memory(
         source=body.source,
         occurred_at=body.occurred_at,
         dedupe=body.dedupe,
+        extract=body.extract,
         auto_supersede=body.auto_supersede,
         detect_conflicts=body.detect_conflicts,
     )

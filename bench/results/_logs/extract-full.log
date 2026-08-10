@@ -1293,3 +1293,5 @@ run lme-v19-extract-add-cap2
 Python(74298) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
     vector_only            FULL=0.948 hit=1.000 mrr=0.987 18097ms (288s)
     lexical_only           FULL=0.826 hit=0.966 mrr=0.898 17294ms (276s)
+    hybrid_rrf             FULL=0.916 hit=0.998 mrr=0.963 18059ms (288s)
+    hybrid_rerank          FULL=0.800 hit=0.962 mrr=0.810 16787ms (267s)

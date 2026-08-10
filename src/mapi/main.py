@@ -29,6 +29,7 @@ from .core.errors import (
     SupermemoryError,
     ValidationError,
 )
+from .core.gcp import materialize_adc
 from .core.logging import configure_logging, get_logger
 from .core.ratelimit import build_rate_limiter
 from .domain.embeddings import build_embedder
@@ -240,6 +241,10 @@ def register_error_handlers(app: FastAPI) -> None:
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level, resolved.log_json)
+    # Before any provider client is constructed: on a platform without gcloud
+    # the service-account key arrives as a config var, and google-auth wants a
+    # path. No-op locally, where real ADC already exists.
+    materialize_adc()
 
     app = FastAPI(
         title="Mapi",

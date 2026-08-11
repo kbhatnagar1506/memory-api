@@ -75,11 +75,31 @@ async def space(store: InMemoryStore, org: Organization) -> Space:
 # -- API fixtures --------------------------------------------------------------
 
 
+async def _confirm_everything(prompt: str) -> str:
+    """A stand-in adjudicator: confirms conflicts, refuses supersessions.
+
+    Contradiction and supersession both FAIL CLOSED -- without a model to
+    confirm, nothing is recorded, because the cheap signals produce false
+    positives in volume on any corpus with dates or quantities in it. The
+    e2e app has no vendor, so tests asserting a conflict was recorded have
+    to supply the judgement the design requires.
+
+    Supersession is deliberately refused. It is the only operation that
+    HIDES a memory, and a fixture that hid memories behind every test's back
+    would make unrelated assertions fail in ways nobody would think to
+    attribute to a stub. Tests that want supersession inject their own.
+    """
+    if "REPLACES" in prompt:
+        return "[]"
+    return '[{"n": 1, "reason": "adjudicated", "confidence": 0.95}]'
+
+
 @pytest.fixture
 async def app_context(settings: Settings):
     """A fully wired app with lifespan run, plus a seeded org/space/admin key."""
     app = create_app(settings)
     async with app.router.lifespan_context(app):
+        app.state.service.extractor = _confirm_everything
         store = app.state.store
         organization = await store.create_organization(Organization(name="Acme"))
         sp = await store.create_space(

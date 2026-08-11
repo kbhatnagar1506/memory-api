@@ -240,7 +240,63 @@ class MemoryService:
         verdicts = await adjudicate_supersessions(memory.content, pairs, self.extractor)
         return [by_id[v.memory_id] for v in verdicts if v.memory_id in by_id]
 
-    async def _adjudicate_remaining(
+    @staticmethod
+    def _unexplained_conflicts(
+        memory: Memory,
+        embedding: list[float],
+        pairs: Sequence[tuple[Memory, list[float]]],
+    ) -> list[ContradictionProposal]:
+        """Close pairs with no lexical signal, as bare shortlist entries."""
+        return [
+            ContradictionProposal(
+                left_id=memory.id,
+                right_id=other.id,
+                similarity=score,
+                reason="",
+                confidence=0.0,
+            )
+            for other, score in unexplained_pairs(memory, embedding, pairs)
+        ]
+
+    async def _confirm_conflicts(
+        self,
+        memory: Memory,
+        shortlist: Sequence[ContradictionProposal],
+    ) -> list[ContradictionProposal]:
+        """Keep only the shortlisted conflicts the model agrees with.
+
+        Fails closed. Without an adjudicator nothing is recorded: a false
+        CONTRADICTS edge between two facts that merely differ erodes trust
+        faster than a missed one, and the lexical signals produce those in
+        volume on any corpus with dates or quantities in it.
+        """
+        if not shortlist:
+            return []
+        if self.extractor is None:
+            log.info("conflicts_unconfirmed", count=len(shortlist))
+            return []
+        by_id = {p.right_id: p for p in shortlist}
+        existing = await self.store.get_memories(
+            memory.org_id, memory.space_id, list(by_id)
+        )
+        verdicts = await adjudicate_contradictions(
+            memory.content,
+            [(mid, m.content) for mid, m in existing.items()],
+            self.extractor,
+        )
+        return [
+            ContradictionProposal(
+                left_id=memory.id,
+                right_id=v.memory_id,
+                similarity=by_id[v.memory_id].similarity,
+                reason=v.reason,
+                confidence=v.confidence,
+            )
+            for v in verdicts
+            if v.memory_id in by_id
+        ]
+
+    async def _unused_adjudicate_remaining(
         self,
         memory: Memory,
         embedding: list[float],
@@ -483,7 +539,17 @@ class MemoryService:
                     count=len(declined),
                     floor=floor,
                 )
-            conflict_proposals = (
+            # Contradiction now works exactly like supersession: the cheap
+            # signals SHORTLIST, and the model decides.
+            #
+            # They used to be a verdict, and on real data they were wrong
+            # almost every time. `_figure_conflict` fires whenever two
+            # topically-close memories carry different numbers, so a phone
+            # number and a relocation year read as "same subject, different
+            # figures" -- a contradiction between a contact detail and a move
+            # date. Any corpus containing dates or quantities is mostly those
+            # pairs.
+            conflict_shortlist = (
                 propose_contradictions(memory, chunks[0].embedding or [], pairs)
                 if detect_conflicts
                 else []
@@ -496,11 +562,15 @@ class MemoryService:
             association_proposals = propose_associations(
                 memory, chunks[0].embedding or [], pairs
             )
+            conflict_proposals: list[ContradictionProposal] = []
             if detect_conflicts:
-                conflict_proposals.extend(
-                    await self._adjudicate_remaining(
-                        memory, chunks[0].embedding or [], pairs
-                    )
+                # Pairs the lexical signals could not explain join the same
+                # shortlist rather than bypassing the judge.
+                conflict_shortlist += self._unexplained_conflicts(
+                    memory, chunks[0].embedding or [], pairs
+                )
+                conflict_proposals = await self._confirm_conflicts(
+                    memory, conflict_shortlist
                 )
             # The memory must exist before an edge can point at it: the edge
             # has a foreign key to both endpoints.

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -94,8 +95,11 @@ or the topic.
 Heroku" and "deploys on Heroku with two dynos" agree.
   * Being in the same subject area is NOT a replacement. Two facts about \
 one deployment, one codebase or one person usually both hold.
-  * A restatement in other words IS a replacement -- the older phrasing \
-is redundant.
+  * A restatement in other words IS a replacement, but ONLY when the new \
+statement carries everything the old one did. A shorter, vaguer version of \
+the same fact replaces nothing: "affiliated with Reakon Labs" does NOT \
+replace "Principal Engineer and co-founder of Reakon Labs since May 2026", \
+it just says less.
 
 Replacing hides the old statement from search, so when in doubt, do not.
 
@@ -109,6 +113,62 @@ Reply with a JSON array and nothing else. Include ONLY the ones the new \
 statement replaces; reply with [] if it replaces none.
 
 [{{"n": <number>, "reason": "<six words or fewer>", "confidence": <0.0-1.0>}}]"""
+
+
+#: A statement replacing another must not say strictly LESS than it.
+#:
+#: Measured on real data: "Krishna is affiliated with Reakon Labs" was applied
+#: as superseding "Krishna is Principal Engineer and co-founder of Reakon Labs
+#: Pvt. Ltd. since May 2026", hiding the specific fact behind the vague one.
+#: The model called it a restatement, which it is -- a lossy one.
+#:
+#: This is a code guard rather than another prompt line because the direction
+#: of information loss is a property of the two strings, and a rule that can
+#: be checked should not be delegated to a judge that can be talked out of it.
+#: How much shorter a statement must be before it counts as a summary.
+_SUMMARY_LENGTH_RATIO = 0.7
+#: How many content words `old` can lose before the loss is material, when
+#: none of them is a number.
+_MIN_LOST_TOKENS = 4
+
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2}
+
+
+def _is_less_specific(new: str, old: str) -> bool:
+    """True when `new` is a lossy summary of `old`, which may never replace it.
+
+    Measured on real data: "Krishna is affiliated with Reakon Labs" was
+    applied as superseding "Krishna is Principal Engineer and co-founder of
+    Reakon Labs Pvt. Ltd. since May 2026", hiding the specific fact behind
+    the vague one. The model called it a restatement, which it is -- a lossy
+    one, and the direction of the loss is what makes it wrong.
+
+    Token OVERLAP is the obvious test and it does not work: a summary
+    paraphrases, so its own words ("affiliated") are absent from the original
+    and coverage reads low. What identifies a summary is what the other
+    statement KEEPS -- the dates, quantities and qualifiers that the shorter
+    one dropped.
+
+    So: substantially shorter, sharing a subject, and the discarded remainder
+    contains either a number or several content words. Conservative by
+    construction, because a false positive here only means a real revision
+    goes unrecorded, while a false negative hides a true memory.
+
+    A code guard rather than another prompt line: the direction of
+    information loss is a property of the two strings, and a rule that can be
+    checked should not be delegated to a judge that can be talked out of it.
+    """
+    new_tokens, old_tokens = _tokens(new), _tokens(old)
+    if not new_tokens or not old_tokens:
+        return False
+    if not new_tokens & old_tokens:
+        return False  # different subjects entirely; not a summary of anything
+    if len(new_tokens) >= len(old_tokens) * _SUMMARY_LENGTH_RATIO:
+        return False
+    lost = old_tokens - new_tokens
+    return any(t.isdigit() for t in lost) or len(lost) >= _MIN_LOST_TOKENS
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +308,11 @@ async def adjudicate_supersessions(
     vendor hides nothing, which is the safe direction when the alternative
     is deleting true memories from every future answer.
     """
-    usable = [(mid, text) for mid, text in candidates if text.strip()][:max_candidates]
+    usable = [
+        (mid, text)
+        for mid, text in candidates
+        if text.strip() and not _is_less_specific(statement, text)
+    ][:max_candidates]
     if not statement.strip() or not usable:
         return []
 

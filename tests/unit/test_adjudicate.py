@@ -243,3 +243,77 @@ def test_a_claim_is_never_proposed_as_contradicting_its_parent() -> None:
     vector, close = [1.0, 0.0, 0.0], [0.92, 0.39, 0.0]
 
     assert propose_contradictions(claim, vector, [(parent, close)]) == []
+
+
+# -- a summary never replaces the fact it summarises ----------------------
+
+
+@pytest.mark.parametrize(
+    ("new", "old"),
+    [
+        (
+            "Krishna is affiliated with Reakon Labs.",
+            "Krishna is Principal Engineer and co-founder of Reakon Labs Pvt. Ltd. "
+            "since May 2026.",
+        ),
+        (
+            "Krishna's GitHub username is kbhatnagar1506.",
+            "Krishna's GitHub account kbhatnagar1506 shows 1,612 contributions in "
+            "the past year.",
+        ),
+    ],
+)
+def test_a_lossy_summary_is_never_a_replacement(new: str, old: str) -> None:
+    """Both of these were applied for real, hiding the specific fact."""
+    from mapi.domain.synthesis.adjudicate import _is_less_specific
+
+    assert _is_less_specific(new, old)
+
+
+@pytest.mark.parametrize(
+    ("new", "old"),
+    [
+        # A genuine revision: same attribute, new value.
+        ("I live in Madrid now.", "I live in Berlin"),
+        ("The API runs on Cloud Run now.", "The API runs on Heroku with two web dynos."),
+        (
+            "The standup is now at 10:15am every weekday in the main room.",
+            "The standup is at 9:30am every weekday in the main room.",
+        ),
+        # The specific direction must stay allowed.
+        (
+            "Krishna is Principal Engineer and co-founder of Reakon Labs since May 2026.",
+            "Krishna is affiliated with Reakon Labs.",
+        ),
+    ],
+)
+def test_real_revisions_are_not_blocked_as_summaries(new: str, old: str) -> None:
+    from mapi.domain.synthesis.adjudicate import _is_less_specific
+
+    assert not _is_less_specific(new, old)
+
+
+async def test_a_summary_never_reaches_the_adjudicator() -> None:
+    """Filtered before the call, so no prompt can talk the guard down."""
+    from mapi.domain.synthesis.adjudicate import adjudicate_supersessions
+
+    called = False
+
+    async def complete(prompt: str) -> str:
+        nonlocal called
+        called = True
+        return '[{"n": 1, "reason": "restated", "confidence": 0.99}]'
+
+    verdicts = await adjudicate_supersessions(
+        "Krishna is affiliated with Reakon Labs.",
+        [
+            (
+                "mem_specific",
+                "Krishna is Principal Engineer and co-founder of Reakon Labs "
+                "Pvt. Ltd. since May 2026.",
+            )
+        ],
+        complete,
+    )
+    assert verdicts == []
+    assert not called

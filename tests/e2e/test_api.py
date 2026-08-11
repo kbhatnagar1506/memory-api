@@ -1177,9 +1177,11 @@ async def test_contradiction_is_visible_from_both_sides(client, space_id) -> Non
         assert right["id"] in {m["id"] for m in ctx["contradicts"]}
 
 
-async def test_conflict_detection_is_opt_in(client, space_id) -> None:
-    """It costs a candidate scan on the write path, and a cheap write path is
-    the architectural bet of this system — so it is off by default."""
+async def test_conflict_detection_needs_no_asking(client, space_id) -> None:
+    """It used to be opt-in, on the theory that the candidate scan was the
+    cost that mattered. It was not: the scan is now a bounded
+    nearest-neighbour lookup, and a memory system whose conflict detection
+    is off unless you knew to ask for it does not detect conflicts."""
     await client.post(
         f"/v1/spaces/{space_id}/memories",
         json={"content": "The office moves to the 4th floor in June"},
@@ -1190,7 +1192,7 @@ async def test_conflict_detection_is_opt_in(client, space_id) -> None:
             json={"content": "The office moves to the 9th floor in June"},
         )
     ).json()
-    assert second["contradicts"] == []
+    assert second["contradicts"], "no flag was passed, and none should be needed"
 
 
 # -- calibration ---------------------------------------------------------------

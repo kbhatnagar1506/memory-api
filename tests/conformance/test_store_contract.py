@@ -191,16 +191,16 @@ async def test_memory_is_invisible_across_tenants(tenant) -> None:
 async def test_upsert_replaces_chunks_wholesale(tenant) -> None:
     store, org, space = tenant
     memory = await _add(store, org, space, "original")
-    updated = memory.model_copy(
-        update={
-            "content": "revised",
-            "chunks": [
-                Chunk(
-                    memory_id=memory.id, ordinal=0, text="revised", embedding=[0.1] * DIMENSIONS
-                )
-            ],
-            "version": 2,
-        }
+    # `revise`, not `model_copy`: a bare copy skips validators, so this test used
+    # to store content "revised" carrying the sha256 of "original" -- a landmine
+    # in the conformance suite itself, since that digest is the exact-duplicate
+    # key and the erase attestation's certificate of what was destroyed.
+    updated = memory.revise(
+        content="revised",
+        chunks=[
+            Chunk(memory_id=memory.id, ordinal=0, text="revised", embedding=[0.1] * DIMENSIONS)
+        ],
+        version=2,
     )
     await store.upsert_memory(updated)
     fetched = await store.get_memory(org.id, space.id, memory.id)
@@ -208,6 +208,48 @@ async def test_upsert_replaces_chunks_wholesale(tenant) -> None:
     assert fetched.content == "revised"
     assert len(fetched.chunks) == 1
     assert fetched.chunks[0].text == "revised"
+
+
+async def test_a_stored_memorys_digest_always_describes_its_content(tenant) -> None:
+    """The invariant the guard on `_fill_hash` used to let slip.
+
+    `content_sha256` is the exact-duplicate key AND the erase attestation's
+    certificate. A memory whose digest describes different text deduplicates
+    against its own former self and certifies the destruction of something else.
+    """
+    from mapi.domain.models import content_hash
+
+    store, org, space = tenant
+    memory = await _add(store, org, space, "the original text")
+    await store.upsert_memory(memory.revise(content="the revised text", version=2))
+
+    fetched = await store.get_memory(org.id, space.id, memory.id)
+    assert fetched is not None
+    assert fetched.content_sha256 == content_hash(fetched.content)
+    assert fetched.content_sha256 != content_hash("the original text")
+
+
+async def test_a_revised_memory_no_longer_dedupes_against_its_old_text(tenant) -> None:
+    """The consequence, made concrete.
+
+    With a stale digest, `find_by_content_hash` returned the revised memory when
+    asked about the ORIGINAL text -- so re-ingesting the original was reported as
+    a duplicate of a memory that no longer said it.
+    """
+    from mapi.domain.models import content_hash
+
+    store, org, space = tenant
+    memory = await _add(store, org, space, "the original text")
+    await store.upsert_memory(memory.revise(content="the revised text", version=2))
+
+    stale = await store.find_by_content_hash(
+        org.id, space.id, content_hash("the original text")
+    )
+    assert stale is None
+    current = await store.find_by_content_hash(
+        org.id, space.id, content_hash("the revised text")
+    )
+    assert current is not None and current.id == memory.id
 
 
 async def test_delete_is_idempotent_and_reports_absence(tenant) -> None:
@@ -675,7 +717,7 @@ async def test_version_bump_opens_a_new_snapshot_and_closes_the_old(tenant) -> N
     t1 = t0 + timedelta(hours=1)
     memory = Memory(org_id=org.id, space_id=space.id, content="v1")
     await store.upsert_memory(memory, now=t0)
-    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+    await store.upsert_memory(memory.revise(content="v2", version=2), now=t1)
 
     versions = await store.list_memory_versions(org.id, space.id, memory.id)
     assert [v.content for v in versions] == ["v1", "v2"]
@@ -692,7 +734,7 @@ async def test_same_version_write_is_an_in_place_correction(tenant) -> None:
     store, org, space = tenant
     memory = Memory(org_id=org.id, space_id=space.id, content="v1")
     await store.upsert_memory(memory)
-    await store.upsert_memory(memory.model_copy(update={"content": "corrected"}))
+    await store.upsert_memory(memory.revise(content="corrected"))
 
     versions = await store.list_memory_versions(org.id, space.id, memory.id)
     assert len(versions) == 1
@@ -705,7 +747,7 @@ async def test_point_in_time_read(tenant) -> None:
     t1 = t0 + timedelta(hours=2)
     memory = Memory(org_id=org.id, space_id=space.id, content="v1")
     await store.upsert_memory(memory, now=t0)
-    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+    await store.upsert_memory(memory.revise(content="v2", version=2), now=t1)
 
     mid = await store.get_memory_as_of(org.id, space.id, memory.id, t0 + timedelta(hours=1))
     assert mid is not None and mid.content == "v1"
@@ -720,7 +762,7 @@ async def test_point_in_time_boundary_is_half_open(tenant) -> None:
     t1 = t0 + timedelta(hours=1)
     memory = Memory(org_id=org.id, space_id=space.id, content="v1")
     await store.upsert_memory(memory, now=t0)
-    await store.upsert_memory(memory.model_copy(update={"content": "v2", "version": 2}), now=t1)
+    await store.upsert_memory(memory.revise(content="v2", version=2), now=t1)
     at_boundary = await store.get_memory_as_of(org.id, space.id, memory.id, t1)
     assert at_boundary is not None and at_boundary.content == "v2"
 

@@ -260,7 +260,31 @@ class PostgresStore(MemoryStore):
         if filters.tags:
             stmt = stmt.where(model.tags.contains(list(filters.tags)))
         for key, value in filters.metadata:
-            stmt = stmt.where(model.meta[key].astext == str(value))
+            # JSONB CONTAINMENT, not text comparison.
+            #
+            # This was `model.meta[key].astext == str(value)`, which compares
+            # the JSON TEXT of the stored value against Python's `str()` of the
+            # filter value. Those agree for strings and ints and for nothing
+            # else, so `MemoryFilter.matches` -- documented one line above its
+            # own definition as the semantics "SQL backends must reproduce
+            # exactly" -- was reproduced for two types out of eight:
+            #
+            #     True         'true'      vs str(True)  == 'True'      no match
+            #     None         SQL NULL    vs 'None'                    no match
+            #     1.0          '1'         vs '1.0'                     no match
+            #     {"b": 1}     '{"b": 1}'  vs "{'b': 1}"  (repr)        no match
+            #     ["a"]        '["a"]'     vs "['a']"                   no match
+            #
+            # Reachable from the product: `POST /search` accepts `metadata` as
+            # `dict[str, Any]` with no shallowness validator on the search body,
+            # so a caller filtering on a boolean got zero results against
+            # Postgres and the right ones in any in-memory dev run. Silent, and
+            # invisible to the conformance suite, whose only metadata fixture is
+            # `{"k": "v"}` -- one of the two types that happened to work.
+            #
+            # `@>` containment matches Python equality for every JSON type,
+            # compares numbers as numbers, and uses the GIN index on `meta`.
+            stmt = stmt.where(model.meta.contains({key: value}))
         if filters.occurred_after is not None:
             stmt = stmt.where(model.occurred_at >= _aware(filters.occurred_after))
         if filters.occurred_before is not None:

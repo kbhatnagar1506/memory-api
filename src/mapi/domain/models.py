@@ -336,9 +336,44 @@ class Memory(Base):
 
     @model_validator(mode="after")
     def _fill_hash(self) -> Self:
-        if not self.content_sha256:
-            object.__setattr__(self, "content_sha256", content_hash(self.content))
+        """`content_sha256` is DERIVED from content, always and only.
+
+        This used to be guarded by `if not self.content_sha256`, and the guard
+        was the bug. `Base` sets `validate_assignment=True`, so this validator
+        does re-run when a field is assigned -- but with a hash already present
+        the guard made it a no-op, and `memory.content = "something new"` kept
+        the old digest.
+
+        Nothing in `src/` sets this field to anything but the derived value, and
+        nothing could reasonably want to: every reader either compares it
+        (`find_by_content_hash`, the exact-duplicate gate) or publishes it (the
+        erase attestation, which certifies WHICH content was destroyed). A hash
+        that disagrees with its content is wrong in both roles -- it makes a
+        revised memory dedupe against its own former text, and it makes the
+        attestation describe something other than what was erased.
+
+        So it is recomputed unconditionally. Note the remaining hole, which is
+        pydantic's and not ours: `model_copy(update={"content": ...})` skips
+        validation entirely, so it does NOT come through here. Use `revise()`
+        below for that, and see `test_model_invariants.py` for the pin.
+        """
+        object.__setattr__(self, "content_sha256", content_hash(self.content))
         return self
+
+    def revise(self, **changes: object) -> Self:
+        """`model_copy` with derived fields kept honest.
+
+        `model_copy` bypasses validators by design, so a copy that changes
+        `content` carries the previous `content_sha256` -- which the conformance
+        suite was doing, storing content "revised" under the hash of "original".
+        This clears the digest before the copy so the constructor re-derives it.
+        """
+        if "content" in changes:
+            changes.setdefault("content_sha256", "")
+            copied = self.model_copy(update=changes)
+            object.__setattr__(copied, "content_sha256", content_hash(str(changes["content"])))
+            return copied
+        return self.model_copy(update=changes)
 
     @property
     def is_retrievable(self) -> bool:

@@ -55,7 +55,6 @@ def test_bench_is_importable() -> None:
 #: phase is the rot this test exists to catch.
 _MARKERS_PENDING = {
     "slow": "tests/capability/test_scale.py (Phase 5)",
-    "live_llm": "tests/capability/test_semantic_embedder.py (Phase 4)",
 }
 
 

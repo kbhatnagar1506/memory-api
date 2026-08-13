@@ -15,7 +15,7 @@ a higher cosine ranks first, which is true by construction and tests nothing.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from tests.support.embedder import ScriptedEmbedder
@@ -71,17 +71,27 @@ async def geometry(
 
 
 @pytest.fixture(autouse=True)
-def assert_no_misses(request: pytest.FixtureRequest) -> AsyncIterator[None]:
+def assert_no_misses(request: pytest.FixtureRequest) -> Iterator[None]:
     """Fail any geometry test that embedded an unregistered string.
 
     Without this, a typo in a marker makes the memory land on the reserved miss
     axis, the query finds nothing there, and the test passes for the wrong
-    reason. Only applies when the test asked for `scripted`.
+    reason -- the assertion holds because nothing matched, which is the same
+    outcome as the code being broken.
+
+    The reference is captured during SETUP, not at teardown. Fetching it after
+    the yield raised "the fixture value for 'scripted' is not available ...
+    already been torn down": this fixture declares no dependency on `scripted`,
+    so pytest is free to tear that one down first. Grabbing it while it is
+    definitely alive also keeps the "only when the test asked for it" behaviour,
+    which a plain parameter would lose.
     """
+    embedder = (
+        request.getfixturevalue("scripted") if "scripted" in request.fixturenames else None
+    )
     yield
-    if "scripted" not in request.fixturenames:
+    if embedder is None:
         return
-    embedder = request.getfixturevalue("scripted")
     assert embedder.misses == [], (
         "these strings were embedded without a registered vector, so they landed "
         f"on the reserved miss axis: {embedder.misses}"

@@ -53,9 +53,11 @@ def test_bench_is_importable() -> None:
 #: will use it, and MUST be deleted when that file appears -- at which point
 #: this test starts enforcing the marker for real. An entry that outlives its
 #: phase is the rot this test exists to catch.
-_MARKERS_PENDING = {
-    "slow": "tests/capability/test_scale.py (Phase 5)",
-}
+#:
+#: Empty, and that is the point: every declared marker is now applied to
+#: something. `postgres` gates the conformance parametrization, `slow` the scale
+#: and tenancy sweeps, `live_llm` the one provider-semantics file.
+_MARKERS_PENDING: dict[str, str] = {}
 
 
 def test_every_declared_marker_is_used() -> None:

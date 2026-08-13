@@ -137,15 +137,29 @@ question. Rules:
 Output ONLY a JSON array:
 [{{"date": "YYYY-MM-DD", "fact": "...", "quote": "..."}}]"""
 
+#: The reference date is in here because without it a whole class of question
+#: is not merely hard but UNCOMPUTABLE. "How many weeks ago did I attend the
+#: sale", "how many months have passed since I last visited a museum" -- one
+#: endpoint of that subtraction is the day the question was asked, and this
+#: prompt used to supply dated rows and no "now". 25 of LongMemEval's 133
+#: temporal-reasoning questions are that shape, 19% of the capability our
+#: retrieval is already weakest on, and the model had no way to answer any of
+#: them from what it was given.
+#:
+#: The direct answer path in the harness has stated the date all along. Only
+#: the derived path, which is the one that ROUTES date arithmetic, did not.
 _COMPOSE_PROMPT = """\
 Answer the question using ONLY this table of dated, verified facts.
 
 {table}
-
+{asked_at}
 Question: {question}
 
-Answer in as few words as possible. If the table cannot answer it, reply
-NO_ANSWER."""
+If the question asks how long ago something happened, or how much time has
+passed since it, measure from its date to today's date above.
+
+Answer in as few words as possible, in the unit the question asks for. If the
+table cannot answer it, reply NO_ANSWER."""
 
 
 def _parse_json_array(raw: str) -> list[dict[str, object]]:
@@ -374,7 +388,77 @@ def _states_quantity(fact: str) -> bool:
     return any(not _YEARISH.match(m.replace(",", "")) for m in _DIGITS.findall(fact))
 
 
-def _reduce_in_code(kind: QuestionKind, table: list[Extraction]) -> str | None:
+#: The unit the answer has to be expressed in. Reading it off the question is
+#: the whole point: the reducer used to return "N days" for every date
+#: subtraction, so "how many WEEKS ago did I attend the sale" -- whose gold
+#: answer is the bare number 4 -- was answered "28 days". Correct retrieval,
+#: correct dates, correct arithmetic, wrong answer.
+_ASKED_UNIT = re.compile(r"\bhow (?:many|much)\s+(\w+)", re.IGNORECASE)
+
+#: Days per unit. Weeks are exact; months and years are the conventional
+#: approximations, which is what a question asking "how many months ago"
+#: expects -- nobody asking that wants a calendar-difference edge case.
+_UNIT_DAYS_OUT = {"day": 1, "week": 7, "month": 30, "year": 365}
+
+#: A question measuring FROM an event TO the present. One endpoint of that
+#: subtraction is the day the question was asked, so it cannot be computed from
+#: the table alone -- and the old reducer required two dates in the table and
+#: returned None for all of these. 25 of LongMemEval's 133 temporal questions.
+_TO_PRESENT = re.compile(
+    r"\bago\b|\bsince\b|\b(?:have|has)\s+passed\b|\buntil now\b|\bso far\b",
+    re.IGNORECASE,
+)
+
+
+def _date_span(
+    question: str, table: Sequence[Extraction], asked_at: date | None
+) -> str | None:
+    """A date subtraction, in the unit the question asked for.
+
+    Two endpoints are needed and only one of them is always in the table. A
+    question saying "ago" or "since" measures to the present, so `asked_at`
+    supplies the other end; anything else measures between two rows.
+
+    Deliberately silent rather than wrong. A question measuring to the present
+    over a table holding several unrelated dates cannot be resolved here -- the
+    row being asked about is not identifiable from dates alone -- so it returns
+    None and composes through the model, which can read the facts and pick. The
+    old code guessed max-minus-min in that case and answered confidently.
+    """
+    dates = sorted({row.date for row in table if row.date is not None})
+    if not dates:
+        return None
+
+    unit = "day"
+    if match := _ASKED_UNIT.search(question):
+        candidate = match.group(1).lower().rstrip("s")
+        if candidate in _UNIT_DAYS_OUT:
+            unit = candidate
+
+    if _TO_PRESENT.search(question):
+        if asked_at is None or len(dates) != 1:
+            return None
+        days = (asked_at - dates[0]).days
+    elif len(dates) >= 2:
+        days = (dates[-1] - dates[0]).days
+    else:
+        return None
+
+    if days < 0:
+        # An event dated after the question was asked means the extraction or
+        # the reference date is wrong. Saying so is better than a negative age.
+        return None
+    if unit == "day":
+        return f"{days} days"
+    return f"{days // _UNIT_DAYS_OUT[unit]} {unit}s"
+
+
+def _reduce_in_code(
+    kind: QuestionKind,
+    table: list[Extraction],
+    question: str = "",
+    asked_at: date | None = None,
+) -> str | None:
     """The arithmetic stage. Returns None when this kind needs the model."""
     if kind is QuestionKind.COUNT:
         # The stated-quantity branch was DELETED here, not disabled.
@@ -433,10 +517,7 @@ def _reduce_in_code(kind: QuestionKind, table: list[Extraction]) -> str | None:
                 # wrong one. Under a contains-the-answer judge, more context
                 # can only help.
                 return row.fact
-        dates = sorted(row.date for row in table if row.date is not None)
-        if len(dates) >= 2:
-            return f"{(dates[-1] - dates[0]).days} days"
-        return None
+        return _date_span(question, table, asked_at)
 
     if kind is QuestionKind.LIST_ALL:
         if not table:
@@ -533,14 +614,20 @@ async def derive_answer(
     if not table:
         return None
 
-    computed = _reduce_in_code(kind, table)
+    computed = _reduce_in_code(kind, table, question, asked_at)
     if computed is not None:
         answer = computed
         was_computed = True
     else:
         try:
             raw = await complete(
-                _COMPOSE_PROMPT.format(table=_format_table(table), question=question)
+                _COMPOSE_PROMPT.format(
+                    table=_format_table(table),
+                    question=question,
+                    asked_at=(
+                        f"\nToday's date is {asked_at.isoformat()}.\n" if asked_at else ""
+                    ),
+                )
             )
         except Exception:
             return None

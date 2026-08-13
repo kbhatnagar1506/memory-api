@@ -23,6 +23,7 @@ import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import StrEnum
 
 from ..text import STOPWORDS
 from .classify import QuestionKind
@@ -388,6 +389,59 @@ def _states_quantity(fact: str) -> bool:
     return any(not _YEARISH.match(m.replace(",", "")) for m in _DIGITS.findall(fact))
 
 
+class _Order(StrEnum):
+    """Which end of a sorted table the question is asking for."""
+
+    EARLIEST = "earliest"
+    LATEST = "latest"
+    SEQUENCE = "sequence"
+
+
+#: A request for the WHOLE ordering rather than one endpoint. Checked first,
+#: because "the order of the six museums from earliest to latest" contains the
+#: words for both endpoints and is asking for neither.
+_WANTS_SEQUENCE = re.compile(
+    r"\bthe order of\b|\bin (?:what|which) order\b|\bin order\b"
+    r"|\bearliest to latest\b|\boldest to newest\b|\bchronological\b|\bsequence\b",
+    re.IGNORECASE,
+)
+
+#: PRIMACY. This is the defect these three patterns exist to fix.
+#:
+#: The ORDER reducer always returned `dated[-1]`, the most recent row, under a
+#: comment claiming "the question's own wording picks the end" -- and the code
+#: never read the wording. It could not: `question` was not a parameter of the
+#: reducer until date arithmetic needed it.
+#:
+#: So every question asking which of two things came FIRST was answered with
+#: whichever came LAST. Measured on the 494-question run: 16 of 62 ORDER-shaped
+#: questions were wrong, 9 of them binary "which came first, A or B" -- and all
+#: nine were inverted, not scattered. A coin flip would have got four or five.
+_WANTS_EARLIEST = re.compile(
+    r"\b(?:first|earliest|oldest|initial(?:ly)?|original(?:ly)?)\b|\bbegin with\b",
+    re.IGNORECASE,
+)
+_WANTS_LATEST = re.compile(
+    r"\b(?:last|latest|most recent|newest|final(?:ly)?)\b", re.IGNORECASE
+)
+
+
+def _order_direction(question: str) -> _Order:
+    """Which end the question wants. Latest is the default it always was.
+
+    Sequence wins over both endpoints, and earliest wins over latest when both
+    appear ("which did I do first, before the move") because a question naming
+    "first" is asking for primacy whatever else it mentions.
+    """
+    if _WANTS_SEQUENCE.search(question):
+        return _Order.SEQUENCE
+    if _WANTS_EARLIEST.search(question):
+        return _Order.EARLIEST
+    if _WANTS_LATEST.search(question):
+        return _Order.LATEST
+    return _Order.LATEST
+
+
 #: The unit the answer has to be expressed in. Reading it off the question is
 #: the whole point: the reducer used to return "N days" for every date
 #: subtraction, so "how many WEEKS ago did I attend the sale" -- whose gold
@@ -503,9 +557,13 @@ def _reduce_in_code(
         if not dated:
             return None
         dated.sort(key=lambda row: row.date or date.min)
-        # The question's own wording picks the end: default to the most
-        # recent, which is what bare "last/latest" asks for.
-        chosen = dated[-1]
+        want = _order_direction(question)
+        if want is _Order.SEQUENCE:
+            return "; ".join(
+                f"{row.fact} ({row.date.isoformat()})" if row.date else row.fact
+                for row in dated
+            )
+        chosen = dated[0] if want is _Order.EARLIEST else dated[-1]
         return f"{chosen.fact} ({chosen.date.isoformat()})" if chosen.date else chosen.fact
 
     if kind is QuestionKind.DATE_ARITH:

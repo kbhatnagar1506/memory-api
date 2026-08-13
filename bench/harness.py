@@ -637,6 +637,14 @@ it is absent.
 - Combine facts across excerpts when the answer needs more than one.
 - Excerpts are ordered oldest to newest. If a fact CHANGED, the answer is the \
 value from the most recent excerpt that mentions it.
+- That recency rule is for CHANGED VALUES ONLY. If the question asks which of \
+two things came FIRST, or happened EARLIEST, the answer is the one with the \
+EARLIER date -- which is the one nearer the top. Compare the two dates \
+explicitly before answering, and do not let the later excerpt win just because \
+you read it last.
+- If the question asks which came first between two things and only ONE of \
+them appears in the excerpts, say the other is not mentioned rather than \
+naming the one you found.
 - Answer with the specific value asked for (a name, place, date, number), not \
 a description of where it came from.
 - Two different reasons to withhold, and only one of them is right. If the \

@@ -210,6 +210,19 @@ class Settings(BaseSettings):
     #: floor is in the single digits. The extra rows were being fetched and
     #: discarded.
     consolidation_candidates: int = Field(default=64, ge=1, le=512)
+    #: Turns of surrounding context handed to the answerer with each
+    #: retrieved memory. 0 restores the old behaviour exactly.
+    #:
+    #: Measured need: retrieval delivers complete evidence for 97.2% of
+    #: LongMemEval questions and accuracy is 0.8255, so ~17.5% are answered
+    #: wrong while the evidence is already in context, against a 2.8%
+    #: retrieval ceiling. A memory is one chat turn; "yeah, three of them"
+    #: retrieves correctly and cannot be answered from.
+    answer_neighbours: int = Field(default=2, ge=0, le=8)
+    #: Ceiling on the assembled answer context. Padding every anchor with
+    #: context dilutes the prompt, which is the mirror image of the failure
+    #: hydration fixes.
+    answer_budget_chars: int = Field(default=24_000, ge=1_000, le=200_000)
     half_life_days: float = Field(
         default=180.0,
         gt=0,

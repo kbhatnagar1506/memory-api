@@ -69,6 +69,7 @@ from .domain.synthesis.chat import Turn as ChatTurn
 from .domain.synthesis.chat import answer as chat_answer
 from .domain.synthesis.derive import CompleteFn, DerivedAnswer, SourceDoc, derive_answer
 from .domain.synthesis.extract import DEFAULT_SUBJECT, Claim, extract_claims
+from .domain.synthesis.hydrate import Neighbourhood, assemble
 from .domain.synthesis.understand import QueryUnderstanding
 from .store.base import MemoryFilter, MemoryStore, Page
 
@@ -218,6 +219,77 @@ class MemoryService:
         check_memories(quota, usage.memories)
         check_bytes(quota, usage.bytes_stored, incoming_bytes)
         check_writes(quota, usage.writes_today)
+
+    async def _hydrate(
+        self,
+        org_id: str,
+        space_id: str,
+        hits: Sequence[Any],
+    ) -> list[SourceDoc]:
+        """Retrieved memories plus the turns around them, budgeted.
+
+        Only what is ASSEMBLED changes; retrieval is untouched, so
+        `full_recall@k` and MRR are computed on the same set as before and
+        any movement in accuracy is attributable.
+        """
+        anchors = [
+            SourceDoc(
+                id=hit.memory.id,
+                text=hit.memory.content,
+                occurred_at=hit.memory.occurred_at,
+            )
+            for hit in hits
+        ]
+        width = self.settings.answer_neighbours
+        if not anchors or width <= 0:
+            return anchors
+
+        hoods = []
+        for hit, anchor in zip(hits, anchors, strict=True):
+            before, after = await self._surrounding(org_id, space_id, hit.memory, width)
+            hoods.append(Neighbourhood(anchor=anchor, before=before, after=after))
+        return assemble(hoods, budget_chars=self.settings.answer_budget_chars)
+
+    async def _surrounding(
+        self,
+        org_id: str,
+        space_id: str,
+        memory: Memory,
+        width: int,
+    ) -> tuple[tuple[SourceDoc, ...], tuple[SourceDoc, ...]]:
+        """The turns immediately before and after `memory` in its own source.
+
+        `source` is the caller's grouping -- a conversation, a thread, a
+        document -- so this reassembles the unit they wrote and never invents
+        one. No source means no neighbours.
+        """
+        if not memory.source:
+            return (), ()
+        page = await self.store.list_memories(
+            org_id,
+            space_id,
+            filters=MemoryFilter(source=memory.source),
+            # Enough either side to find the anchor's position without
+            # paging a long conversation into memory.
+            limit=max(width * 8, 32),
+        )
+        ordered = sorted(page.items, key=lambda m: (m.occurred_at, m.id))
+        try:
+            at = next(i for i, m in enumerate(ordered) if m.id == memory.id)
+        except StopIteration:
+            return (), ()
+
+        def to_docs(items: Sequence[Memory]) -> tuple[SourceDoc, ...]:
+            return tuple(
+                SourceDoc(id=m.id, text=m.content, occurred_at=m.occurred_at)
+                for m in items
+                if m.id != memory.id and m.status is MemoryStatus.ACTIVE
+            )
+
+        return (
+            to_docs(ordered[max(0, at - width) : at]),
+            to_docs(ordered[at + 1 : at + 1 + width]),
+        )
 
     async def _confirm_supersessions(
         self,
@@ -1239,14 +1311,7 @@ class MemoryService:
         response = await self.search(
             SearchRequest(query=question, org_id=org_id, space_id=space_id, limit=k)
         )
-        docs = [
-            SourceDoc(
-                id=hit.memory.id,
-                text=hit.memory.content,
-                occurred_at=hit.memory.occurred_at,
-            )
-            for hit in response.results
-        ]
+        docs = await self._hydrate(org_id, space_id, response.results)
         # The search already decided what this question is asking for -- reuse
         # it rather than classifying twice. They would usually agree, and
         # "usually" is exactly the kind of divergence nobody finds later.

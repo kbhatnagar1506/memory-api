@@ -846,6 +846,46 @@ def _facts_block(raw: str) -> str:
 NO_OUTPUT = "\x00NO_OUTPUT"
 
 
+#: Most characters of one session handed to a model.
+#:
+#: 24,000 because the corpus says so: p99 is 20,723 chars and p99.9 is 23,707,
+#: so this cuts 20 of 23,867 sessions (0.08%). The value it replaced on the
+#: derive path was 12,000, which cut 9,914 sessions -- 41.5% of the corpus,
+#: 34.7 million characters -- silently and mid-word.
+#:
+#: It is a SAFETY VALVE, not a budget. The ten longest sessions retrieved
+#: together are ~93K tokens against a 1M window, so nothing here is near a
+#: real constraint; the limit exists so one pathological document cannot blow
+#: the context or the bill.
+MAX_SESSION_CHARS = 24_000
+
+
+def clip_session(text: str, limit: int = MAX_SESSION_CHARS) -> str:
+    """Trim to `limit` on a boundary, and say so in the text itself.
+
+    `text[:N]` amputates mid-word. A model handed a session ending "I bought
+    the camera on the" is reading corrupted evidence with no signal that
+    anything was removed -- it cannot tell a truncated session from a session
+    that simply ended, so it answers confidently from half the facts.
+
+    Paragraph boundary first, then sentence, then a hard cut for text
+    containing neither -- the same descent the extractor uses for its windows.
+    The marker is deliberate: an explicit "[...]" lets the model treat the
+    absence as absence.
+    """
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    for sep in ("\n\n", "\n", ". "):
+        cut = head.rfind(sep)
+        # Only honour a boundary in the last quarter; otherwise a document
+        # with one early paragraph break would lose most of its content.
+        if cut > limit * 0.75:
+            head = head[: cut + len(sep)]
+            break
+    return head.rstrip() + "\n[... session truncated]"
+
+
 def _ANSWER_MAX_TOKENS(is_advice: bool) -> int:
     """Output allowance for one answer.
 
@@ -1085,7 +1125,7 @@ async def evaluate_end_to_end(
     # and 20,000 cuts none. Cost is +15% context (mean session 8,894 -> 10,225
     # chars). Truncating the sentence that holds the answer is the cheapest
     # possible way to lose a question.
-    max_session_chars: int = 20_000,
+    max_session_chars: int = MAX_SESSION_CHARS,
     max_per_source: int = 0,
     route_by_kind: bool = False,
     episodes_only: bool = False,
@@ -1157,7 +1197,7 @@ async def evaluate_end_to_end(
                 # them positionally unorderable — the model cannot answer
                 # "which happened first" from evidence it cannot sequence.
                 f"[{hit.memory.occurred_at.isoformat(timespec='minutes')}]\n"
-                f"{hit.memory.content[:max_session_chars]}"
+                f"{clip_session(hit.memory.content, max_session_chars)}"
                 for hit in ordered
             )
             # Advice requests get the personalisation prompt; everything else
@@ -1217,7 +1257,7 @@ async def evaluate_end_to_end(
                 docs = [
                     SourceDoc(
                         id=hit.memory.id,
-                        text=hit.memory.content[:max_session_chars],
+                        text=clip_session(hit.memory.content, max_session_chars),
                         occurred_at=hit.memory.occurred_at,
                     )
                     for hit in ordered

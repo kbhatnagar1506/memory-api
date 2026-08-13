@@ -344,3 +344,59 @@ def test_judge_token_budget_leaves_room_for_thinking() -> None:
     an 8-token cap returned a truncated 'N' that parses as "no" and would have
     scored every answer wrong while looking like a working grader."""
     assert _JUDGE_MAX_TOKENS >= 256
+
+
+# -- session truncation ----------------------------------------------------
+#
+# Measured on the real corpus: the derive path's 12,000-char limit cut 9,914
+# of 23,867 sessions -- 41.5%, 34.7 million characters -- silently and
+# mid-word. It was LOWER than the direct path's limit, while mapping one
+# document per call and therefore having the most room in the system.
+
+
+def test_a_short_session_is_untouched() -> None:
+    from bench.harness import clip_session
+
+    assert clip_session("a short session") == "a short session"
+
+
+def test_a_long_session_is_marked_as_truncated() -> None:
+    """A model cannot tell a cut session from one that simply ended."""
+    from bench.harness import clip_session
+
+    out = clip_session("word. " * 8000, limit=1000)
+    assert "[... session truncated]" in out
+    assert len(out) < 1200
+
+
+def test_the_cut_lands_on_a_boundary_not_mid_word() -> None:
+    from bench.harness import clip_session
+
+    body = "This is a complete sentence. " * 200
+    out = clip_session(body, limit=1000).replace("\n[... session truncated]", "")
+    assert out.endswith("."), f"cut mid-sentence: {out[-40:]!r}"
+
+
+def test_an_early_boundary_does_not_swallow_the_session() -> None:
+    """Only a boundary in the last quarter counts.
+
+    Otherwise a document with one paragraph break near the top loses almost
+    everything it had.
+    """
+    from bench.harness import clip_session
+
+    body = "Intro.\n\n" + ("x" * 5000)
+    out = clip_session(body, limit=1000)
+    assert len(out) > 900, "an early break truncated the whole session"
+
+
+def test_the_derive_and_direct_limits_agree() -> None:
+    """They disagreed, and the tighter one was on the path with more room."""
+    import inspect
+
+    from bench.harness import MAX_SESSION_CHARS
+
+    from mapi.domain.synthesis.derive import derive_answer
+
+    derive_limit = inspect.signature(derive_answer).parameters["max_doc_chars"].default
+    assert derive_limit == MAX_SESSION_CHARS == 24_000

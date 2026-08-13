@@ -319,6 +319,19 @@ _DIGITS = re.compile(r"\b(\d[\d,]*(?:\.\d+)?)\b")
 _YEARISH = re.compile(r"^(19|20)\d{2}$")
 
 
+def _clip(text: str, limit: int) -> str:
+    """Trim on a boundary and mark it, rather than amputating mid-word."""
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    for sep in ("\n\n", "\n", ". "):
+        cut = head.rfind(sep)
+        if cut > limit * 0.75:
+            head = head[: cut + len(sep)]
+            break
+    return head.rstrip() + "\n[... truncated]"
+
+
 def _states_quantity(fact: str) -> bool:
     """True when the fact text itself carries the number being asked for.
 
@@ -423,7 +436,14 @@ async def derive_answer(
     complete: CompleteFn,
     *,
     concurrency: int = 8,
-    max_doc_chars: int = 12_000,
+    # 24_000, matching the direct answer path. It was 12_000 -- LOWER than
+    # the path that crams ten sessions into one prompt, while this one maps a
+    # single document per call and therefore has the most room in the system.
+    # The asymmetry had no stated reason and cut 41.5% of a real corpus
+    # mid-word, which is a plausible cause of the derive arm's regression:
+    # grounding drops any claim whose quote fell past the cut, and the reducer
+    # then counts over an incomplete table.
+    max_doc_chars: int = 24_000,
     asked_at: date | None = None,
 ) -> DerivedAnswer | None:
     """Run map -> ground -> dedupe -> reduce for one question.
@@ -440,7 +460,7 @@ async def derive_answer(
     async def map_one(doc: SourceDoc) -> list[Extraction]:
         prompt = _MAP_PROMPT.format(
             doc_date=doc.occurred_at.date().isoformat(),
-            text=doc.text[:max_doc_chars],
+            text=_clip(doc.text, max_doc_chars),
             question=question,
         )
         async with semaphore:

@@ -314,3 +314,69 @@ def test_the_answer_dataclass_defaults_are_safe_to_read() -> None:
     assert blank.cited == []
     assert blank.considered == []
     assert blank.used_unverified is False
+
+
+# -- advice routing: the measured prompt swap ------------------------------
+#
+# The preference lab measured the decline rule as the advice failure mode:
+# fact framing 7/12 with three refusals, advice framing 10/12, identical
+# evidence. `answer()` now routes by question shape -- same classifier as the
+# derive path, no caller flag -- so these pin which contract each shape gets.
+
+
+async def test_an_advice_request_gets_the_grounded_advice_contract() -> None:
+    seen: dict[str, str] = {}
+    await answer(
+        "Can you recommend a hotel for my Barcelona trip?",
+        [_hit("The Lisbon hotel's rooftop pool sold me instantly.")],
+        _capturing(seen),
+    )
+    prompt = seen["prompt"]
+    assert "advising this user" in prompt
+    assert "no stored preference applies" in prompt
+    assert "I don't have that in memory" not in prompt, (
+        "the decline instruction reached an advice request -- the measured "
+        "failure mode (three refusals of twelve) is back"
+    )
+
+
+async def test_a_fact_question_keeps_the_decline_contract() -> None:
+    """The routing must not soften the fact path: inventing a fact is worse
+    than refusing one, and the decline rule is correct there."""
+    seen: dict[str, str] = {}
+    await answer(
+        "What database do we use?",
+        [_hit("Postgres 16 on Cloud SQL.")],
+        _capturing(seen),
+    )
+    assert "I don't have that in memory" in seen["prompt"]
+    assert "advising this user" not in seen["prompt"]
+
+
+async def test_advice_citations_still_parse_and_flag_unverified() -> None:
+    """The two-step advice shape keeps the [n] convention, so the citation
+    machinery -- and the unverified flag riding on it -- work unchanged."""
+    shaky = _hit("I think I preferred the aisle?", metadata={"confidence": "unsure"})
+    result = await answer(
+        "Which seat should I book for the long flight?",
+        [shaky],
+        _replying('Per [1] "preferred the aisle" -- book the aisle.'),
+    )
+    assert result.cited == [shaky.memory.id]
+    assert result.used_unverified is True
+
+
+async def test_an_advice_request_over_an_empty_store_still_declines() -> None:
+    """ "Never refuse" applies to thin evidence, not to NO evidence: with an
+    empty store there are no preferences to apply, and a recommendation from
+    nothing is the model's own priors wearing the product's voice."""
+    called = False
+
+    async def complete(prompt: str) -> str:
+        nonlocal called
+        called = True
+        return "I recommend the aisle!"
+
+    result = await answer("Can you recommend a seat for me?", [], complete)
+    assert not called
+    assert "don't have" in result.reply

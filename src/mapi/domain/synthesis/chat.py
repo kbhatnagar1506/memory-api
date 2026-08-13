@@ -32,6 +32,7 @@ from datetime import datetime
 
 from ...core.logging import get_logger
 from ..models import ScoredMemory
+from .classify import QuestionKind, classify
 from .derive import CompleteFn
 
 log = get_logger(__name__)
@@ -62,6 +63,47 @@ of further help.
 {memories}
 
 Question: {question}
+Answer:"""
+
+#: The advice variant, and the measurement behind it.
+#:
+#: `CHAT_PROMPT`'s rule 1 -- decline when the memories do not contain the answer
+#: -- is CORRECT for facts and is the measured failure mode for advice. An
+#: advice request has no stored answer by construction; its whole point is to
+#: APPLY stored preferences. Measured on the preference lab (12 questions,
+#: identical evidence): the fact framing scored 7/12 with three refusals on
+#: questions the advice framing answered correctly at 10/12.
+#:
+#: The two-step shape is the lab's `grounded` arm, which tied plain advice on
+#: accuracy and won on legibility: where no preference bore on the request, the
+#: plain arm confidently recommended "a weekday morning" -- the exact violation
+#: of a stored never-before-10am rule whose memory had not been retrieved --
+#: while the grounded arm wrote "no stored preference applies" and labelled its
+#: suggestion a guess. Same score, different failure: a wrong answer wearing
+#: confidence versus a system reporting its own evidence gap. Quoting the
+#: preference FIRST also binds the recommendation to a citation, which is the
+#: same mechanism that grounds the fact path.
+ADVICE_CHAT_PROMPT = """\
+You are advising this user from a memory store. The numbered memories below \
+are what you know about them; they will NOT contain a ready-made answer -- \
+they contain what this user likes, avoids, owns and does.
+
+Work in two steps, both in your reply:
+1. Name the preference(s) that bear on this request, quoting the memory and \
+citing it as [1], [2] inline. If a preference CHANGED over time, use the \
+latest. If NO memory bears on the request, say "no stored preference applies \
+here" instead.
+2. Make one concrete recommendation that follows from exactly the preferences \
+you cited -- never from general taste. If none applied, still recommend, and \
+say plainly that it is a guess.
+
+A memory marked UNVERIFIED is not established fact; say so if you lean on it. \
+Be brief and concrete.
+
+{history}Memories:
+{memories}
+
+Request: {question}
 Answer:"""
 
 
@@ -167,6 +209,15 @@ async def answer(
 
     With no hits the model is never called: there is nothing to ground an
     answer in, and asking anyway invites exactly the invention rule 1 forbids.
+    That holds for advice too -- with an EMPTY store there are no preferences to
+    apply, and a recommendation from nothing is a recommendation from the
+    model's own priors wearing the product's voice.
+
+    Routing is by the question's SHAPE, via the same classifier the derive path
+    and the benchmark use -- no dataset label, no caller flag. A fact question
+    gets the decline-when-absent contract; an advice request gets the
+    grounded-advice contract, because the decline rule is the measured failure
+    mode there (7/12 -> 10/12 on the preference lab, three refusals converted).
     """
     considered = [h.memory.id for h in hits]
     if not hits:
@@ -175,7 +226,8 @@ async def answer(
             considered=considered,
         )
 
-    prompt = CHAT_PROMPT.format(
+    template = ADVICE_CHAT_PROMPT if classify(question) is QuestionKind.ADVICE else CHAT_PROMPT
+    prompt = template.format(
         history=format_history(history),
         memories=format_memories(hits),
         question=question.strip(),
@@ -201,6 +253,7 @@ async def answer(
 
 
 __all__ = [
+    "ADVICE_CHAT_PROMPT",
     "CHAT_PROMPT",
     "ChatAnswer",
     "Turn",

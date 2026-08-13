@@ -43,7 +43,7 @@ from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
 from ..synthesis.classify import QuestionKind, classify
 from ..synthesis.scope import extract_scope
 from ..synthesis.understand import QueryIntent, QueryUnderstanding
-from .confidence import RetrievalConfidence, assess
+from .confidence import RetrievalConfidence, assess, calibrated_score
 from .decay import apply_decay
 from .entities import salient_entities
 from .expansion import NoopExpander, QueryExpander
@@ -543,8 +543,26 @@ class RetrievalPipeline:
             timings["entity_ms"] = (loop.time() - t0) * 1000
 
         # -- stage 3: hydrate --------------------------------------------------
+        #
+        # The pool is cut with `effective_limit`, not `request.limit`, and the
+        # difference was a silent cap on the whole coverage feature.
+        #
+        # `effective_limit` is widened above for a comprehensive question --
+        # up to `coverage_limit` (default 100), bounded by _MAX_COVERAGE_LIMIT
+        # (200) -- and `fetch` is widened with it, up to 600 candidates. Then
+        # this line threw all but `max(rerank_candidates, request.limit)` of
+        # them away, and every stage after it can only shrink the list. So with
+        # the shipped defaults (rerank_candidates=32, API limit=10) a
+        # comprehensive question fetched up to 600 candidates and could never
+        # return more than 32 results, while stage 9 stamped
+        # "coverage window 100" on each one.
+        #
+        # Measured on a 60-fact space: 32 results at limit=10, 50 at limit=50 --
+        # which is what identified `request.limit` as the cap rather than any
+        # coverage constant. `test_coverage.py` could not see it: its fixture
+        # holds 20 facts, under the ceiling.
         t0 = loop.time()
-        pool = fused[: max(request.rerank_candidates, request.limit)]
+        pool = fused[: max(request.rerank_candidates, effective_limit)]
         memories = await self.store.get_memories(
             request.org_id, request.space_id, [f.id for f in pool]
         )
@@ -691,7 +709,7 @@ class RetrievalPipeline:
         timings["mmr_ms"] = (loop.time() - t0) * 1000
 
         if request.min_score > 0.0:
-            kept = [s for s in scored if s.score >= request.min_score]
+            kept = [s for s in scored if calibrated_score(s) >= request.min_score]
             if len(kept) != len(scored):
                 log.debug(
                     "min_score_filtered",
@@ -705,7 +723,7 @@ class RetrievalPipeline:
             for hit in final:
                 hit.explain.append(f"coverage window {effective_limit} ({intent.source})")
         conflicts = await self._find_conflicts(final, request)
-        confidence = assess([s.score for s in final], has_conflicts=bool(conflicts))
+        confidence = assess([calibrated_score(s) for s in final], has_conflicts=bool(conflicts))
         return SearchResponse(
             results=final,
             query=request.query,

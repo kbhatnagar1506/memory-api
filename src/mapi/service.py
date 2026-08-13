@@ -663,7 +663,23 @@ class MemoryService:
             shortlist = [p for p in all_proposals if p.confidence >= floor]
             declined = [p.old_id for p in all_proposals if p.confidence < floor]
             proposals = await self._confirm_supersessions(memory, shortlist)
-            declined += [p.old_id for p in shortlist if p not in proposals]
+            # Compare by TARGET ID, not by proposal value.
+            #
+            # This was `[p.old_id for p in shortlist if p not in proposals]`,
+            # and `SupersessionProposal` is a frozen dataclass, so `in` compares
+            # all five fields -- including `reason` and `confidence`, which
+            # `_confirm_supersessions` deliberately REPLACES with the
+            # adjudicator's verdict. So no confirmed proposal ever equalled its
+            # own shortlist entry, and every applied supersession was also
+            # reported as declined: the same memory id appeared in both
+            # `superseded` and `supersede_declined`, and the
+            # `supersession_declined` log line counted confirmations.
+            #
+            # Which contradicts what the field promises -- "proposed but NOT
+            # applied ... these memories are still active" -- for a memory that
+            # is, at that moment, SUPERSEDED.
+            applied = {p.old_id for p in proposals}
+            declined += [p.old_id for p in shortlist if p.old_id not in applied]
             if declined:
                 # Reported, never silent: a caller that wanted those merges
                 # needs to see that the system saw them and held back.

@@ -464,9 +464,7 @@ _TO_PRESENT = re.compile(
 )
 
 
-def _date_span(
-    question: str, table: Sequence[Extraction], asked_at: date | None
-) -> str | None:
+def _date_span(question: str, table: Sequence[Extraction], asked_at: date | None) -> str | None:
     """A date subtraction, in the unit the question asked for.
 
     Two endpoints are needed and only one of them is always in the table. A

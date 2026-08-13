@@ -34,8 +34,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from ..models import ScoredMemory
+
 #: Cosine similarity above which a top hit is a strong lexical/semantic match.
 #: Structural default, not fitted -- see the module docstring.
+#:
+#: THE SCALE THESE ARE ON, because getting it wrong made the whole feature
+#: report noise. They are cosine thresholds, as the comment always said. But
+#: `assess` was being called on `ScoredMemory.score`, which is a cosine at NO
+#: point in the pipeline:
+#:
+#:     use_rerank=True   ->  top score 5.7835   level=high
+#:     use_rerank=False  ->  top score 0.0352   level=low, refusal=weak_evidence
+#:
+#: One query, one corpus, one answer, opposite verdicts -- decided by a flag.
+#: With rerank off the scale is RRF, whose maximum with two arms at rank 1 is
+#: `2/(rrf_k+1)` ~= 0.033, so nothing could ever clear 0.30 and every search
+#: returned LOW/weak_evidence. With rerank on the scale is `HeuristicReranker`'s
+#: unbounded IDF sum, so almost everything cleared 0.55 and returned HIGH.
+#: Meanwhile `vector_score` was 0.806 in both runs -- an actual cosine, ignored.
+#:
+#: `min_score` had the same bug with a worse symptom: `min_score=0.3` with
+#: rerank off dropped every result from every query, silently.
+#:
+#: Fixed by comparing against `calibrated_score` below rather than by moving
+#: these numbers, because a threshold that has to be re-derived per flag
+#: combination is not a threshold.
 _STRONG_SCORE = 0.55
 _WEAK_SCORE = 0.30
 #: A top result that barely beats the runner-up means the retriever found a
@@ -94,10 +118,35 @@ class RetrievalConfidence:
         return self.level is not ConfidenceLevel.NONE
 
 
+def calibrated_score(hit: ScoredMemory) -> float:
+    """The number the thresholds in this module are actually about.
+
+    `ScoredMemory.score` is whatever the last stage that touched it left behind:
+    an RRF score (~0.03 ceiling), or a reranker's unbounded lexical sum (5.78
+    observed), depending on `use_rerank`. Neither is a similarity, so neither can
+    be compared against a similarity threshold -- see `_STRONG_SCORE` above for
+    the measurement.
+
+    `vector_score` is a cosine in [-1, 1], set by the vector arm and preserved
+    through every later stage. So it is the number to grade on, and the fallback
+    to `score` exists for the one case where it is absent: a lexical-only
+    search, either because the caller zeroed `vector_weight` or because the
+    embedding provider failed and the pipeline degraded. In that case the old
+    behaviour is the best available and is what happens.
+
+    Deliberately NOT normalized across the result set. Min-max normalization
+    would make the top score 1.0 by construction, so `_STRONG_SCORE` would stop
+    discriminating and only `margin` would survive -- a strictly worse signal
+    that still looked like two.
+    """
+    return hit.vector_score if hit.vector_score is not None else hit.score
+
+
 def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConfidence:
     """Grade a result set from its score distribution.
 
-    `scores` must be ordered best-first, as the pipeline returns them.
+    `scores` must be ordered best-first, as the pipeline returns them, and must
+    be on the COSINE scale -- pass `calibrated_score(hit)`, not `hit.score`.
     """
     if not scores:
         return RetrievalConfidence(
@@ -171,4 +220,10 @@ def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConf
     )
 
 
-__all__ = ["ConfidenceLevel", "RefusalReason", "RetrievalConfidence", "assess"]
+__all__ = [
+    "ConfidenceLevel",
+    "RefusalReason",
+    "RetrievalConfidence",
+    "assess",
+    "calibrated_score",
+]

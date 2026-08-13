@@ -92,6 +92,7 @@ ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 # Session bodies are corpus DATA; rewrapping them to satisfy a line limit would
 # change the text under test.
 "bench/lab/corpus.py" = ["E501"]
+"bench/lab/preference.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

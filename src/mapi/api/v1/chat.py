@@ -33,7 +33,16 @@ async def chat(
 
     A memory carrying `confidence: unverified` in its metadata is labelled as
     such in the model's context, and `used_unverified` flags an answer that
-    rests on one. Requires a configured synthesis backend (503 otherwise).
+    rests on one.
+
+    Requires a configured synthesis backend. Without one this returns **502
+    provider_error** -- the docstring said 503, which is what `StoreError` uses;
+    this text is the endpoint's OpenAPI description, so the wrong number was the
+    documented contract. Note also that the response `detail` is the generic
+    "Upstream provider failed": the error handler replaces `detail` with `title`
+    for every status >= 500 unless `debug_errors` is on, so the actionable message
+    ("set synthesis_backend=gemini") appears in the server log and not in the
+    response.
     """
     if not is_valid(space_id, "space"):
         raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")

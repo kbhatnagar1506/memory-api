@@ -211,6 +211,17 @@ def salient_entities(
     for counts in per_seed:
         tally.update({k for k in counts if k in confirmed})
 
+    # A zero budget means zero, and it did not.
+    #
+    # The cap was checked AFTER the append, so `max_entities=0` returned one
+    # entity: the first candidate was added, `1 >= 0` broke the loop, and the
+    # caller got exactly what it had asked not to get. Harmless while the budget
+    # was unreachable from the API; now that `entity_budget` is settable, a
+    # caller disabling bridging by zeroing it would still have paid for one
+    # indexed lookup per search.
+    if max_entities <= 0:
+        return []
+
     threshold = max(2, int(len(texts) * drop_ubiquitous_ratio))
     out: list[str] = []
     for entity, count in tally.most_common():

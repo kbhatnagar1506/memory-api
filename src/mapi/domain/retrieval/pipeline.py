@@ -50,6 +50,7 @@ from .fusion import FusedItem, RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
 from .rerank import RerankCandidate, Reranker
 from .routing import allocate, apply_allocation
+from .tuning import Fusion, fusion_for
 
 log = get_logger(__name__)
 
@@ -189,6 +190,10 @@ class SearchRequest:
     candidate_multiplier: int = 6
     rerank_candidates: int = 32
     rrf_k: int = 60
+    #: Let the question's shape scale the fusion arms. Off restores one set
+    #: of weights for every question; see tuning.py for where the numbers
+    #: come from (reasoned, not fitted).
+    tune_by_intent: bool = True
     #: Weight of each first-stage strategy in fusion.
     vector_weight: float = 1.0
     lexical_weight: float = 1.0
@@ -421,6 +426,15 @@ class RetrievalPipeline:
         )
         timings["embed_ms"] = (loop.time() - t0) * 1000
 
+        # The classifier already ran, concurrently with the embedding. Reuse
+        # its answer here rather than serving every question the same
+        # weights: a lookup wants paraphrase-matching, an enumeration wants
+        # every surface form and a flatter rank curve.
+        tuning = fusion_for(intent.kind) if request.tune_by_intent else Fusion()
+        vector_weight = request.vector_weight * tuning.vector
+        lexical_weight = request.lexical_weight * tuning.lexical
+        rrf_k = tuning.rrf_k if request.tune_by_intent else request.rrf_k
+
         effective_limit = request.limit
         if intent.comprehensive:
             effective_limit = min(
@@ -480,7 +494,7 @@ class RetrievalPipeline:
                     "vector",
                     [h.memory_id for h in vector_hits],
                     {h.memory_id: h.score for h in vector_hits},
-                    weight=request.vector_weight,
+                    weight=vector_weight,
                 )
             )
         if lexical_hits:
@@ -489,10 +503,10 @@ class RetrievalPipeline:
                     "lexical",
                     [h.memory_id for h in lexical_hits],
                     {h.memory_id: h.score for h in lexical_hits},
-                    weight=request.lexical_weight,
+                    weight=lexical_weight,
                 )
             )
-        fused = reciprocal_rank_fusion(ranked, k=request.rrf_k)
+        fused = reciprocal_rank_fusion(ranked, k=rrf_k)
         timings["fusion_ms"] = (loop.time() - t0) * 1000
 
         # -- stage 2b: entity bridging ----------------------------------------
@@ -514,7 +528,7 @@ class RetrievalPipeline:
                         weight=request.entity_weight,
                     )
                 )
-                fused = reciprocal_rank_fusion(ranked, k=request.rrf_k)
+                fused = reciprocal_rank_fusion(ranked, k=rrf_k)
                 strategies.append("entity")
             timings["entity_ms"] = (loop.time() - t0) * 1000
 

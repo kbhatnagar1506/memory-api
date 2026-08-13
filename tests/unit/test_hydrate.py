@@ -100,3 +100,46 @@ def test_the_anchor_count_is_never_reduced() -> None:
     hoods = [Neighbourhood(anchor=doc(n)) for n in range(12)]
     out = assemble(hoods, budget_chars=1)
     assert len(out) == 12
+
+
+# -- what counts as "the same conversation" -------------------------------
+#
+# This nearly cost a 500-question benchmark run. The harness sets
+# `source=document.speaker`, so grouping on `source` would have treated every
+# turn the user ever spoke as one conversation and hydrated each anchor with
+# unrelated turns from months away. The session lives in metadata.
+
+
+def _memory(**kw):
+    from mapi.core.ids import new_id
+    from mapi.domain.models import Memory
+
+    return Memory(org_id=new_id("org"), space_id=new_id("space"),
+                  content=kw.pop("content", "a turn"), **kw)
+
+
+def test_a_session_id_wins_over_a_coarse_source_label() -> None:
+    from mapi.service import MemoryService
+
+    m = _memory(source="user", metadata={"doc_id": "session-42"})
+    assert MemoryService._grouping(m) == ("doc_id", "session-42")
+
+
+def test_source_is_used_only_when_no_finer_key_exists() -> None:
+    from mapi.service import MemoryService
+
+    assert MemoryService._grouping(_memory(source="thread-7")) == ("source", "thread-7")
+
+
+def test_an_ungrouped_memory_travels_alone() -> None:
+    """The previous behaviour, and the right answer when we cannot tell."""
+    from mapi.service import MemoryService
+
+    assert MemoryService._grouping(_memory()) is None
+
+
+def test_a_claim_groups_with_its_own_passage() -> None:
+    from mapi.service import MemoryService
+
+    m = _memory(metadata={"extracted_from": "mem_parent"})
+    assert MemoryService._grouping(m) == ("extracted_from", "mem_parent")

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from ...core.errors import ValidationError
 from ...core.ids import is_valid
-from ...domain.models import MemoryKind, MemoryStatus, Scope
+from ...domain.models import MemoryKind, MemoryStatus, RelationType, Scope
 from ...service import IngestResult
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
@@ -254,13 +254,19 @@ async def get_relations(
     service: ServiceDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
     direction: Annotated[str, Query(pattern="^(out|in)$")] = "out",
+    type: RelationType | None = None,
 ) -> RelationListResponse:
     """`out` = relations this memory asserts. `in` = relations pointing at it,
-    which is how you ask "what supersedes this"."""
+    which is how you ask "what supersedes this".
+
+    `type` narrows to one kind of edge. Worth having now that consolidation
+    runs on every write: a memory accumulates association edges by itself,
+    and "what does this replace" should not mean paging all of them.
+    """
     _validate_space_id(space_id)
     _validate_memory_id(memory_id)
     edges = await service.list_relations(
-        principal.org_id, space_id, memory_id, direction=direction
+        principal.org_id, space_id, memory_id, direction=direction, type=type
     )
     return RelationListResponse(items=[RelationResponse.from_domain(e) for e in edges])
 

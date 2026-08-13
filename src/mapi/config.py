@@ -219,6 +219,13 @@ class Settings(BaseSettings):
     #: retrieval ceiling. A memory is one chat turn; "yeah, three of them"
     #: retrieves correctly and cannot be answered from.
     answer_neighbours: int = Field(default=2, ge=0, le=8)
+    #: Embed each chunk with a one-line header of date, title, source and
+    #: tags. The STORED text is never changed -- see embeddings/context.py.
+    #:
+    #: Unlike write-time extraction this adds no retrieval units, so the
+    #: crowding that cost extraction 21-54 questions cannot occur: same chunk
+    #: count, same window, only the vector moves.
+    contextual_embedding: bool = Field(default=True)
     #: Ceiling on the assembled answer context. Padding every anchor with
     #: context dilutes the prompt, which is the mirror image of the failure
     #: hydration fixes.

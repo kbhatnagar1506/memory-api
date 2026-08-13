@@ -648,10 +648,13 @@ async def test_lineage_resolves_the_head_of_truth(client, space_id) -> None:
 async def test_relations_endpoint_both_directions(client, space_id) -> None:
     oldest, middle, newest = await _chain_of_three(client, space_id)
 
+    # Filtered by type. Consolidation runs on every write now, so a memory
+    # accumulates edges the test did not create -- asserting exclusivity
+    # would be asserting that the system does nothing on its own.
     outgoing = (
         await client.get(
             f"/v1/spaces/{space_id}/memories/{newest}/relations",
-            params={"direction": "out"},
+            params={"direction": "out", "type": "supersedes"},
         )
     ).json()["items"]
     assert [e["target_id"] for e in outgoing] == [middle]
@@ -659,7 +662,7 @@ async def test_relations_endpoint_both_directions(client, space_id) -> None:
     incoming = (
         await client.get(
             f"/v1/spaces/{space_id}/memories/{oldest}/relations",
-            params={"direction": "in"},
+            params={"direction": "in", "type": "supersedes"},
         )
     ).json()["items"]
     assert [e["source_id"] for e in incoming] == [middle]
@@ -724,10 +727,12 @@ async def test_relation_creation_is_idempotent_over_http(client, space_id) -> No
         json={"target_id": oldest, "relation": "supersedes"},
     )
     assert repeat.status_code == 201
+    # Narrowed to the edge under test: consolidation adds its own on every
+    # write, so counting all outgoing edges would count the system working.
     edges = (
         await client.get(
             f"/v1/spaces/{space_id}/memories/{middle}/relations",
-            params={"direction": "out"},
+            params={"direction": "out", "type": "supersedes"},
         )
     ).json()["items"]
     assert len(edges) == 1

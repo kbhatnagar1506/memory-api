@@ -45,6 +45,7 @@ from .domain.consolidation import (
     unexplained_pairs,
 )
 from .domain.embeddings.base import EmbeddingProvider
+from .domain.embeddings.context import build_header, for_embedding
 from .domain.models import (
     Chunk,
     Memory,
@@ -250,6 +251,30 @@ class MemoryService:
             hoods.append(Neighbourhood(anchor=anchor, before=before, after=after))
         return assemble(hoods, budget_chars=self.settings.answer_budget_chars)
 
+    @staticmethod
+    def _grouping(memory: Memory) -> tuple[str, str] | None:
+        """What "the same conversation" means for this memory.
+
+        Ordered by how specific each key is, and the order is load-bearing.
+        `source` is LAST and is a fallback, because callers use it for
+        coarse labels: the benchmark harness sets `source=document.speaker`,
+        so grouping on it would treat every turn the user ever spoke as one
+        conversation and hydrate an anchor with unrelated turns from months
+        away. A neighbourhood has to be the unit the caller actually wrote.
+
+        None means no grouping is known, and the memory travels alone --
+        which is the previous behaviour, and the right answer when we cannot
+        tell what it belongs with.
+        """
+        meta = memory.metadata or {}
+        for key in ("session_id", "conversation_id", "doc_id", "extracted_from"):
+            value = meta.get(key)
+            if isinstance(value, str) and value:
+                return (key, value)
+        if memory.source:
+            return ("source", memory.source)
+        return None
+
     async def _surrounding(
         self,
         org_id: str,
@@ -257,18 +282,20 @@ class MemoryService:
         memory: Memory,
         width: int,
     ) -> tuple[tuple[SourceDoc, ...], tuple[SourceDoc, ...]]:
-        """The turns immediately before and after `memory` in its own source.
-
-        `source` is the caller's grouping -- a conversation, a thread, a
-        document -- so this reassembles the unit they wrote and never invents
-        one. No source means no neighbours.
-        """
-        if not memory.source:
+        """The turns immediately before and after `memory` in its own unit."""
+        group = self._grouping(memory)
+        if group is None:
             return (), ()
+        key, value = group
+        filters = (
+            MemoryFilter(source=value)
+            if key == "source"
+            else MemoryFilter(metadata=((key, value),))
+        )
         page = await self.store.list_memories(
             org_id,
             space_id,
-            filters=MemoryFilter(source=memory.source),
+            filters=filters,
             # Enough either side to find the anchor's position without
             # paging a long conversation into memory.
             limit=max(width * 8, 32),
@@ -498,8 +525,24 @@ class MemoryService:
         if not pieces:
             raise ValidationError("content produced no chunks", field="content")
 
+        # Embedded WITH a context header, stored WITHOUT one. The header
+        # gives an isolated chunk the date, subject and speaker its own text
+        # never states; the persisted chunk stays byte-identical to what the
+        # caller wrote, so search results, quotes and grounding are unchanged.
+        header = (
+            build_header(
+                occurred_at=memory.occurred_at,
+                source=source,
+                tags=tuple(tags),
+                metadata=metadata or {},
+            )
+            if self.settings.contextual_embedding
+            else ""
+        )
         try:
-            result = await self.embedder.embed([p.text for p in pieces])
+            result = await self.embedder.embed(
+                [for_embedding(p.text, header) for p in pieces]
+            )
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(pieces))
         except Exception:
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()
@@ -1003,10 +1046,18 @@ class MemoryService:
         return edge
 
     async def list_relations(
-        self, org_id: str, space_id: str, memory_id: str, *, direction: str = "out"
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        direction: str = "out",
+        type: RelationType | None = None,
     ) -> list[RelationEdge]:
         await self.get_memory(org_id, space_id, memory_id)
-        return await self.store.list_relations(org_id, space_id, memory_id, direction=direction)
+        return await self.store.list_relations(
+            org_id, space_id, memory_id, direction=direction, type=type
+        )
 
     async def get_lineage(
         self, org_id: str, space_id: str, memory_id: str

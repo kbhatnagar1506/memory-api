@@ -1,0 +1,388 @@
+{
+ "packs": [
+  {
+   "persona": "Colleen, 56, a med-surg nurse at St. Luke's hospital. Married to Marcus; daughter Claire lives in Portland; sister Ruth in Albuquerque; grandkids Theo and Ivy visit most weekends. Keeps a vegetable garden, sings in a choir, knits (until her thumb objects), and will not drive after dark.",
+   "sessions": [
+    {
+     "id": "a01",
+     "week": 0,
+     "text": "Third night shift in a row and I'm running on fumes, but that night differential is fattening the Disney-with-the-grandkids fund, so I keep signing up for them. Grabbed my usual double-shot latte at Rosie's cart on the way in \u2014 still broad daylight at seven, the one mercy of a summer night shift \u2014 and the girl there starts pulling it when she sees my car. Census was brutal; two admits after midnight."
+    },
+    {
+     "id": "a02",
+     "week": 1,
+     "text": "Spent most of Sunday on my knees in the in-ground tomato rows pulling bindweed, and stood up like a rusty gate. Started knitting mittens for Theo in that green he likes \u2014 should have them done before the cold snap if the yarn holds out. Marcus grilled corn and we ate on the porch."
+    },
+    {
+     "id": "a03",
+     "week": 3,
+     "text": "Booked my flight to see Ruth in Albuquerque for October. Paid the extra nine dollars for the aisle \u2014 this knee is not climbing over two strangers to reach the bathroom, not ever again. Also emailed the hotel to ask for a room at the end of the hall, away from the elevator and the ice machine; last conference I heard doors slamming until two in the morning."
+    },
+    {
+     "id": "a04",
+     "week": 4,
+     "text": "Theo's allergy panel came back and it's peanuts, a serious one, so I cleared every jar and granola bar out of my pantry \u2014 this house is a peanut-free zone now and staying that way. At lunch Dana talked me into the medium verde enchiladas and I was gulping milk after two bites; the waitress kindly swapped it for my usual mild plate. Dana is never letting me live it down."
+    },
+    {
+     "id": "a05",
+     "week": 5,
+     "text": "Choir moved rehearsal to 8 pm across town and I told them I'm out \u2014 I don't drive after dark anymore, the oncoming headlights halo so badly I can't see the lane lines. Signed up for Tuesday water aerobics instead; the pool is the only exercise that doesn't leave my knees aching for two days. Fair trade, I think."
+    },
+    {
+     "id": "a06",
+     "week": 7,
+     "text": "Twelve-hour shift and my feet were screaming by hour nine, so I finally replaced my worn-out clogs \u2014 nothing but a wide toe box and real arch support goes on these feet from now on, whatever it costs. Finished another audiobook on the drive home this morning; the narrator does a different voice for every sister and I sat in the driveway just to hear the chapter end."
+    },
+    {
+     "id": "a07",
+     "week": 8,
+     "text": "The grandkids stayed over Saturday and we made zucchini bread with the monsters taking over the garden \u2014 flour everywhere, worth it. Ivy lost her first tooth right at the breakfast table and Theo demanded equal payment for wiggling his. Rain all Sunday, so we did puzzles."
+    },
+    {
+     "id": "a08",
+     "week": 10,
+     "text": "Took the train down to Portland to see Claire \u2014 third trip this year, and I watch the river the whole way instead of white-knuckling I-5. She'd bought me a fancy lotion gift set for my birthday and I had to return it; anything perfumed sets off my migraines within the hour, and the ward's scent-free anyway. We laughed about it over pie."
+    },
+    {
+     "id": "a09",
+     "week": 12,
+     "text": "Made it official \u2014 I'm off nights and on the day shift rotation starting next month, and after one trial week of days I'm sleeping like an actual person for the first time in years. Also marched the weed-and-feed right back to the register; nothing synthetic goes on beds where the grandkids graze cherry tomatoes like candy. Soap spray and ladybugs will have to earn their keep."
+    },
+    {
+     "id": "a10",
+     "week": 14,
+     "text": "Cardiology follow-up went fine, but with the blood pressure numbers Dr. Osei said the caffeine has to go, so it's decaf for me from here on out \u2014 and honestly, I don't miss the 3 pm jitters. Stopped by Hartley's Nursery for fall lettuce starts even though the big-box flat was half the price; Ed remembered my soil trouble and threw in an extra six-pack."
+    },
+    {
+     "id": "a11",
+     "week": 16,
+     "text": "Marcus finished the two cedar raised beds and I planted the garlic standing nearly upright \u2014 my back forgave me by dinner, and I am never planting at ground level again. The old in-ground rows are becoming a clover patch for the bees."
+    },
+    {
+     "id": "a12",
+     "week": 18,
+     "text": "Tried to start a winter hat and my thumb flared so badly I had to quit knitting twenty minutes in \u2014 the fine needles just aren't happening with this arthritis. Switched to a fat crochet hook on Dana's advice and did three granny squares without a twinge, so crochet it is from now on. Theo says the squares look like waffles."
+    },
+    {
+     "id": "a13",
+     "week": 20,
+     "text": "Twenty-nine years at St. Luke's this week and the unit surprised me with a card and a lemon cake. Brought home a basket of the last tomatoes and made sauce while the grandkids raced snails on the patio. A good, ordinary week."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm booking my October flight to Albuquerque \u2014 which seat should I pick?",
+     "spec": "aisle + knee|knees",
+     "evidence_quote": "this knee is not climbing over two strangers"
+    },
+    {
+     "kind": "explicit",
+     "question": "My work clogs are shot again. What features should I insist on in the replacement pair?",
+     "spec": "wide|roomy; arch|support|supportive + toe|feet",
+     "evidence_quote": "a wide toe box and real arch support"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm booking a hotel for a nursing conference \u2014 anything I should request for the room?",
+     "spec": "away|quiet|end|far; elevator|elevators|ice",
+     "evidence_quote": "away from the elevator and the ice machine"
+    },
+    {
+     "kind": "explicit",
+     "question": "I want to add one more exercise class to my week \u2014 what kind should I look for?",
+     "spec": "water|pool|swim|swimming|aqua|aquatic + knee|knees",
+     "evidence_quote": "the only exercise that doesn't leave my knees aching"
+    },
+    {
+     "kind": "implicit",
+     "question": "I'm bringing salsa to the unit potluck and want a jar for myself too \u2014 which heat level should I grab?",
+     "spec": "mild + medium|verde",
+     "evidence_quote": "swapped it for my usual mild plate"
+    },
+    {
+     "kind": "implicit",
+     "question": "The big-box garden center has spring seedling flats for half what I paid last fall \u2014 where should I buy my starts?",
+     "spec": "hartley|hartleys|local|nursery|independent + price",
+     "evidence_quote": "even though the big-box flat was half the price"
+    },
+    {
+     "kind": "implicit",
+     "question": "My book club's next pick just came out \u2014 which format should I get it in for my commute?",
+     "spec": "audiobook|audio|listen|listening|audible",
+     "evidence_quote": "another audiobook on the drive home this morning"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need to get down to Portland next month to help Claire move \u2014 how should I travel?",
+     "spec": "train|amtrak|rail + drive|driving|fly|flying",
+     "evidence_quote": "third trip this year, and I watch the river"
+    },
+    {
+     "kind": "negative",
+     "question": "I'm finally signing up for a weekly pottery class \u2014 what time slot should I ask the studio for?",
+     "spec": "saturday|morning|daytime|afternoon|midday|noon|10|11 + night|evening|dark",
+     "evidence_quote": "I don't drive after dark anymore"
+    },
+    {
+     "kind": "negative",
+     "question": "The grandkids are sleeping over Friday and I promised to bake cookies \u2014 anything I should steer clear of when I pick a recipe?",
+     "spec": "peanut|peanuts|nut|nuts + allergy|allergic|allergies|theo",
+     "evidence_quote": "this house is a peanut-free zone now"
+    },
+    {
+     "kind": "negative",
+     "question": "Aphids are all over my kale \u2014 recommend a treatment.",
+     "spec": "soap|neem|ladybug|ladybugs|organic|natural|insecticidal|beneficial + synthetic|chemical|chemicals|pesticide|pesticides",
+     "evidence_quote": "nothing synthetic goes on beds where the grandkids graze"
+    },
+    {
+     "kind": "negative",
+     "question": "My hands are wrecked from all the washing at work \u2014 recommend a hand cream for me.",
+     "spec": "unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+     "evidence_quote": "anything perfumed sets off my migraines within the hour"
+    },
+    {
+     "kind": "updated",
+     "question": "Grabbing a drink at the coffee cart before my shift \u2014 what should I order?",
+     "spec": "decaf|decaffeinated|herbal + double|caffeine|caffeinated",
+     "evidence_quote": "it's decaf for me from here on out"
+    },
+    {
+     "kind": "updated",
+     "question": "The scheduler posted extra shifts for next month and the graveyard ones pay a premium \u2014 which should I pick up?",
+     "spec": "day|days|daytime + night|nights|graveyard|differential",
+     "evidence_quote": "off nights and on the day shift rotation"
+    },
+    {
+     "kind": "updated",
+     "question": "Where should I plant the spring lettuce this year?",
+     "spec": "raised|bed|beds|cedar + ground|rows",
+     "evidence_quote": "I am never planting at ground level again"
+    },
+    {
+     "kind": "updated",
+     "question": "I want to make a blanket for Claire's new baby \u2014 which of my yarn crafts should I use?",
+     "spec": "crochet|crocheted|crocheting + knit|knitting|thumb|arthritis",
+     "evidence_quote": "so crochet it is from now on"
+    },
+    {
+     "kind": "composed",
+     "question": "Book me the return flight home from Ruth's \u2014 what seat should I pick, and roughly what time of day should it land?",
+     "spec": "aisle; morning|midday|afternoon|daylight|daytime|noon|sunset|dusk + night|dark|evening",
+     "evidence_quote": "Paid the extra nine dollars for the aisle"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan my overnight trip to Portland \u2014 how should I get there, and what should I ask for at the hotel?",
+     "spec": "train|amtrak|rail; quiet|away|elevator|ice|end + drive|driving",
+     "evidence_quote": "the whole way instead of white-knuckling I-5"
+    },
+    {
+     "kind": "composed",
+     "question": "My sister wants gift ideas for me \u2014 what should she look for in work shoes and in a hand cream?",
+     "spec": "wide|arch|support|supportive; unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+     "evidence_quote": "my feet were screaming by hour nine"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan Saturday breakfast with the grandkids \u2014 anything I need to watch for with the pancake mix, and what should go in my mug?",
+     "spec": "peanut|peanuts|nut|nuts|allergy|allergies|allergen|allergens; decaf|decaffeinated|herbal + caffeine|caffeinated",
+     "evidence_quote": "cleared every jar and granola bar out of my pantry"
+    }
+   ]
+  },
+  {
+   "persona": "B",
+   "sessions": [
+    {
+     "id": "b01",
+     "week": 0,
+     "text": "Finished the appliance-manual job at half past one, the flat finally quiet. Rode the signed contract over to the client's office myself \u2014 twenty minutes by bike beats forty in a tram, and I got a hill in. Turin is showing off this week."
+    },
+    {
+     "id": "b02",
+     "week": 1,
+     "text": "Took the rush job on the medical brochure, so the whole weekend is gone, but the 1.5x fee will cover the new wheelset. Third double espresso of the night and the translation memory is finally behaving. Sent the draft at 3 a.m. and slept like a stone."
+    },
+    {
+     "id": "b03",
+     "week": 3,
+     "text": "Frankfurt Book Fair week. Swapped my window seat at the gate for an aisle \u2014 two hours of knee cramp otherwise, these legs were not built for economy. Booked a bunk in the same hostel dorm as last year; half my current clients started out as bunkmates there."
+    },
+    {
+     "id": "b04",
+     "week": 4,
+     "text": "Sunday loop on the fresh tarmac up to Superga, the 28mm slicks humming the whole climb. Rewarded myself with jungle curry at the Thai place and told them to make it properly hot \u2014 mild curries put me to sleep. Back at the desk by ten for the software strings."
+    },
+    {
+     "id": "b05",
+     "week": 6,
+     "text": "Client lunch went sideways: the risotto arrived under a gorgonzola sauce nobody had mentioned \u2014 one splash of cream and my afternoon is ruined \u2014 so I ate bread and renegotiated the deadline. Tried the new caf\u00e9 on Via Po for the afternoon edit, but the milk steamer and the pop playlist chased me out within the hour."
+    },
+    {
+     "id": "b06",
+     "week": 8,
+     "text": "My sister's wedding down in Bari. I danced badly, translated nothing for four days, and fielded the aunts' questions about when I will get a real job. Worth every minute."
+    },
+    {
+     "id": "b07",
+     "week": 9,
+     "text": "An agency wrote offering a steady pipeline of post-editing machine output; I told them what I always tell them \u2014 I translate, I don't launder algorithms. Passed the Italian-to-English website contract along to Sarah as well: I only work into Italian, because my English reads like a train timetable."
+    },
+    {
+     "id": "b08",
+     "week": 11,
+     "text": "Took the train to Lyon for the client workshop \u2014 five hours with a table and my laptop beats an airport eating the whole day. My favourite merino jersey tore at the pocket, so I spent the evening darning it instead of ordering a new one. The client signed for another year, which softened the ride home."
+    },
+    {
+     "id": "b09",
+     "week": 13,
+     "text": "Turned down a Saturday delivery for the first time in my career \u2014 after June's burnout scare, weekends are off the table for good, whatever the fee. Found a silent reading room at the Biblioteca Civica and got four uninterrupted hours, more than the whole caf\u00e9 week combined."
+    },
+    {
+     "id": "b10",
+     "week": 15,
+     "text": "Two close passes from vans on the Superga descent settled it: I've moved the Sunday ride onto the gravel tracks through La Mandria, and I'm not going back. Printed all 300 pages of the manuscript for the final pass \u2014 I catch twice as many errors on paper as I ever do on a screen."
+    },
+    {
+     "id": "b11",
+     "week": 17,
+     "text": "The cardiologist was polite about the palpitations, but the evening espressos are finished \u2014 the caf\u00e9 now knows me as the decaf guy and I've made my peace with it. Cycled the twelve kilometres to the appointment and back; the receptionist thought I was joking about the helmet hair."
+    },
+    {
+     "id": "b12",
+     "week": 19,
+     "text": "Booked a small private room for the Lisbon conference \u2014 after the snoring symphony in the Vienna dorm last spring, I'm done with hostel bunks for good. Also dropped the Milan agency after they moved everyone to 60-day payment terms \u2014 thirty days or I walk, and they know it."
+    },
+    {
+     "id": "b13",
+     "week": 20,
+     "text": "Rebuilt the rear wheel at the kitchen table with new spokes rather than buying the replacement the shop kept pushing. Deadline week for the novel, and my best paragraphs still arrive between midnight and two, so I've stopped pretending to be a morning person. The wheel is true and so, mostly, is the prose."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm booking my flight to Dublin for the poetry festival and the seat map just opened \u2014 which seat should I pick?",
+     "spec": "aisle|exit|legroom + window|knee|knees",
+     "evidence_quote": "my window seat at the gate for an aisle"
+    },
+    {
+     "kind": "explicit",
+     "question": "The final proofread of a 200-page annual report is due Friday \u2014 should I do the pass on my tablet or some other way?",
+     "spec": "paper|print|printed|printout|printing|hardcopy|printer + screen|screens|tablet",
+     "evidence_quote": "I catch twice as many errors on paper"
+    },
+    {
+     "kind": "explicit",
+     "question": "I need to get from Turin to Paris for a client workshop \u2014 roughly five and a half hours overland, or a short flight. Which should I book?",
+     "spec": "train|rail|railway|tgv + airport|flight|plane|flying",
+     "evidence_quote": "five hours with a table and my laptop"
+    },
+    {
+     "kind": "explicit",
+     "question": "At the Thai place tonight \u2014 which curry should I go for, and anything I should tell the kitchen when I order?",
+     "spec": "jungle|spicy|spicier|spiciest|hot|hotter|hottest + mild",
+     "evidence_quote": "mild curries put me to sleep"
+    },
+    {
+     "kind": "implicit",
+     "question": "I have a meeting across town tomorrow, about four kilometres away. What's the best way to get there?",
+     "spec": "bike|bicycle|cycle|cycling + tram",
+     "evidence_quote": "twenty minutes by bike beats forty in a tram"
+    },
+    {
+     "kind": "implicit",
+     "question": "Two coworking spaces near me offer day passes: an open loft with a caf\u00e9 bar and nonstop playlists, or a bare floor above it where nobody talks. Which should I take for my editing sprint?",
+     "spec": "silent|quiet|quieter|upstairs|second|latter|above|bare + lively|loft",
+     "evidence_quote": "four uninterrupted hours, more than the whole caf\u00e9 week"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need to block three hours of deep focus for the contract translation \u2014 what time of day should I schedule it?",
+     "spec": "evening|night|nights|late|midnight|pm + morning",
+     "evidence_quote": "my best paragraphs still arrive between midnight and two"
+    },
+    {
+     "kind": "implicit",
+     "question": "My desk chair's gas lift is sagging to the floor. What should I do about it?",
+     "spec": "repair|repairing|fix|fixing|mend|mending|cartridge|cylinder|swap|swapping|diy + replace|replacement",
+     "evidence_quote": "spent the evening darning it instead of ordering a new one"
+    },
+    {
+     "kind": "negative",
+     "question": "Recommend a dessert for me to order at the Italian restaurant tonight.",
+     "spec": "sorbet|sorbetto|granita|fruit|dairy|lactose + gelato",
+     "evidence_quote": "one splash of cream and my afternoon is ruined"
+    },
+    {
+     "kind": "negative",
+     "question": "An agency is offering me a steady stream of machine-translation post-editing at a fair hourly rate. Should I take it on?",
+     "spec": "decline|declining|refuse|refusing|turn|turning|pass|passing|avoid|skip|reject|walk + launder",
+     "evidence_quote": "I translate, I don't launder algorithms"
+    },
+    {
+     "kind": "negative",
+     "question": "A startup wants their app localized from Italian into English and reached out to me directly. Should I take the job or hand it off?",
+     "spec": "refer|referral|referring|hand|handing|colleague|native|decline|declining|pass|passing|outsource|sarah + timetable",
+     "evidence_quote": "my English reads like a train timetable"
+    },
+    {
+     "kind": "negative",
+     "question": "A big agency offers me strong volume, but their standard payment terms run two months after invoice. Should I sign their vendor agreement?",
+     "spec": "decline|declining|refuse|refusing|negotiate|negotiating|renegotiate|counter|thirty|30|walk|turn|turning|pass + 60",
+     "evidence_quote": "thirty days or I walk"
+    },
+    {
+     "kind": "updated",
+     "question": "It's nine in the evening and I'm settling in at the caf\u00e9 for a work session \u2014 what should I order to drink?",
+     "spec": "decaf|decaffeinated|herbal|chamomile|barley|orzo|tea|tisane + espresso",
+     "evidence_quote": "the caf\u00e9 now knows me as the decaf guy"
+    },
+    {
+     "kind": "updated",
+     "question": "A regular client just asked for a rush job delivered by Sunday evening, at a premium rate. Should I accept?",
+     "spec": "decline|declining|turn|turning|pass|passing|refuse|refusing|counter|monday|weekday + weekend",
+     "evidence_quote": "weekends are off the table for good"
+    },
+    {
+     "kind": "updated",
+     "question": "Plan my Sunday ride \u2014 the fast road loop up to Superga, or something else?",
+     "spec": "gravel|mandria|trail|trails|unpaved|dirt|forest + tarmac",
+     "evidence_quote": "moved the Sunday ride onto the gravel tracks"
+    },
+    {
+     "kind": "updated",
+     "question": "Booking my accommodation for the Lisbon conference now \u2014 the sociable dorm bunks everyone from the translators' chat is taking, or a different option?",
+     "spec": "private|hotel|apartment|guesthouse|airbnb|pension|single|own + hostel",
+     "evidence_quote": "done with hostel bunks for good"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan my trip to the Zurich localization meetup \u2014 it's a short hop by air or about four hours overland \u2014 including how I should get around the city during the three days there.",
+     "spec": "train|rail|railway; bike|bicycle|cycle|cycling|velo + airport|flight|plane",
+     "evidence_quote": "beats an airport eating the whole day"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm at the caf\u00e9 for a late editing session and fancy something warm and milky \u2014 what exactly should I order?",
+     "spec": "decaf|decaffeinated|barley|orzo|chamomile|herbal|tea|chocolate|cocoa; oat|soy|almond|coconut|plant|dairy|lactose|rice + espresso",
+     "evidence_quote": "The cardiologist was polite about the palpitations"
+    },
+    {
+     "kind": "composed",
+     "question": "Booking my flight to the Helsinki conference: one departure leaves at dawn, the other just after lunch \u2014 which should I book, and which seat should I pick?",
+     "spec": "aisle; afternoon|later|latter|second|lunch|midday|noon + dawn",
+     "evidence_quote": "two hours of knee cramp otherwise"
+    },
+    {
+     "kind": "composed",
+     "question": "Recommend what kind of place I should book for a three-night retreat to finish the novel translation.",
+     "spec": "private|hotel|apartment|guesthouse|cottage|cabin|airbnb|agriturismo; quiet|quieter|silent|calm|peaceful|tranquil|secluded + hostel",
+     "evidence_quote": "after the snoring symphony in the Vienna dorm"
+    }
+   ]
+  }
+ ]
+}

@@ -19,3 +19,4 @@ scripts/.demo_corpus.json
 bench/lab/format_results.json
 bench/lab/preference_results.json
 bench/lab/postfix_answers.json
+bench/lab/preference_v2_results.json

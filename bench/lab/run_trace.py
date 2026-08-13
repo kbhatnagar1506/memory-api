@@ -62,7 +62,14 @@ CASES: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "How much does Cloud SQL cost per month?": ("410", ("410 dollars",)),
     "Are we moving off Redis?": ("no|not", ("NOT moving off Redis",)),
-    "What did I do in March?": ("migrat|migration", ("Migrated off Heroku Postgres",)),
+    # Whole words, not stems: the scorer matches on word boundaries (so "18"
+    # cannot match inside "180"), which means "migrat" can never match
+    # "migrated". Authoring a stem here was the bug -- caught when the model's
+    # correct post-fix answer ("In March, I migrated off...") scored wrong.
+    "What did I do in March?": (
+        "migrated|migration|migrating",
+        ("Migrated off Heroku Postgres",),
+    ),
     "What is invoice INV-4472 for?": ("datadog + 890", ("INV-4472",)),
 }
 

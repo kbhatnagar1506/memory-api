@@ -122,7 +122,19 @@ def format_history(turns: Sequence[Turn]) -> str:
     return f"Conversation so far:\n{body}\n\n"
 
 
-_CITATION = re.compile(r"\[(\d{1,2})\]")
+#: Three digits, because a coverage question can now return more than 99.
+#:
+#: This was `\d{1,2}`, which was sufficient while the coverage window was capped
+#: at 32 by a hydration-pool bug. Fixing that cap raised the ceiling to
+#: `_MAX_COVERAGE_LIMIT` (200) and made memories 100 and beyond UNCITABLE: the
+#: model would write `[137]`, the regex would not match, and the claim would be
+#: reported as uncited -- indistinguishable from a claim the memories did not
+#: support, which is the exact signal `cited` exists to carry.
+#:
+#: Bounded at three rather than unbounded: `\d+` would match a year in `[2026]`
+#: or a bracketed figure in the memory text quoted back, and out-of-range
+#: indices are dropped below anyway.
+_CITATION = re.compile(r"\[(\d{1,3})\]")
 
 
 def parse_citations(reply: str, hits: Sequence[ScoredMemory]) -> list[str]:

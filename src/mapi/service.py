@@ -446,13 +446,30 @@ class MemoryService:
         ]
         memory = memory.model_copy(update={"chunks": chunks})
 
+        # -- neighbours: one lookup, four consumers ----------------------------
+        # Deduplication, supersession, contradiction and association all ask
+        # the same question. This used to be TWO scans -- a 512-row
+        # `sample_embeddings` for dedupe and a separate one for the rest --
+        # and the dedupe scan carried no text, which is why it could only
+        # compare vectors.
+        pairs: list[tuple[Memory, list[float]]] = []
+        if chunks:
+            pairs = await self.store.neighbours(
+                org_id,
+                space_id,
+                chunks[0].embedding or [],
+                limit=self.settings.consolidation_candidates,
+                exclude_id=memory.id,
+            )
+
         # -- near duplicate ----------------------------------------------------
         if dedupe and chunks:
-            candidates = await self.store.sample_embeddings(org_id, space_id, limit=512)
             verdict = detect_near_duplicate(
                 chunks[0].embedding or [],
-                candidates,
+                [(m.id, v) for m, v in pairs],
                 threshold=self.settings.dedupe_threshold,
+                text=cleaned,
+                texts={m.id: m.content for m, _ in pairs},
             )
             if verdict.is_duplicate and verdict.existing_id:
                 existing = await self.store.get_memory(org_id, space_id, verdict.existing_id)
@@ -492,13 +509,6 @@ class MemoryService:
             # in a space with more than 256 memories, anything older simply
             # stopped being a supersession or contradiction candidate, so a
             # fact stated last year could never be revised.
-            pairs = await self.store.neighbours(
-                org_id,
-                space_id,
-                chunks[0].embedding or [],
-                limit=self.settings.consolidation_candidates,
-                exclude_id=memory.id,
-            )
             all_proposals = (
                 propose_supersessions(memory, chunks[0].embedding or [], pairs)
                 if auto_supersede
@@ -572,6 +582,20 @@ class MemoryService:
                 conflict_proposals = await self._confirm_conflicts(
                     memory, conflict_shortlist
                 )
+                # A pair cannot be BOTH revised and disputed. Supersession
+                # says time orders them; contradiction says nothing does, and
+                # they mean opposite things to a reader -- one hides the old
+                # memory, the other insists both stay visible.
+                #
+                # Observed live: "I live in Berlin" came back as superseded by
+                # AND contradicting "I moved to Madrid", so the graph asserted
+                # a replacement and a standoff about the same two rows.
+                # Supersession wins: it is the more specific claim, and it is
+                # the one that already acted on the data.
+                revised = {p.old_id for p in proposals}
+                conflict_proposals = [
+                    c for c in conflict_proposals if c.right_id not in revised
+                ]
             # The memory must exist before an edge can point at it: the edge
             # has a foreign key to both endpoints.
             memory = await self.store.upsert_memory(memory)

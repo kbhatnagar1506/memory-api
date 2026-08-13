@@ -20,7 +20,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from ._models import Memory, MemoryContext, SearchResult, Space
+from ._models import Memory, MemoryContext, SearchResult, Space, WriteResult
 
 T = TypeVar("T")
 
@@ -40,11 +40,15 @@ def _memory_body(
     metadata: dict[str, Any] | None = None,
     source: str = "",
     occurred_at: datetime | None = None,
-    dedupe: bool = True,
-    extract: bool | None = None,
-    auto_supersede: bool = False,
-    detect_conflicts: bool = False,
 ) -> dict[str, Any]:
+    """The write body. There are no behaviour flags, by design.
+
+    Deduplication, extraction, supersession and contradiction detection all
+    run on every write. They used to be per-call switches defaulting to off,
+    which meant the graph was empty for anyone who did not know to ask -- and
+    the server now rejects those fields outright, so sending them is a 422
+    rather than a no-op.
+    """
     body: dict[str, Any] = {"content": content}
     if summary:
         body["summary"] = summary
@@ -56,21 +60,6 @@ def _memory_body(
         body["source"] = source
     if occurred_at is not None:
         body["occurred_at"] = occurred_at.isoformat()
-    if not dedupe:
-        body["dedupe"] = False
-    # `extract` is tri-state, unlike the two flags below: the server has an
-    # account-level default, so None means "whatever the account says" and
-    # False is a real override that has to travel. Sending it only when truthy
-    # would make `extract=False` silently do nothing on an account that has
-    # extraction switched on.
-    if extract is not None:
-        body["extract"] = extract
-    for flag, value in (
-        ("auto_supersede", auto_supersede),
-        ("detect_conflicts", detect_conflicts),
-    ):
-        if value:
-            body[flag] = True
     return body
 
 
@@ -124,26 +113,18 @@ class Memories(_Resource):
         metadata: dict[str, Any] | None = None,
         source: str = "",
         occurred_at: datetime | None = None,
-        dedupe: bool = True,
-        extract: bool | None = None,
-        auto_supersede: bool = False,
-        detect_conflicts: bool = False,
-    ) -> Memory:
-        """Store one memory.
+    ) -> WriteResult:
+        """Store one memory, and report what storing it did.
 
         `occurred_at` is when it HAPPENED, not when you are writing it. The
         difference matters for anything asking what order things came in, and
         defaulting to now makes a backfill look like it all happened today.
 
-        The three consolidation flags are what separate this from a vector
-        store, and all three are per-write because all three cost something:
-
-        * `extract` decomposes the text into atomic claims stored beside the
-          original. None means the account default; True and False override it.
-        * `auto_supersede` lets this write retire an older memory it replaces.
-        * `detect_conflicts` records a CONTRADICTS edge when this disagrees
-          with something already stored. Neither side is hidden — an agent
-          told two facts disagree can ask; one handed a winner cannot.
+        Consolidation is automatic and has no switches. The RESULT is what
+        you read it from: `superseded` names memories this write retired,
+        `contradicts` names ones it disagrees with (nothing is hidden --
+        either side may be the true one), and `created` is False when this
+        collapsed into a row that was already there.
         """
         data = self._request(
             "POST",
@@ -155,13 +136,9 @@ class Memories(_Resource):
                 metadata=metadata,
                 source=source,
                 occurred_at=occurred_at,
-                dedupe=dedupe,
-                extract=extract,
-                auto_supersede=auto_supersede,
-                detect_conflicts=detect_conflicts,
             ),
         )
-        return Memory.parse((data or {}).get("memory", data) or {})
+        return WriteResult.parse(data or {})
 
     def add_many(
         self, items: builtins.list[dict[str, Any]], *, space: str
@@ -393,11 +370,8 @@ class AsyncMemories:
         metadata: dict[str, Any] | None = None,
         source: str = "",
         occurred_at: datetime | None = None,
-        dedupe: bool = True,
-        extract: bool | None = None,
-        auto_supersede: bool = False,
-        detect_conflicts: bool = False,
-    ) -> Memory:
+    ) -> WriteResult:
+        """Store one memory, and report what storing it did. See `Memories.add`."""
         data = await self._request(
             "POST",
             f"/v1/spaces/{await self._space_id(space)}/memories",
@@ -408,13 +382,9 @@ class AsyncMemories:
                 metadata=metadata,
                 source=source,
                 occurred_at=occurred_at,
-                dedupe=dedupe,
-                extract=extract,
-                auto_supersede=auto_supersede,
-                detect_conflicts=detect_conflicts,
             ),
         )
-        return Memory.parse((data or {}).get("memory", data) or {})
+        return WriteResult.parse(data or {})
 
     async def add_many(
         self, items: builtins.list[dict[str, Any]], *, space: str

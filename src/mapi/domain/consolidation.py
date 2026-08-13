@@ -25,7 +25,7 @@ per-request and per-space.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -98,13 +98,53 @@ def detect_exact_duplicate(content: str, existing: Sequence[Memory]) -> Duplicat
     return DuplicateVerdict(DuplicateKind.NONE)
 
 
+#: Tokens that distinguish one record from another: numbers, identifiers,
+#: and anything carrying a digit. Two texts differing in these are different
+#: facts however close their embeddings sit.
+_DISTINCTIVE = re.compile(r"\b\w*\d[\w.-]*\b")
+
+
+def differs_materially(left: str, right: str) -> bool:
+    """Whether two texts state different FACTS, not merely different words.
+
+    Near-duplicate detection exists to collapse restatements, and it decides
+    from cosine similarity alone. That is safe for prose and destructive for
+    records, because an embedding barely moves when one digit changes:
+
+        "component number 2: service-2"
+        "component number 3: service-3"      cosine 0.980
+
+    Measured on the live service, eight distinct facts written in that shape
+    became four -- half the corpus silently discarded at write time, with the
+    caller told "duplicate". Any corpus of invoices, SKUs, log lines, ticket
+    numbers or contact records is mostly pairs like that.
+
+    So a duplicate must also agree on the tokens that carry identity. This is
+    deliberately a NARROW test -- numbers and identifiers only -- because its
+    job is to veto a merge, and a veto that fires too often merely keeps two
+    copies of a restatement, which costs a row. The failure it prevents costs
+    a fact.
+    """
+    return set(_DISTINCTIVE.findall(left.lower())) != set(
+        _DISTINCTIVE.findall(right.lower())
+    )
+
+
 def detect_near_duplicate(
     embedding: Vector,
     candidates: Sequence[tuple[str, Vector]],
     *,
     threshold: float = 0.97,
+    text: str = "",
+    texts: Mapping[str, str] | None = None,
 ) -> DuplicateVerdict:
-    """Highest-similarity candidate at or above `threshold`, if any."""
+    """Highest-similarity candidate at or above `threshold`, if any.
+
+    When `text` and `texts` are supplied, a candidate is additionally
+    required not to differ materially -- see `differs_materially` for the
+    half-a-corpus this loses without it. They are optional so the pure
+    similarity behaviour stays available and testable.
+    """
     if not embedding or not candidates:
         return DuplicateVerdict(DuplicateKind.NONE)
     if not 0.0 <= threshold <= 1.0:
@@ -118,6 +158,10 @@ def detect_near_duplicate(
             # model. Skip rather than crash; the caller re-embeds.
             continue
         sim = cosine_similarity(embedding, vector)
+        if texts is not None and text and differs_materially(text, texts.get(memory_id, "")):
+            # Close in embedding space, different in the tokens that carry
+            # identity. Not a duplicate, whatever the cosine says.
+            continue
         if sim > best_sim:
             best_sim, best_id = sim, memory_id
 
@@ -294,6 +338,7 @@ __all__ = [
     "apply_supersession",
     "detect_exact_duplicate",
     "detect_near_duplicate",
+    "differs_materially",
     "merge_duplicate",
     "propose_contradictions",
     "propose_supersessions",

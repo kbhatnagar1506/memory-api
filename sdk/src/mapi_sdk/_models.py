@@ -51,6 +51,64 @@ class Memory:
 
 
 @dataclass(frozen=True, slots=True)
+class WriteResult:
+    """What a write DID, not merely what it stored.
+
+    `memories.add` used to return a bare `Memory`, which threw the whole
+    consolidation outcome away: a caller could not tell that their write had
+    replaced an older fact, been flagged against one, been collapsed into an
+    existing row, or been decomposed into claims. All of that is in the
+    response and none of it reached the client -- so from the SDK the system
+    looked inert, which is exactly the complaint that started this.
+
+    It behaves like a `Memory` for the common case (`.id`, `.content`), so
+    existing code keeps working.
+    """
+
+    memory: Memory
+    #: False when this collapsed into an existing memory.
+    created: bool = True
+    #: Set when this was a duplicate; `duplicate_kind` is "exact" or "near".
+    duplicate_of: str | None = None
+    duplicate_kind: str = "none"
+    similarity: float = 0.0
+    #: Older memories this write replaced. They are hidden from default
+    #: search from now on, and still readable by id.
+    superseded: list[str] = field(default_factory=list)
+    #: Memories this write disagrees with. NOTHING is hidden -- either side
+    #: may be the true one, which is the point of reporting it.
+    contradicts: list[str] = field(default_factory=list)
+    #: Supersessions the system considered and declined. Reported so a
+    #: near-miss is auditable rather than invisible.
+    supersede_declined: list[str] = field(default_factory=list)
+    chunk_count: int = 0
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def id(self) -> str:
+        return self.memory.id
+
+    @property
+    def content(self) -> str:
+        return self.memory.content
+
+    @classmethod
+    def parse(cls, data: dict[str, Any]) -> WriteResult:
+        return cls(
+            memory=Memory.parse(data.get("memory") or data),
+            created=bool(data.get("created", True)),
+            duplicate_of=data.get("duplicate_of"),
+            duplicate_kind=str(data.get("duplicate_kind", "none")),
+            similarity=float(data.get("similarity") or 0.0),
+            superseded=[str(x) for x in (data.get("superseded") or [])],
+            contradicts=[str(x) for x in (data.get("contradicts") or [])],
+            supersede_declined=[str(x) for x in (data.get("supersede_declined") or [])],
+            chunk_count=int(data.get("chunk_count") or 0),
+            raw=data,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class SearchHit:
     """One result. `score` is comparable within a response, not across them."""
 
@@ -170,4 +228,11 @@ class Space:
         )
 
 
-__all__ = ["Memory", "MemoryContext", "SearchHit", "SearchResult", "Space"]
+__all__ = [
+    "Memory",
+    "MemoryContext",
+    "SearchHit",
+    "SearchResult",
+    "Space",
+    "WriteResult",
+]

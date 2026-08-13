@@ -283,3 +283,68 @@ def test_two_signals_score_higher_than_one() -> None:
     )
     assert single and double
     assert double[0].confidence > single[0].confidence
+
+
+# -- near duplicates must not eat distinct records ------------------------
+#
+# Measured on the live service: eight facts of the form "component number N:
+# service-N" were written and four survived. An embedding barely moves when
+# one digit changes -- cosine 0.980 for consecutive components -- so pure
+# similarity called them duplicates and the caller was told so. Any corpus of
+# invoices, SKUs, log lines, ticket numbers or contacts is mostly pairs like
+# that.
+
+
+def test_records_differing_only_in_a_number_are_not_duplicates() -> None:
+    from mapi.domain.consolidation import differs_materially
+
+    assert differs_materially(
+        "component number 2: service-2", "component number 3: service-3"
+    )
+    assert differs_materially("Invoice INV-4471 is paid.", "Invoice INV-4472 is paid.")
+    assert differs_materially("The offsite is on 12 June.", "The offsite is on 19 June.")
+
+
+def test_a_genuine_restatement_is_still_a_duplicate() -> None:
+    from mapi.domain.consolidation import differs_materially
+
+    assert not differs_materially(
+        "I prefer aisle seats on long flights.",
+        "I prefer aisle seats on long flights!",
+    )
+    assert not differs_materially(
+        "The cat sat on the mat.", "the cat sat on the mat"
+    )
+
+
+def test_detect_near_duplicate_vetoes_on_material_difference() -> None:
+    """The vector says duplicate; the digits say otherwise."""
+    from mapi.domain.consolidation import detect_near_duplicate
+
+    close = [0.999, 0.045, 0.0]
+    probe = [1.0, 0.0, 0.0]
+
+    without_text = detect_near_duplicate(probe, [("mem_a", close)], threshold=0.97)
+    assert without_text.is_duplicate, "similarity alone still behaves as before"
+
+    with_text = detect_near_duplicate(
+        probe,
+        [("mem_a", close)],
+        threshold=0.97,
+        text="component number 3: service-3",
+        texts={"mem_a": "component number 2: service-2"},
+    )
+    assert not with_text.is_duplicate, "a distinct record was collapsed"
+
+
+def test_a_true_restatement_still_collapses_with_text_supplied() -> None:
+    from mapi.domain.consolidation import detect_near_duplicate
+
+    verdict = detect_near_duplicate(
+        [1.0, 0.0, 0.0],
+        [("mem_a", [0.999, 0.045, 0.0])],
+        threshold=0.97,
+        text="I prefer aisle seats on long flights.",
+        texts={"mem_a": "I prefer aisle seats on long flights"},
+    )
+    assert verdict.is_duplicate

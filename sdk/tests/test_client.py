@@ -190,11 +190,14 @@ def test_event_time_is_sent_when_given(client: Mapi) -> None:
         "ran a 5K",
         space="ada",
         occurred_at=datetime(2023, 5, 20, tzinfo=UTC),
-        extract=True,
     )
     body = route.calls[0].request.content.decode()
     assert "2023-05-20" in body
-    assert '"extract":true' in body.replace(" ", "")
+    # No behaviour flags travel: consolidation is automatic, and the server
+    # forbids unknown fields, so sending one would be a 422 rather than a
+    # no-op.
+    for gone in ("extract", "dedupe", "auto_supersede", "detect_conflicts"):
+        assert gone not in body
 
 
 @respx.mock
@@ -279,3 +282,59 @@ def test_sync_and_async_expose_exactly_the_same_methods() -> None:
             f"{name}: sync-only {sorted(sync - asynchronous)}, "
             f"async-only {sorted(asynchronous - sync)}"
         )
+
+
+@respx.mock
+def test_a_write_reports_what_it_did(client: Mapi) -> None:
+    """A bare Memory threw the consolidation outcome away.
+
+    A write that quietly retired last month's answer is the single most
+    important thing a memory API can tell a caller, and it was not reaching
+    them: `add` returned only the stored row.
+    """
+    respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json=SPACES))
+    respx.post(f"{BASE}/v1/spaces/spc_ada/memories").mock(
+        httpx.Response(
+            201,
+            json={
+                "memory": {"id": "mem_new", "content": "I live in Madrid now."},
+                "created": True,
+                "superseded": ["mem_old"],
+                "contradicts": [],
+                "supersede_declined": ["mem_maybe"],
+                "chunk_count": 1,
+            },
+        )
+    )
+
+    result = client.memories.add("I live in Madrid now.", space="ada")
+
+    assert result.id == "mem_new"
+    assert result.content == "I live in Madrid now."
+    assert result.superseded == ["mem_old"]
+    assert result.supersede_declined == ["mem_maybe"]
+    assert result.created
+
+
+@respx.mock
+def test_a_collapsed_duplicate_says_so(client: Mapi) -> None:
+    respx.get(f"{BASE}/v1/spaces").mock(httpx.Response(200, json=SPACES))
+    respx.post(f"{BASE}/v1/spaces/spc_ada/memories").mock(
+        httpx.Response(
+            200,
+            json={
+                "memory": {"id": "mem_existing", "content": "same thing"},
+                "created": False,
+                "duplicate_of": "mem_existing",
+                "duplicate_kind": "near",
+                "similarity": 0.981,
+            },
+        )
+    )
+
+    result = client.memories.add("same thing", space="ada")
+
+    assert not result.created
+    assert result.duplicate_of == "mem_existing"
+    assert result.duplicate_kind == "near"
+    assert result.similarity == pytest.approx(0.981)

@@ -20,6 +20,7 @@ from bench.datasets.locomo import LoCoMo
 from bench.datasets.longmemeval import LongMemEval
 from bench.harness import (
     _JUDGE_MAX_TOKENS,
+    NO_OUTPUT,
     OFFICIAL_JUDGE_PROMPTS,
     _token_batches,
     judge_prompt,
@@ -82,25 +83,65 @@ def test_wilson_is_sane_at_the_extremes() -> None:
 
 
 @pytest.mark.parametrize(
-    "raw,expected",
+    ("raw", "expected"),
     [
-        ("FACTS: x\nANSWER: Target", "Target"),
-        ("ANSWER: NO_ANSWER", "NO_ANSWER"),
-        ("answer: 7 May 2023", "7 May 2023"),
+        ('{"facts": "x", "answer": "Target"}', "Target"),
+        ('{"answer": "NO_ANSWER"}', "NO_ANSWER"),
+        ('{"answer": "7 May 2023"}', "7 May 2023"),
+        # Numbers come back as strings; the judge compares text.
+        ('{"answer": 3}', "3"),
+        # null is a real decline, distinct from no output at all.
+        ('{"answer": null}', ""),
+        # Fenced despite the instruction: a formatting slip around a real
+        # answer, not a wrong answer.
+        ('```json\n{"answer": "Target"}\n```', "Target"),
+        # Prose either side of the object.
+        ('Here you go: {"answer": "Target"} hope that helps', "Target"),
+        # Ignored the format entirely but still answered.
         ("bare answer with no format", "bare answer with no format"),
-        ("FACTS: only facts, model ignored the format", ""),
-        ("", ""),
-        ("FACTS: a\nANSWER:   spaced   ", "spaced"),
+        ('{"answer": "  spaced  "}', "spaced"),
     ],
 )
 def test_parse_answer(raw: str, expected: str) -> None:
     assert parse_answer(raw) == expected
 
 
-def test_parse_answer_never_returns_the_reasoning_as_an_answer() -> None:
-    """A FACTS-only reply must yield "", not the fact list. Grading a fact list
-    as if it were an answer is how a formatting slip becomes a fake score."""
-    assert parse_answer("FACTS: the user mentioned Target and coffee") == ""
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "",
+        "   \n  ",
+        # Truncated mid-object: the failure this format exists to catch.
+        '{"facts": "the user said", "answer": "Tar',
+        '{"answer": "the thing is',
+    ],
+)
+def test_no_output_is_distinguishable_from_a_wrong_answer(raw: str) -> None:
+    """The whole reason for JSON.
+
+    The FACTS/ANSWER text form could not tell a wrong answer from no answer --
+    both arrive as a string. Measured cost: gemini-2.5-pro returned empty on
+    64 of 118 "failures" because reasoning tokens consumed a 256-token
+    allowance, and the arm reported 0.734 while measuring our ceiling rather
+    than the model.
+    """
+    assert parse_answer(raw) == NO_OUTPUT
+
+
+def test_only_the_answer_field_is_read() -> None:
+    """`facts` is the model's working space, never graded.
+
+    Grading a fact list as if it were an answer is how a formatting slip
+    becomes a fake score.
+    """
+    raw = '{"facts": "the user mentioned Target and coffee", "answer": "coffee"}'
+    assert parse_answer(raw) == "coffee"
+
+
+def test_a_reply_carrying_only_reasoning_is_not_an_answer() -> None:
+    assert parse_answer('{"facts": "the user mentioned Target"}') == (
+        "{\"facts\": \"the user mentioned Target\"}"
+    )
 
 
 # -- token batching ------------------------------------------------------------

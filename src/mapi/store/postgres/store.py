@@ -24,7 +24,12 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from ...core.errors import BadRequestError, ConflictError, StoreError
+from ...core.errors import (
+    BadRequestError,
+    ConflictError,
+    StoreError,
+    ValidationError,
+)
 from ...core.ids import new_id
 from ...core.logging import get_logger
 from ...domain.embeddings.base import Vector
@@ -924,7 +929,15 @@ class PostgresStore(MemoryStore):
         type: RelationType | None = None,
     ) -> list[RelationEdge]:
         if direction not in ("out", "in"):
-            raise ValueError(f"direction must be 'out' or 'in', got {direction!r}")
+            # ValidationError (422), not a bare ValueError. Unreachable over HTTP
+            # today -- the route constrains it with Query(pattern="^(out|in)$") --
+            # but a non-MapiError escaping the store becomes an opaque 500 through
+            # the catch-all handler, so any future caller that forwards an
+            # unvalidated direction would get "an unexpected error occurred"
+            # instead of a problem document naming the field.
+            raise ValidationError(
+                f"direction must be 'out' or 'in', got {direction!r}", field="direction"
+            )
         column = RelationEdgeRow.source_id if direction == "out" else RelationEdgeRow.target_id
         async with self._session() as session:
             await self._scope(session, org_id)
@@ -993,7 +1006,8 @@ class PostgresStore(MemoryStore):
         async with self._session() as session:
             await self._scope(session, org_id)
             row = await session.scalar(
-                select(MemoryVersionRow).where(
+                select(MemoryVersionRow)
+                .where(
                     MemoryVersionRow.org_id == org_id,
                     MemoryVersionRow.space_id == space_id,
                     MemoryVersionRow.memory_id == memory_id,
@@ -1003,6 +1017,17 @@ class PostgresStore(MemoryStore):
                     (MemoryVersionRow.valid_to.is_(None))
                     | (MemoryVersionRow.valid_to > moment),
                 )
+                # Newest match, explicitly. Without this the query had no
+                # ORDER BY and no LIMIT, so `scalar()` returned whichever row
+                # the planner produced first, while the in-memory store scans
+                # `reversed(versions)` and returns the newest. Unobservable
+                # today -- the write path keeps validity intervals disjoint, so
+                # at most one row can match -- but "correct because nothing has
+                # broken the invariant yet" is not the same as correct, and any
+                # backfill, import or manual insert that overlaps two intervals
+                # would silently return an arbitrary version.
+                .order_by(MemoryVersionRow.version.desc())
+                .limit(1)
             )
             if row is None:
                 return None

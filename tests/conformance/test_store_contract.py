@@ -693,10 +693,23 @@ async def test_walk_rejects_a_zero_depth(tenant) -> None:
 
 
 async def test_invalid_direction_rejected(tenant) -> None:
+    """A typed 422, not a bare ValueError.
+
+    Both backends raised `ValueError`, which is outside the `MapiError`
+    hierarchy, so anything that escaped the store became "an unexpected error
+    occurred" through the catch-all handler -- a 500 for a caller's typo. Not
+    reachable over HTTP today (the route constrains `direction` with
+    `Query(pattern="^(out|in)$")`), so this is defence in depth for the next
+    caller that forwards the parameter unvalidated.
+    """
+    from mapi.core.errors import ValidationError
+
     store, org, space = tenant
     a = await _add(store, org, space, "a")
-    with pytest.raises(ValueError, match="direction"):
+    with pytest.raises(ValidationError, match="direction") as caught:
         await store.list_relations(org.id, space.id, a.id, direction="sideways")
+    assert caught.value.status_code == 422
+    assert caught.value.field == "direction"
 
 
 # -- bitemporal history --------------------------------------------------------

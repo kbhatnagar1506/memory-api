@@ -423,11 +423,28 @@ class SearchRequestBody(Request):
     include_superseded: bool = False
     #: 1.0 = pure relevance, 0.0 = maximum diversity.
     mmr_lambda: float = Field(default=0.7, ge=0.0, le=1.0)
-    use_mmr: bool = True
+    #: OFF, matching `SearchRequest.use_mmr` -- which it did not.
+    #:
+    #: This defaulted True while the field it feeds defaults False, and the
+    #: reason recorded on that field is a measurement: MMR "changed no retrieval
+    #: metric while costing 2.5x latency (61ms -> 110ms on LoCoMo)". So every
+    #: HTTP search paid for a stage that had been measured not to help, and the
+    #: documented decision was true of the library and false of the product.
+    #:
+    #: Still exposed, because MMR is the right tool for a corpus that genuinely
+    #: accumulates restatements. Opt in per request.
+    use_mmr: bool = False
     use_rerank: bool = True
     use_decay: bool = True
     half_life_days: float = Field(default=180.0, gt=0, le=36500)
-    min_score: float = Field(default=0.0, ge=0.0)
+    #: Minimum COSINE similarity, not minimum fused score.
+    #:
+    #: See `retrieval/confidence.calibrated_score`: this is compared against a
+    #: hit's `vector_score` when the vector arm ran. It used to be compared
+    #: against the post-fusion `score`, whose scale depends on `use_rerank` --
+    #: so `min_score=0.3` with reranking off silently discarded every result of
+    #: every query.
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
     vector_weight: float = Field(default=1.0, ge=0.0, le=10.0)
     lexical_weight: float = Field(default=1.0, ge=0.0, le=10.0)
     #: Return the complete set rather than the best few.
@@ -440,6 +457,46 @@ class SearchRequestBody(Request):
     coverage: bool | None = None
     #: Include per-stage score provenance on every hit.
     explain: bool = False
+
+    # -- fields that existed on SearchRequest and could not be reached --------
+    #
+    # These eight were settable nowhere in `src/`, so they sat at their dataclass
+    # defaults forever. Two consequences, both invisible:
+    #
+    #   * pipeline stage 4b (temporal scope) is gated on `asked_at is not None`,
+    #     and nothing ever set it -- so the whole stage was dead code in the
+    #     product while being measured and documented in the benchmark harness.
+    #   * `use_expansion` and `use_entity_expansion` could not be turned on at
+    #     all, so two features with measured write-ups were unreachable.
+    #
+    # Wiring them is not enabling them. Every default below is the previous
+    # effective behaviour, EXCEPT `asked_at`, which the route now fills with the
+    # current time -- see the route for why that is the safe direction.
+
+    #: When the question was asked. Resolves "last March" and "three weeks ago"
+    #: against the asker's clock rather than the server's wall time, and is what
+    #: brings the temporal stage to life. Defaults to now at the route.
+    asked_at: datetime | None = None
+    #: Bias candidates whose event time falls inside a window the question names.
+    #: Inert without `asked_at`; a bias, never a filter.
+    use_temporal_scope: bool = True
+    #: Let question shape pick the fusion weights (`retrieval/tuning.py`).
+    tune_by_intent: bool = True
+    #: HyDE: generate a hypothetical answer, embed it, average with the query.
+    #:
+    #: Costs an extra LLM call per search, which is why it stays off by default
+    #: even now that it can be switched on. Requires a synthesis backend; with
+    #: none configured the expander is a no-op and this flag does nothing.
+    use_expansion: bool = False
+    #: Bridge to memories sharing a salient entity with the query. Costs one
+    #: extra store lookup per entity, so also opt-in.
+    use_entity_expansion: bool = False
+    entity_budget: int = Field(default=6, ge=0, le=32)
+    entity_weight: float = Field(default=0.6, ge=0.0, le=10.0)
+    #: Speaker names to exclude from entity extraction -- in a dialogue corpus
+    #: the participants are the most frequent proper nouns and the least
+    #: discriminating.
+    known_speakers: list[str] = Field(default_factory=list, max_length=16)
 
     @field_validator("occurred_before")
     @classmethod

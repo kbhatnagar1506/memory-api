@@ -58,6 +58,7 @@ from .domain.models import (
     Space,
     utcnow,
 )
+from .domain.retrieval.expansion import CompletionExpander
 from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchResponse
 from .domain.retrieval.rerank import Reranker
 from .domain.synthesis import classify
@@ -157,8 +158,20 @@ class MemoryService:
         self.understanding = QueryUnderstanding(
             understander, timeout_s=settings.understanding_timeout_s
         )
+        #: HyDE, when there is a model to generate the hypothetical answer with.
+        #:
+        #: The pipeline defaulted to `NoopExpander` and nothing ever passed
+        #: anything else, so `HydeExpander` was never constructed anywhere in the
+        #: tree -- `use_expansion=True` was silently a no-op even for a caller who
+        #: found the flag. Now the expander exists whenever a completer does, and
+        #: the flag decides per request whether to spend the call.
+        expander = CompletionExpander(completer) if completer is not None else None
         self.pipeline = RetrievalPipeline(
-            store, embedder, reranker, understanding=self.understanding
+            store,
+            embedder,
+            reranker,
+            understanding=self.understanding,
+            expander=expander,
         )
 
     # -- spaces ------------------------------------------------------------

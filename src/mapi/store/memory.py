@@ -21,7 +21,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from ..core.errors import ConflictError
+from ..core.errors import ConflictError, ValidationError
 from ..domain.embeddings.base import Vector, cosine_similarity
 from ..domain.models import (
     ApiKey,
@@ -508,7 +508,15 @@ class InMemoryStore(MemoryStore):
         type: RelationType | None = None,
     ) -> list[RelationEdge]:
         if direction not in ("out", "in"):
-            raise ValueError(f"direction must be 'out' or 'in', got {direction!r}")
+            # ValidationError (422), not a bare ValueError. Unreachable over HTTP
+            # today -- the route constrains it with Query(pattern="^(out|in)$") --
+            # but a non-MapiError escaping the store becomes an opaque 500 through
+            # the catch-all handler, so any future caller that forwards an
+            # unvalidated direction would get "an unexpected error occurred"
+            # instead of a problem document naming the field.
+            raise ValidationError(
+                f"direction must be 'out' or 'in', got {direction!r}", field="direction"
+            )
         index = self._edges_by_source if direction == "out" else self._edges_by_target
         edges = [self._edges[eid] for eid in index.get((space_id, memory_id), [])]
         edges = [e for e in edges if e.org_id == org_id]

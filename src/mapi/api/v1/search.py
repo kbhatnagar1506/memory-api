@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 
 from ...core.errors import ValidationError
 from ...core.ids import is_valid
-from ...domain.models import Scope
+from ...domain.models import Scope, utcnow
 from ...domain.retrieval.pipeline import SearchRequest
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
@@ -71,6 +71,26 @@ async def search(
         coverage_limit=settings.coverage_limit,
         max_per_source=settings.max_per_source,
         route_by_kind=settings.route_by_kind,
+        # `asked_at` defaults to NOW rather than to None, which is the one place
+        # this wiring changes behaviour on purpose.
+        #
+        # Stage 4b is gated on `asked_at is not None`, so leaving it unset kept
+        # the temporal stage dead for every product request while the benchmark
+        # harness -- the only caller that set it -- measured and documented it.
+        # "The question was asked now" is true of every synchronous search, and a
+        # caller replaying history can say otherwise.
+        #
+        # Safe because the stage is a BIAS: it multiplies in-window scores and
+        # removes nothing, and it does nothing at all unless the query names a
+        # window `extract_scope` can parse.
+        asked_at=body.asked_at or utcnow(),
+        use_temporal_scope=body.use_temporal_scope,
+        tune_by_intent=body.tune_by_intent,
+        use_expansion=body.use_expansion,
+        use_entity_expansion=body.use_entity_expansion,
+        entity_budget=body.entity_budget,
+        entity_weight=body.entity_weight,
+        known_speakers=tuple(body.known_speakers),
     )
     result = await service.search(request)
     return SearchResponseBody(

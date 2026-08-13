@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+from collections.abc import Awaitable, Callable
 
 from ...core.logging import get_logger
 
@@ -142,4 +143,55 @@ class HydeExpander(QueryExpander):
         return [passage] if passage else []
 
 
-__all__ = ["HydeExpander", "NoopExpander", "QueryExpander"]
+class CompletionExpander(QueryExpander):
+    """HyDE over an injected `CompleteFn`, so the service can wire it.
+
+    `HydeExpander` above builds its own `google.genai` client, which makes it
+    unusable from `MemoryService`: that class is deliberately vendor-free -- see
+    the comment on `self.completer`, "the service never imports a vendor SDK" --
+    and every other model boundary in the system is an injected async
+    `prompt -> text`. `derive`, `extract`, `adjudicate` and `understand` all take
+    one. Expansion was the only one that did not, and the consequence was that
+    the pipeline's `expander` argument was never once passed: `use_expansion=True`
+    was a no-op everywhere in the product, whatever the caller set.
+
+    Same prompt, same clipping, same fail-open behaviour as `HydeExpander`.
+    `HydeExpander` stays for the benchmark harness, which owns its own client.
+    """
+
+    def __init__(
+        self,
+        complete: Callable[[str], Awaitable[str]],
+        *,
+        timeout_s: float = 12.0,
+        max_chars: int = 600,
+    ) -> None:
+        self._complete = complete
+        self.timeout_s = timeout_s
+        self.max_chars = max_chars
+
+    @property
+    def name(self) -> str:
+        return "hyde"
+
+    async def expand(self, query: str) -> list[str]:
+        if not query.strip():
+            return []
+        try:
+            raw = await asyncio.wait_for(
+                self._complete(_PROMPT.format(query=query)), timeout=self.timeout_s
+            )
+        except TimeoutError:
+            log.warning("hyde_timeout", expander=self.name)
+            return []
+        except Exception as exc:
+            log.warning("hyde_failed", expander=self.name, error=str(exc)[:200])
+            return []
+
+        passage = " ".join(raw.split())[: self.max_chars].strip()
+        # Never an empty string: the embedder rejects blank input, and that
+        # rejection would fail the whole search rather than skip the expansion.
+        return [passage] if passage else []
+
+
+__all__ = ["CompletionExpander", "HydeExpander", "NoopExpander", "QueryExpander"]

@@ -319,17 +319,41 @@ _DIGITS = re.compile(r"\b(\d[\d,]*(?:\.\d+)?)\b")
 _YEARISH = re.compile(r"^(19|20)\d{2}$")
 
 
+#: A sentence end, including any quote or bracket that closes after it, so a
+#: cut lands after `said."` rather than between the period and the quote.
+_SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*\s")
+
+#: How far back from the limit a boundary may be before taking it costs more
+#: text than the tidiness is worth.
+_BOUNDARY_FLOOR = 0.75
+
+_MARKER = "\n[... truncated]"
+
+
 def _clip(text: str, limit: int) -> str:
-    """Trim on a boundary and mark it, rather than amputating mid-word."""
+    """Trim on a boundary and mark it, rather than amputating mid-word.
+
+    Boundaries in descending order of how little they cost the reader:
+    paragraph, line, sentence, word. The previous version stopped at `". "` and
+    then fell through to a hard character cut, so anything without that exact
+    sequence in its last quarter was severed mid-word. The whitespace tier is
+    what closes that hole; the sentence tier only makes the result tidier.
+    """
     if len(text) <= limit:
         return text
-    head = text[:limit]
-    for sep in ("\n\n", "\n", ". "):
+    head, floor = text[:limit], limit * _BOUNDARY_FLOOR
+
+    for sep in ("\n\n", "\n"):
         cut = head.rfind(sep)
-        if cut > limit * 0.75:
-            head = head[: cut + len(sep)]
-            break
-    return head.rstrip() + "\n[... truncated]"
+        if cut > floor:
+            return head[:cut].rstrip() + _MARKER
+
+    sentences = [m.end() for m in _SENTENCE_END.finditer(head)]
+    if sentences and sentences[-1] > floor:
+        return head[: sentences[-1]].rstrip() + _MARKER
+
+    space = head.rfind(" ")
+    return (head[:space] if space > floor else head).rstrip() + _MARKER
 
 
 def _states_quantity(fact: str) -> bool:

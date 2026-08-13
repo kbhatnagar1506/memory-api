@@ -79,9 +79,7 @@ async def test_it_finds_what_the_word_list_cannot() -> None:
         seen["prompt"] = prompt
         return '[{"n": 1, "reason": "no longer eats meat", "confidence": 0.92}]'
 
-    verdicts = await adjudicate_contradictions(
-        "I no longer eat meat", CANDIDATES, complete
-    )
+    verdicts = await adjudicate_contradictions("I no longer eat meat", CANDIDATES, complete)
     assert [v.memory_id for v in verdicts] == ["mem_a"]
     assert "I no longer eat meat" in seen["prompt"]
 
@@ -348,7 +346,7 @@ def test_a_confirmation_is_not_a_replacement() -> None:
 
 
 def test_the_same_value_in_another_format_is_not_a_replacement() -> None:
-    """"$45.00" and "45 dollars" are one value wearing two formats."""
+    """ "$45.00" and "45 dollars" are one value wearing two formats."""
     raw = (
         '[{"n":1,"attribute":"cost","old_value":"$45.00",'
         '"new_value":"45 dollars","confidence":0.99}]'
@@ -386,3 +384,151 @@ def test_case_alone_is_not_a_change() -> None:
         '"new_value":"heroku","confidence":0.9}]'
     )
     assert _verdicts(raw) == []
+
+
+# -- a value must be a value -----------------------------------------------
+#
+# With the attribute/old_value/new_value contract in place, the surviving false
+# supersessions on a 10-session trace were two shapes, both visible only once
+# the adjudicator's own reason reached the edge:
+#
+#   echo:        "Redis status: Redis is unchanged at 45 dollars. ->
+#                 The user is NOT moving off Redis."
+#   non-value:   "Heroku cost: unknown -> 175 dollars a month"
+#
+# The first pastes whole sentences into both slots, which passes a difference
+# check and asserts nothing. The second concedes the old value is not known and
+# hides a memory anyway -- it hid the Python-and-dynos stack fact on the
+# strength of a cost it could not state.
+
+
+def test_a_sentence_echoed_into_the_value_slots_is_rejected() -> None:
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    candidates = [("m1", "Redis is unchanged at 45 dollars.")]
+    raw = (
+        '[{"n":1,"attribute":"Redis status",'
+        '"old_value":"Redis is unchanged at 45 dollars.",'
+        '"new_value":"The user is NOT moving off Redis.","confidence":0.85}]'
+    )
+    assert parse_supersede_verdicts(raw, candidates, "The user is NOT moving off Redis.") == []
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    [
+        # The six a word list would have named.
+        "unknown",
+        "n/a",
+        "not stated",
+        "none",
+        "-",
+        "",
+        # And the ones it would not. These are the point: the rule is that the
+        # old value must be readable out of the memory being hidden, so it does
+        # not matter which phrasing the model reaches for.
+        "TBD",
+        "???",
+        "not recorded",
+        "wasn't said",
+        "unstated",
+        "omitted",
+        "no prior value",
+        "the memory does not say",
+        "cannot tell",
+        "blank",
+    ],
+)
+def test_a_value_absent_from_the_old_memory_is_rejected(placeholder: str) -> None:
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    candidates = [("m1", "The API runs on Heroku with two web dynos, Python 3.13.")]
+    raw = (
+        f'[{{"n":1,"attribute":"Heroku cost","old_value":"{placeholder}",'
+        '"new_value":"175 dollars a month","confidence":0.9}]'
+    )
+    assert parse_supersede_verdicts(raw, candidates, "Heroku is now 175 a month.") == []
+
+
+def test_an_old_value_the_memory_never_stated_is_rejected() -> None:
+    """The generalisation the word list could not have reached.
+
+    Both statements say Cloud SQL. The model reported the change as "Heroku
+    Postgres -> Cloud SQL", which is the history of the migration rather than a
+    difference between these two memories -- so the new statement adds a date
+    and provenance and replaces nothing. Caught on a live trace, where it had
+    been counted as a correct supersession by eye.
+    """
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    candidates = [
+        (
+            "m1",
+            "The user's primary database is Postgres 16 running on Cloud SQL in us-central1.",
+        )
+    ]
+    raw = (
+        '[{"n":1,"attribute":"primary database provider",'
+        '"old_value":"Heroku Postgres","new_value":"Cloud SQL","confidence":1.0}]'
+    )
+    statement = "The user migrated off Heroku Postgres onto Cloud SQL on 03 March 2026."
+    assert parse_supersede_verdicts(raw, candidates, statement) == []
+
+
+def test_a_new_value_may_be_inferred_rather_than_quoted() -> None:
+    """Quotability is required of the OLD value only.
+
+    A revision's new value is often implied rather than stated -- cancelling an
+    add-on means it now costs nothing, and the statement says "cancelled", not
+    "0 dollars". Requiring both sides to be quotable would reject exactly the
+    revisions this feature exists to record.
+    """
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    candidates = [("m1", "The user's Redis cost is 45 dollars a month this quarter.")]
+    raw = (
+        '[{"n":1,"attribute":"Redis cost","old_value":"45 dollars a month this quarter",'
+        '"new_value":"0 dollars a month (cancelled)","confidence":0.9}]'
+    )
+    out = parse_supersede_verdicts(
+        raw, candidates, "The user cancelled the unused Heroku Redis add-on."
+    )
+    assert [v.memory_id for v in out] == ["m1"]
+
+
+@pytest.mark.parametrize(
+    ("old", "source"),
+    [
+        ("$45.00", "The plan costs $45.00 every month."),
+        ("45 dollars", "The plan costs 45 dollars every month."),
+        ("two web dynos", "The API runs on Heroku with two web dynos, Python 3.13."),
+        ("Python 3.13", "The API runs on Heroku with two web dynos, Python 3.13."),
+        ("needs stating earlier", "The threat model in the paper needs stating earlier."),
+    ],
+)
+def test_a_real_quote_is_not_mistaken_for_a_placeholder(old: str, source: str) -> None:
+    """Punctuation and formatting must not make a genuine quote unquotable."""
+    from mapi.domain.synthesis.adjudicate import _is_quotable
+
+    assert _is_quotable(old, source)
+
+
+@pytest.mark.parametrize(
+    ("attribute", "old", "new"),
+    [
+        ("cost", "340 dollars a month", "410 dollars a month"),
+        ("page count", "9 pages", "14 pages"),
+        ("host", "Heroku", "Cloud Run"),
+    ],
+)
+def test_a_named_change_still_passes(attribute: str, old: str, new: str) -> None:
+    """The checks must aim supersession, not disable it."""
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    candidates = [("m1", f"The {attribute} is {old}.")]
+    raw = (
+        f'[{{"n":1,"attribute":"{attribute}","old_value":"{old}",'
+        f'"new_value":"{new}","confidence":0.95}}]'
+    )
+    out = parse_supersede_verdicts(raw, candidates, f"The {attribute} is now {new}.")
+    assert [v.memory_id for v in out] == ["m1"]

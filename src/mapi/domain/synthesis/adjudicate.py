@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -143,8 +144,30 @@ _SUMMARY_LENGTH_RATIO = 0.7
 _MIN_LOST_TOKENS = 4
 
 
+#: Shortest token worth comparing. Drops "a", "of", "is" and initials without
+#: needing a stopword list, which would be one more list to keep extending.
+_MIN_TOKEN_CHARS = 2
+
+
 def _tokens(text: str) -> set[str]:
-    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2}
+    """Content words, lowercased, stripped of punctuation and symbols.
+
+    Punctuation is dropped by Unicode general category rather than matched by
+    a character class, because the guards built on this compare a value quoted
+    by a model against the memory it came from, and the model does not quote
+    punctuation back consistently. "$45.00" and "45.00" have to tokenise the
+    same or a real revision is rejected; "n/a" and "???" have to reduce to
+    nothing or a placeholder is accepted as a value.
+
+    A category test does that without an enumeration, and it costs one
+    `unicodedata` lookup per character on strings that are one sentence long.
+    """
+    out: set[str] = set()
+    for word in text.lower().split():
+        clean = "".join(c for c in word if not unicodedata.category(c).startswith(("P", "S")))
+        if len(clean) > _MIN_TOKEN_CHARS:
+            out.add(clean)
+    return out
 
 
 def _is_less_specific(new: str, old: str) -> bool:
@@ -292,9 +315,73 @@ async def adjudicate_contradictions(
     return verdicts
 
 
-#: Currency, unit and phrasing noise that should not make two equal values
-#: look different.
-_VALUE_NOISE = ("dollars", "dollar", "usd", "eur", "euros", "per month", "a month")
+#: A quoted value may be at most this fraction of the statement it came from.
+#:
+#: When the model cannot isolate an attribute it echoes the whole sentence
+#: into both slots -- "Redis status: Redis is unchanged at 45 dollars. -> The
+#: user is NOT moving off Redis." Those pass a difference check trivially and
+#: mean nothing: a value is a value, not a restatement of the claim. Measured
+#: on a 10-session trace, this shape was 3 of the 5 surviving false
+#: supersessions.
+_MAX_VALUE_SHARE = 0.6
+
+
+def _numbers(value: object) -> list[float]:
+    """Every number in `value`, as numbers. Thousands separators removed."""
+    return [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", str(value).replace(",", ""))]
+
+
+def _is_quotable(value: object, source: str) -> bool:
+    """Whether `value` can actually be read out of `source`.
+
+    THE RULE: a memory may not be hidden for a value it does not contain. The
+    model is asked to quote the old value out of the memory it wants to
+    replace, so a quote that is not in there is not a quote -- it is the model
+    filling a required field, and the supersession rests on nothing.
+
+    This replaces a thirteen-item list of placeholder words ("unknown", "n/a",
+    "not stated", ...). The list worked on the cases it named and was blind to
+    every one it did not: TBD, "???", "not recorded", "wasn't said",
+    "unstated", "omitted", "the memory does not say". Enumerating the ways a
+    model can admit it does not know is unbounded, and the enumeration is the
+    wrong shape of solution -- what all of them have in common is that the
+    quoted value is not in the text being quoted.
+
+    It is also strictly stronger. On the same trace, it additionally rejects
+    "primary database provider: Heroku Postgres -> Cloud SQL" against a memory
+    reading "The user's primary database is Postgres 16 running on Cloud SQL
+    in us-central1" -- both statements say Cloud SQL, so the old value was
+    never in there and the "revision" was one fact restated with provenance.
+
+    Numbers anchor, words corroborate: a value carrying a number needs that
+    number present and one word to agree, while a value with no number has
+    nothing but its words and needs all of them.
+
+    Applied to `old_value` only. The NEW value is legitimately inferred --
+    "the user cancelled the add-on" implies 0 dollars -- and requiring it to
+    be quotable would reject real revisions.
+    """
+    tokens = _tokens(str(value))
+    if not tokens:
+        return False
+    if numbers := _numbers(value):
+        return set(numbers) <= set(_numbers(source)) and bool(tokens & _tokens(source))
+    return tokens <= _tokens(source)
+
+
+def _echoes_statement(value: object, statement: str) -> bool:
+    """Whether a quoted value is just the statement copied back.
+
+    A value is a value -- "45 dollars", "Heroku", "9 pages". When the model
+    cannot isolate the attribute it pastes the whole sentence into the slot,
+    which passes a difference check and asserts nothing.
+    """
+    text, source = str(value).strip(), statement.strip()
+    if not text or not source:
+        return False
+    return len(text) >= len(source) * _MAX_VALUE_SHARE and (
+        text[:40].lower() in source.lower() or source[:40].lower() in text.lower()
+    )
 
 
 def _same_value(left: object, right: object) -> bool:
@@ -304,26 +391,23 @@ def _same_value(left: object, right: object) -> bool:
     value wearing two formats and a string comparison calls them different --
     which would let a confirmation through as a replacement, the exact failure
     this check exists to stop.
+
+    That numeric path is also why the currency and unit list this used to
+    carry ("dollars", "usd", "eur", "per month") was doing nothing: it only
+    ever ran when NEITHER side had a number, and "45 dollars a month" against
+    "45 dollars" resolves on the numbers long before any word is compared. It
+    was an English word list guarding a branch it could not reach.
     """
-    def numbers(value: object) -> list[float]:
-        text = str(value).replace(",", "")
-        return [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", text)]
-
-    def words(value: object) -> str:
-        text = str(value).strip().lower()
-        for noise in _VALUE_NOISE:
-            text = text.replace(noise, " ")
-        text = re.sub(r"[^a-z ]+", " ", text)
-        return " ".join(text.split())
-
-    left_n, right_n = numbers(left), numbers(right)
+    left_n, right_n = _numbers(left), _numbers(right)
     if left_n and right_n:
         return left_n == right_n
-    return words(left) == words(right)
+    return _tokens(str(left)) == _tokens(str(right))
 
 
 def parse_supersede_verdicts(
-    raw: str, candidates: Sequence[tuple[str, str]]
+    raw: str,
+    candidates: Sequence[tuple[str, str]],
+    statement: str = "",
 ) -> list[Verdict]:
     """Read supersession verdicts, rejecting any that fail their own evidence.
 
@@ -359,10 +443,21 @@ def parse_supersede_verdicts(
             # Could not name what changed, so nothing demonstrably changed.
             log.info("supersede_rejected", why="no values", index=index)
             continue
-        if _same_value(old_value, new_value):
+        if not _is_quotable(old_value, candidates[index][1]):
             log.info(
-                "supersede_rejected", why="same value", value=str(old_value)[:40]
+                "supersede_rejected",
+                why="old value not in the memory it would hide",
+                index=index,
+                value=str(old_value)[:40],
             )
+            continue
+        if _echoes_statement(old_value, candidates[index][1]) or _echoes_statement(
+            new_value, statement
+        ):
+            log.info("supersede_rejected", why="echoed the statement", index=index)
+            continue
+        if _same_value(old_value, new_value):
+            log.info("supersede_rejected", why="same value", value=str(old_value)[:40])
             continue
 
         seen.add(index)
@@ -424,10 +519,8 @@ async def adjudicate_supersessions(
         log.warning("supersede_adjudication_failed", error=str(exc)[:160])
         return []
 
-    verdicts = parse_supersede_verdicts(raw, usable)
-    log.info(
-        "adjudicated_supersessions", confirmed=len(verdicts), shortlisted=len(usable)
-    )
+    verdicts = parse_supersede_verdicts(raw, usable, statement)
+    log.info("adjudicated_supersessions", confirmed=len(verdicts), shortlisted=len(usable))
     return verdicts
 
 

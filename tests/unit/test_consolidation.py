@@ -298,9 +298,7 @@ def test_two_signals_score_higher_than_one() -> None:
 def test_records_differing_only_in_a_number_are_not_duplicates() -> None:
     from mapi.domain.consolidation import differs_materially
 
-    assert differs_materially(
-        "component number 2: service-2", "component number 3: service-3"
-    )
+    assert differs_materially("component number 2: service-2", "component number 3: service-3")
     assert differs_materially("Invoice INV-4471 is paid.", "Invoice INV-4472 is paid.")
     assert differs_materially("The offsite is on 12 June.", "The offsite is on 19 June.")
 
@@ -312,9 +310,7 @@ def test_a_genuine_restatement_is_still_a_duplicate() -> None:
         "I prefer aisle seats on long flights.",
         "I prefer aisle seats on long flights!",
     )
-    assert not differs_materially(
-        "The cat sat on the mat.", "the cat sat on the mat"
-    )
+    assert not differs_materially("The cat sat on the mat.", "the cat sat on the mat")
 
 
 def test_detect_near_duplicate_vetoes_on_material_difference() -> None:

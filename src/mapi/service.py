@@ -332,9 +332,7 @@ class MemoryService:
             log.info("supersessions_unconfirmed", count=len(shortlist))
             return []
         by_id = {p.old_id: p for p in shortlist}
-        existing = await self.store.get_memories(
-            memory.org_id, memory.space_id, list(by_id)
-        )
+        existing = await self.store.get_memories(memory.org_id, memory.space_id, list(by_id))
         pairs = [(mid, m.content) for mid, m in existing.items()]
         verdicts = await adjudicate_supersessions(memory.content, pairs, self.extractor)
         # Carry the ADJUDICATOR's reason onto the edge, not the cosine
@@ -390,9 +388,7 @@ class MemoryService:
             log.info("conflicts_unconfirmed", count=len(shortlist))
             return []
         by_id = {p.right_id: p for p in shortlist}
-        existing = await self.store.get_memories(
-            memory.org_id, memory.space_id, list(by_id)
-        )
+        existing = await self.store.get_memories(memory.org_id, memory.space_id, list(by_id))
         verdicts = await adjudicate_contradictions(
             memory.content,
             [(mid, m.content) for mid, m in existing.items()],
@@ -555,9 +551,7 @@ class MemoryService:
             else ""
         )
         try:
-            result = await self.embedder.embed(
-                [for_embedding(p.text, header) for p in pieces]
-            )
+            result = await self.embedder.embed([for_embedding(p.text, header) for p in pieces])
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(pieces))
         except Exception:
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()
@@ -709,9 +703,7 @@ class MemoryService:
                 conflict_shortlist += self._unexplained_conflicts(
                     memory, chunks[0].embedding or [], pairs
                 )
-                conflict_proposals = await self._confirm_conflicts(
-                    memory, conflict_shortlist
-                )
+                conflict_proposals = await self._confirm_conflicts(memory, conflict_shortlist)
                 # A pair cannot be BOTH revised and disputed. Supersession
                 # says time orders them; contradiction says nothing does, and
                 # they mean opposite things to a reader -- one hides the old
@@ -1321,17 +1313,13 @@ class MemoryService:
         nobody made.
         """
         if self.completer is None:
-            raise ProviderError(
-                "no synthesis backend configured; set synthesis_backend=gemini"
-            )
+            raise ProviderError("no synthesis backend configured; set synthesis_backend=gemini")
         await self.get_space_or_raise(org_id, space_id)
 
         response = await self.search(
             SearchRequest(query=message, org_id=org_id, space_id=space_id, limit=k)
         )
-        answer = await chat_answer(
-            message, response.results, self.completer, history=history
-        )
+        answer = await chat_answer(message, response.results, self.completer, history=history)
         if remember:
             await self.ingest(org_id=org_id, space_id=space_id, content=message)
         return answer, response

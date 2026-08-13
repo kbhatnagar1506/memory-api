@@ -48,11 +48,7 @@ async def _org_with_memory(store, label: str) -> tuple[str, str, str]:
     vector = await DeterministicEmbedder(dimensions=DIMENSIONS).embed_one(body)
     memory = Memory(org_id=org.id, space_id=space.id, content=body)
     memory = memory.model_copy(
-        update={
-            "chunks": [
-                Chunk(memory_id=memory.id, ordinal=0, text=body, embedding=vector)
-            ]
-        }
+        update={"chunks": [Chunk(memory_id=memory.id, ordinal=0, text=body, embedding=vector)]}
     )
     await store.upsert_memory(memory)
     return org.id, space.id, body

@@ -28,20 +28,41 @@ from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-_MONTHS = {
-    "january": 1,
-    "february": 2,
-    "march": 3,
-    "april": 4,
-    "may": 5,
-    "june": 6,
-    "july": 7,
-    "august": 8,
-    "september": 9,
-    "october": 10,
-    "november": 11,
-    "december": 12,
-}
+#: A date parser has to know month names, so this is a lexicon and not a
+#: heuristic word list: there is no structural property of a string that makes
+#: it March. What a lexicon CAN be is incomplete, and this one was -- it held
+#: only the full names, so "in Jan 2026", "in Sept" and "in Dec 2025" produced
+#: no window at all. That is the failure this module's docstring calls the one
+#: that hides: the aggregate is then computed over all of history and comes
+#: back looking perfectly confident.
+_MONTH_NAMES = (
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+)
+
+#: Abbreviations, generated rather than typed out. Three letters is the common
+#: form, plus the four-letter "sept" and the full name. Deriving them keeps the
+#: two spellings of a month from drifting apart, which is the usual way a
+#: hand-maintained second list goes wrong.
+_MONTHS: dict[str, int] = {}
+for _index, _name in enumerate(_MONTH_NAMES, start=1):
+    _MONTHS[_name] = _index
+    _MONTHS[_name[:3]] = _index
+_MONTHS["sept"] = 9
+
+#: Longest-first, so "march" is not matched as "mar" with a trailing "ch" that
+#: then fails the word boundary, and "june" is not shadowed by "jun".
+_MONTH_ALT = "|".join(sorted(_MONTHS, key=len, reverse=True))
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,11 +96,41 @@ def _previous_month(reference: date) -> tuple[date, date]:
 
 #: Ordered: the most specific pattern must win. "in March 2023" is a month in
 #: a stated year, not the bare year 2023 and not the bare month March.
-_EXPLICIT_MONTH_YEAR = re.compile(
-    r"\bin\s+(" + "|".join(_MONTHS) + r")\s+(\d{4})\b", re.IGNORECASE
-)
+_EXPLICIT_MONTH_YEAR = re.compile(r"\bin\s+(" + _MONTH_ALT + r")\s+(\d{4})\b", re.IGNORECASE)
 _EXPLICIT_YEAR = re.compile(r"\bin\s+(\d{4})\b")
-_BARE_MONTH = re.compile(r"\b(?:in|during)\s+(" + "|".join(_MONTHS) + r")\b", re.IGNORECASE)
+
+#: A NAMED DAY, which asks for a one-day window and used to get none. Both
+#: orders, because "15 March 2026" and "March 15, 2026" are the same request.
+#: No leading preposition is required: a day, a month and a year together are
+#: unambiguous without one, unlike a bare month.
+_DAY_MONTH_YEAR = re.compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + _MONTH_ALT + r")\.?,?\s+(\d{4})\b",
+    re.IGNORECASE,
+)
+_MONTH_DAY_YEAR = re.compile(
+    r"\b(" + _MONTH_ALT + r")\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b",
+    re.IGNORECASE,
+)
+
+#: NUMERIC DATES. Checked before `_EXPLICIT_YEAR`, which is the bug they also
+#: fix: `\bin\s+(\d{4})\b` matched the year inside "in 2026-03" and returned
+#: the whole of 2026 for a question that named one month -- a window twelve
+#: times too wide, reported with a label ("in 2026") that looks deliberate.
+#:
+#: Day-first and month-first numeric forms (03/04/2026) are deliberately NOT
+#: parsed. They are genuinely ambiguous between conventions, and a silently
+#: wrong window is worse here than no window: an unbounded aggregate is at
+#: least obviously unbounded.
+_ISO_DAY = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
+_ISO_MONTH = re.compile(r"\b(\d{4})-(\d{1,2})\b")
+_SLASH_MONTH = re.compile(r"\b(\d{1,2})/(\d{4})\b")
+
+
+def _valid_day(year: int, month: int, day: int) -> bool:
+    return 1 <= month <= 12 and 1 <= day <= monthrange(year, month)[1]
+
+
+_BARE_MONTH = re.compile(r"\b(?:in|during)\s+(" + _MONTH_ALT + r")\b", re.IGNORECASE)
 _LAST_N = re.compile(
     r"\b(?:in|over|during|within)?\s*the\s+(?:last|past)\s+(\d+|a|an|one)?\s*"
     r"(day|week|fortnight|month|quarter|year|decade)s?\b",
@@ -97,20 +148,20 @@ _UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
 #: running to today. Only the datable forms are handled; "since the move"
 #: needs an event lookup and correctly falls through to unbounded.
 _SINCE = re.compile(
-    r"\bsince\s+(?:(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?|(\d{4}))\b",
+    r"\bsince\s+(?:(" + _MONTH_ALT + r")(?:\s+(\d{4}))?|(\d{4}))\b",
     re.IGNORECASE,
 )
 #: "before 2022", "after March 2021", "up to 2020", "until June".
 _BEFORE_AFTER = re.compile(
     r"\b(before|after|prior to|up to|until|through)\s+"
-    r"(?:(" + "|".join(_MONTHS) + r")\s+)?(\d{4})\b",
+    r"(?:(" + _MONTH_ALT + r")\s+)?(\d{4})\b",
     re.IGNORECASE,
 )
 #: "between March and June", "from January to April", with an optional year
 #: on either side.
 _BETWEEN = re.compile(
-    r"\b(?:between|from)\s+(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?"
-    r"\s+(?:and|to|through|-|until)\s+(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?\b",
+    r"\b(?:between|from)\s+(" + _MONTH_ALT + r")(?:\s+(\d{4}))?"
+    r"\s+(?:and|to|through|-|until)\s+(" + _MONTH_ALT + r")(?:\s+(\d{4}))?\b",
     re.IGNORECASE,
 )
 #: Calendar quarters, which is how anything with a finance or planning
@@ -126,9 +177,7 @@ _SEASONS = {
     "fall": (9, 11),
     "autumn": (9, 11),
 }
-_SEASON = re.compile(
-    r"\b(last|this|past)\s+(" + "|".join(_SEASONS) + r")\b", re.IGNORECASE
-)
+_SEASON = re.compile(r"\b(last|this|past)\s+(" + "|".join(_SEASONS) + r")\b", re.IGNORECASE)
 #: "in the last quarter", "over the past fortnight", and the two units the
 #: numeric pattern above cannot express.
 _UNIT_DAYS_EXTRA = {"quarter": 91, "fortnight": 14, "decade": 3650}
@@ -150,11 +199,44 @@ def extract_scope(question: str, reference: date) -> DateRange | None:
     meaningless without it — and resolving them against the wall clock instead
     would make the same question produce different answers on different days.
     """
+    # A single named or ISO day is the narrowest window there is, so it is
+    # tried before anything that would widen it to the containing month.
+    for pattern, order in ((_DAY_MONTH_YEAR, "dmy"), (_MONTH_DAY_YEAR, "mdy")):
+        match = pattern.search(question)
+        if match:
+            raw_day, raw_month = (
+                (match.group(1), match.group(2))
+                if order == "dmy"
+                else (match.group(2), match.group(1))
+            )
+            year, month, day = int(match.group(3)), _MONTHS[raw_month.lower()], int(raw_day)
+            if _valid_day(year, month, day):
+                point = date(year, month, day)
+                return DateRange(point, point, match.group(0).strip())
+
+    match = _ISO_DAY.search(question)
+    if match:
+        year, month, day = (int(g) for g in match.groups())
+        if _valid_day(year, month, day):
+            point = date(year, month, day)
+            return DateRange(point, point, match.group(0))
+
     match = _EXPLICIT_MONTH_YEAR.search(question)
     if match:
         month, year = _MONTHS[match.group(1).lower()], int(match.group(2))
         start, end = _month_window(year, month)
         return DateRange(start, end, match.group(0).strip())
+
+    # Numeric month-in-year, before the bare-year pattern that would otherwise
+    # swallow the year half of it and return twelve times the window asked for.
+    for pattern, flipped in ((_ISO_MONTH, False), (_SLASH_MONTH, True)):
+        match = pattern.search(question)
+        if match:
+            first, second = int(match.group(1)), int(match.group(2))
+            year, month = (second, first) if flipped else (first, second)
+            if 1 <= month <= 12 and 1900 <= year <= 2200:
+                start, end = _month_window(year, month)
+                return DateRange(start, end, match.group(0))
 
     match = _EXPLICIT_YEAR.search(question)
     if match:

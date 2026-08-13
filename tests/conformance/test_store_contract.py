@@ -1026,7 +1026,7 @@ async def test_kind_survives_point_in_time_reads(tenant) -> None:
 
 
 async def test_neighbours_returns_nearest_first(tenant) -> None:
-    """"What is close to this", not "what is recent"."""
+    """ "What is close to this", not "what is recent"."""
     store, org, space = tenant
     embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
     near = await _add(store, org, space, "the cat sat on the mat")
@@ -1056,9 +1056,7 @@ async def test_neighbours_excludes_the_memory_being_written(tenant) -> None:
     written = await _add(store, org, space, "a statement about a thing")
 
     probe = await embedder.embed_one("a statement about a thing")
-    rows = await store.neighbours(
-        org.id, space.id, probe, limit=10, exclude_id=written.id
-    )
+    rows = await store.neighbours(org.id, space.id, probe, limit=10, exclude_id=written.id)
     assert written.id not in [m.id for m, _ in rows]
 
 
@@ -1088,9 +1086,7 @@ async def test_neighbours_never_crosses_a_tenant(tenant, backend) -> None:
 async def test_neighbours_skips_archived_memories(tenant) -> None:
     store, org, space = tenant
     embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
-    archived = await _add(
-        store, org, space, "an archived fact", status=MemoryStatus.ARCHIVED
-    )
+    archived = await _add(store, org, space, "an archived fact", status=MemoryStatus.ARCHIVED)
 
     probe = await embedder.embed_one("an archived fact")
     rows = await store.neighbours(org.id, space.id, probe, limit=10)

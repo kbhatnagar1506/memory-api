@@ -122,7 +122,7 @@ async def test_coverage_can_be_forced_off(
 async def test_the_coverage_window_is_bounded(
     service: MemoryService, org: Organization, space: Space, stocked: None
 ) -> None:
-    """"Everything" is a shape of question, not a licence to scan a space."""
+    """ "Everything" is a shape of question, not a licence to scan a space."""
     result = await service.search(
         SearchRequest(
             query="tell me everything about our stack",

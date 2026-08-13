@@ -30,9 +30,7 @@ from mapi.domain.synthesis.understand import (
         ("**compare**", QuestionKind.COMPARE),
     ],
 )
-def test_parse_label_survives_the_wrapping_models_add(
-    raw: str, expected: QuestionKind
-) -> None:
+def test_parse_label_survives_the_wrapping_models_add(raw: str, expected: QuestionKind) -> None:
     assert parse_label(raw) is expected
 
 

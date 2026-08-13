@@ -260,9 +260,7 @@ async def dashboard(request: Request, user: CurrentUser, org_id: str) -> Respons
 
 
 @router.post("/orgs/{org_id}/keys.json")
-async def create_key_json(
-    request: Request, user: CurrentUser, org_id: str
-) -> dict[str, str]:
+async def create_key_json(request: Request, user: CurrentUser, org_id: str) -> dict[str, str]:
     """Mint a key for the dashboard's own use. Returns the plaintext ONCE."""
     await _member_or_404(request, user, org_id)
     payload = await request.json()

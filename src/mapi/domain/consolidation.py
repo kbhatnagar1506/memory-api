@@ -131,9 +131,7 @@ def differs_materially(left: str, right: str) -> bool:
     copies of a restatement, which costs a row. The failure it prevents costs
     a fact.
     """
-    return set(_DISTINCTIVE.findall(left.lower())) != set(
-        _DISTINCTIVE.findall(right.lower())
-    )
+    return set(_DISTINCTIVE.findall(left.lower())) != set(_DISTINCTIVE.findall(right.lower()))
 
 
 def detect_near_duplicate(
@@ -202,7 +200,21 @@ _REVISION_MARKERS = (
     "deprecated",
     "rescinded",
 )
-_NEGATIONS = ("not ", "never ", "won't", "will not", "cannot", "can't", "stopped")
+#: English negation is a CLOSED grammatical class. That is what makes this an
+#: inventory rather than a list somebody has to keep extending: not, the
+#: contracted n't, and the negative quantifiers are the whole of it, and no
+#: further phrasing can be added because the language has no more.
+#:
+#: This used to be seven substrings tested with `in`, which had two defects.
+#: "stopped" was in it -- a lexical verb, not a negator, so "stopped by the
+#: store" read as a negation while "gave up", "quit" and "no longer" did not.
+#: Cessation is open-class semantics and belongs to the adjudicator, which
+#: already receives every pair this cannot explain. And substring testing has
+#: no word boundary, so the class is now matched as words.
+_NEGATION = re.compile(
+    r"\b(?:not|no|none|never|neither|nor|nobody|nothing|nowhere|cannot)\b|n't\b",
+    re.IGNORECASE,
+)
 
 
 def propose_supersessions(
@@ -225,7 +237,7 @@ def propose_supersessions(
 
     text = new_memory.content.casefold()
     has_marker = any(m in text for m in _REVISION_MARKERS)
-    has_negation = any(n in text for n in _NEGATIONS)
+    has_negation = _NEGATION.search(text) is not None
 
     proposals: list[SupersessionProposal] = []
     for memory, vector in candidates:
@@ -383,23 +395,44 @@ __all__ = [
 #: about the same specific claim before disagreeing about it is meaningful.
 CONTRADICT_LOW = 0.82
 
-#: Pairs whose presence on opposite sides of two similar statements is
-#: evidence they conflict. Ordered longest-first inside each pair so
-#: "not going" is not read as containing "going".
-_ANTONYMS: tuple[tuple[str, str], ...] = (
+#: Stems whose presence on opposite sides of two similar statements is evidence
+#: they conflict.
+#:
+#: Antonymy is irreducibly lexical -- there is no structural property of two
+#: strings that makes them opposites, so this is a lexicon and stays one. What
+#: it is NOT allowed to be is wrong, and it was: the pairs were tested with
+#: `in`, so they matched inside longer words. Measured on ten innocent pairs,
+#: nine were reported as conflicting:
+#:
+#:     "runs on Python 3.13"    / "the flag is off"    on   inside pyth-ON
+#:     "dislikes the new one"   / "dislikes the old"   like inside dis-LIKE-s
+#:     "Backups upload nightly" / "the download job"   up   inside UP-load
+#:     "The window seat"        / "they close at ten"  win  inside WIN-dow
+#:     "Yesterday it was paid"  / "there is no invoice" yes inside YES-terday
+#:     "The seller confirmed"   / "we will buy two"    sell inside SELL-er
+#:
+#: A false CONTRADICTS edge is the expensive direction here, and worse, these
+#: never reach the adjudicator: `unexplained_pairs` only escalates what the
+#: lexical pass could NOT explain, so a spurious match writes an edge with no
+#: model review at all. The `dislike` row is the sharpest -- two statements
+#: that AGREE, both saying dislike, flagged as opposites because one word
+#: contains the other.
+#:
+#: Five pairs are also gone, and word boundaries are not what saves them:
+#: `before`/`after` and `more`/`less` are relational terms that co-occur
+#: innocently and mean nothing without a shared dimension; `up`/`down` and
+#: `on`/`off` are too polysemous to carry a claim even matched as whole words,
+#: because "runs ON Python" and "the flag is OFF" are both correct uses of
+#: those words and are not a disagreement; and `always`/`never`, `yes`/`no`
+#: are already the negation class above, where they were counted twice.
+_ANTONYM_STEMS: tuple[tuple[str, str], ...] = (
     ("increase", "decrease"),
     ("accept", "reject"),
-    ("accepted", "declined"),
+    ("accept", "decline"),
     ("approve", "deny"),
     ("enable", "disable"),
     ("start", "stop"),
-    ("open", "closed"),
-    ("before", "after"),
-    ("more", "less"),
-    ("always", "never"),
-    ("yes", "no"),
-    ("on", "off"),
-    ("up", "down"),
+    ("open", "close"),
     ("win", "lose"),
     ("buy", "sell"),
     ("hire", "fire"),
@@ -408,7 +441,29 @@ _ANTONYMS: tuple[tuple[str, str], ...] = (
     ("agree", "disagree"),
     ("like", "dislike"),
     ("prefer", "avoid"),
-    ("confirmed", "cancelled"),
+    ("confirm", "cancel"),
+)
+
+#: Suffixes a stem may carry and still be the same term. Doubled-consonant
+#: forms are here because "cancelled" and "stopped" are the shapes these stems
+#: actually appear in, and a lexicon that cannot match its own entries in
+#: running text is a lexicon that does nothing.
+_INFLECTIONS = r"(?:s|es|d|ed|ing|led|ling|ped|ping)?"
+
+
+def _term(stem: str) -> re.Pattern[str]:
+    """A stem, word-bounded, tolerating inflection.
+
+    Stems of two characters take a plural at most: applying the full suffix set
+    to "on" would match "ones", which is how this class of bug starts.
+    """
+    suffix = _INFLECTIONS if len(stem) > 2 else r"s?"
+    return re.compile(rf"\b{stem}{suffix}\b", re.IGNORECASE)
+
+
+_ANTONYMS: tuple[tuple[str, str, re.Pattern[str], re.Pattern[str]], ...] = tuple(
+    (positive, negative, _term(positive), _term(negative))
+    for positive, negative in _ANTONYM_STEMS
 )
 
 #: Above this, a memory is treated as a DOCUMENT rather than a single fact,
@@ -428,16 +483,21 @@ _WEEKDAY = re.compile(
 
 def _polarity_conflict(left: str, right: str) -> str | None:
     """A negation or antonym present on one side and absent on the other."""
-    lower_left, lower_right = left.casefold(), right.casefold()
-    left_neg = any(n in lower_left for n in _NEGATIONS)
-    right_neg = any(n in lower_right for n in _NEGATIONS)
-    if left_neg != right_neg:
+    if bool(_NEGATION.search(left)) != bool(_NEGATION.search(right)):
         return "one statement is negated and the other is not"
-    for positive, negative in _ANTONYMS:
-        in_left = positive in lower_left, negative in lower_left
-        in_right = positive in lower_right, negative in lower_right
-        # One side asserts the positive term, the other the negative term.
-        if (in_left[0] and in_right[1]) or (in_left[1] and in_right[0]):
+    for positive, negative, positive_re, negative_re in _ANTONYMS:
+        left_has = positive_re.search(left), negative_re.search(left)
+        right_has = positive_re.search(right), negative_re.search(right)
+        # One side asserts the positive term, the other the negative term --
+        # and neither side asserts BOTH, which is what a statement discussing
+        # the change itself does ("moved the flag from on to off"). Reading
+        # that as half of a disagreement is how a changelog entry ends up
+        # contradicting the thing it describes.
+        if left_has[0] and left_has[1]:
+            continue
+        if right_has[0] and right_has[1]:
+            continue
+        if (left_has[0] and right_has[1]) or (left_has[1] and right_has[0]):
             return f"opposing terms ({positive}/{negative})"
     return None
 

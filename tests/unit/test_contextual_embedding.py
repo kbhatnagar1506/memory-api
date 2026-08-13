@@ -40,9 +40,7 @@ def test_the_date_is_a_date_not_a_timestamp() -> None:
 
 
 def test_a_header_cannot_crowd_out_the_chunk() -> None:
-    header = build_header(
-        occurred_at=WHEN, source="s" * 400, metadata={"title": "t" * 400}
-    )
+    header = build_header(occurred_at=WHEN, source="s" * 400, metadata={"title": "t" * 400})
     assert len(header) <= MAX_HEADER_CHARS
 
 
@@ -106,8 +104,11 @@ async def test_the_header_does_reach_the_embedder() -> None:
 
     service.embedder.embed = spy  # type: ignore[method-assign]
     await service.ingest(
-        org_id=org_id, space_id=space_id, content="yeah, three of them",
-        source="user", occurred_at=WHEN,
+        org_id=org_id,
+        space_id=space_id,
+        content="yeah, three of them",
+        source="user",
+        occurred_at=WHEN,
     )
     assert any("<context>" in t and "2023-05-20" in t for t in seen)
 
@@ -123,8 +124,11 @@ async def test_turning_it_off_restores_the_previous_behaviour_exactly() -> None:
 
     service.embedder.embed = spy  # type: ignore[method-assign]
     await service.ingest(
-        org_id=org_id, space_id=space_id, content="yeah, three of them",
-        source="user", occurred_at=WHEN,
+        org_id=org_id,
+        space_id=space_id,
+        content="yeah, three of them",
+        source="user",
+        occurred_at=WHEN,
     )
     assert seen == ["yeah, three of them"]
 

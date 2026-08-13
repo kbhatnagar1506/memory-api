@@ -114,8 +114,12 @@ def _memory(**kw):
     from mapi.core.ids import new_id
     from mapi.domain.models import Memory
 
-    return Memory(org_id=new_id("org"), space_id=new_id("space"),
-                  content=kw.pop("content", "a turn"), **kw)
+    return Memory(
+        org_id=new_id("org"),
+        space_id=new_id("space"),
+        content=kw.pop("content", "a turn"),
+        **kw,
+    )
 
 
 def test_a_session_id_wins_over_a_coarse_source_label() -> None:

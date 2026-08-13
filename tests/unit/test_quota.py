@@ -135,9 +135,7 @@ async def test_ingest_refuses_past_the_daily_write_limit() -> None:
 async def test_the_limit_spans_spaces_within_one_org() -> None:
     """A per-space limit is escaped by creating another space."""
     service, org, space = await _service(max_memories_per_org=2)
-    other = await service.store.create_space(
-        Space(org_id=org.id, slug="other", name="Other")
-    )
+    other = await service.store.create_space(Space(org_id=org.id, slug="other", name="Other"))
     await service.ingest(org_id=org.id, space_id=space.id, content="first")
     await service.ingest(org_id=org.id, space_id=other.id, content="second")
 
@@ -153,9 +151,7 @@ async def test_one_tenant_hitting_its_limit_does_not_affect_another() -> None:
     other_space = await service.store.create_space(
         Space(org_id=other_org.id, slug="s", name="Space")
     )
-    result = await service.ingest(
-        org_id=other_org.id, space_id=other_space.id, content="mine"
-    )
+    result = await service.ingest(org_id=other_org.id, space_id=other_space.id, content="mine")
     assert result.created
 
 

@@ -571,9 +571,7 @@ def test_undated_rows_are_reported_not_silently_dropped() -> None:
 def test_a_short_document_is_one_window() -> None:
     from mapi.domain.synthesis.extract import _windows
 
-    assert _windows("a short passage about one thing") == [
-        "a short passage about one thing"
-    ]
+    assert _windows("a short passage about one thing") == ["a short passage about one thing"]
 
 
 def test_an_oversized_document_is_split() -> None:

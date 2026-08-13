@@ -18,9 +18,7 @@ WHEN = datetime(2023, 5, 1, tzinfo=UTC)
 
 
 def _m(kind: MemoryKind) -> Memory:
-    return Memory(
-        org_id="org_1", space_id="spc_1", content="x", kind=kind, occurred_at=WHEN
-    )
+    return Memory(org_id="org_1", space_id="spc_1", content="x", kind=kind, occurred_at=WHEN)
 
 
 def test_no_kinds_means_every_kind() -> None:

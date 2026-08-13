@@ -140,7 +140,7 @@ def test_only_the_answer_field_is_read() -> None:
 
 def test_a_reply_carrying_only_reasoning_is_not_an_answer() -> None:
     assert parse_answer('{"facts": "the user mentioned Target"}') == (
-        "{\"facts\": \"the user mentioned Target\"}"
+        '{"facts": "the user mentioned Target"}'
     )
 
 

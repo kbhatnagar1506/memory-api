@@ -1,0 +1,13 @@
+=== dynkonly started 10:45:37 ===
+run lme-v23-dynkonly
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+    [1/500] 725 chunks, 0s elapsed, ~235s left
+    [25/500] 18630 chunks, 7s elapsed, ~129s left
+    [50/500] 37203 chunks, 12s elapsed, ~110s left
+    [75/500] 55693 chunks, 18s elapsed, ~99s left
+    [100/500] 74491 chunks, 24s elapsed, ~95s left
+    [125/500] 93199 chunks, 30s elapsed, ~90s left
+    [150/500] 111924 chunks, 40s elapsed, ~94s left

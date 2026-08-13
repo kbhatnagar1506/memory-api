@@ -1,0 +1,571 @@
+{
+  "benchmark": "longmemeval",
+  "end_to_end": {
+    "config": {
+      "vector_weight": 1.0,
+      "lexical_weight": 0.0,
+      "use_rerank": false,
+      "use_mmr": false,
+      "use_decay": false
+    },
+    "answer_model": "gemini-2.5-flash",
+    "judge_model": "claude-sonnet-4-5@20250929",
+    "thinking_budget": 128,
+    "dynamic_k": false,
+    "n_attempted": 5,
+    "n_scored": 5,
+    "n_errors": 0,
+    "accuracy": 1.0,
+    "accuracy_ci": [
+      0.5655,
+      1.0
+    ],
+    "n_answerable": 5,
+    "abstention_rate": null,
+    "n_abstention": 0,
+    "latency_ms_mean": 700.66,
+    "context_tokens_mean": 28060.2,
+    "by_category": {
+      "knowledge-update": {
+        "n": 1,
+        "accuracy": 1.0,
+        "ci": [
+          0.2065,
+          1.0
+        ]
+      },
+      "multi-session": {
+        "n": 1,
+        "accuracy": 1.0,
+        "ci": [
+          0.2065,
+          1.0
+        ]
+      },
+      "single-session-assistant": {
+        "n": 1,
+        "accuracy": 1.0,
+        "ci": [
+          0.2065,
+          1.0
+        ]
+      },
+      "single-session-preference": {
+        "n": 1,
+        "accuracy": 1.0,
+        "ci": [
+          0.2065,
+          1.0
+        ]
+      },
+      "single-session-user": {
+        "n": 1,
+        "accuracy": 1.0,
+        "ci": [
+          0.2065,
+          1.0
+        ]
+      }
+    },
+    "judge_protocol": "longmemeval-official",
+    "judge_bias": {
+      "n_paired": 5,
+      "independent_judge": "claude-sonnet-4-5@20250929",
+      "self_judge": "gemini-2.5-flash",
+      "independent_accuracy": 1.0,
+      "self_accuracy": 1.0,
+      "delta_self_minus_independent": 0.0,
+      "agreement": 1.0
+    },
+    "errors": [],
+    "per_question": [
+      {
+        "qid": "6a1eabeb",
+        "category": "knowledge-update",
+        "is_abstention": false,
+        "question": "What was my personal best time in the charity 5K run?",
+        "reference": "25 minutes and 50 seconds (or 25:50)",
+        "prediction": "25:50",
+        "facts": "",
+        "verdict": "CORRECT",
+        "correct": true,
+        "self_correct": true,
+        "derive_kind": "direct",
+        "derived": false,
+        "search_ms": 698.52,
+        "context_tokens": 32560,
+        "answer_k": 10,
+        "full_recall@answer_k": 1.0,
+        "full_recall@k": 1.0
+      },
+      {
+        "qid": "0a995998",
+        "category": "multi-session",
+        "is_abstention": false,
+        "question": "How many items of clothing do I need to pick up or return from a store?",
+        "reference": "3",
+        "prediction": "3",
+        "facts": "",
+        "verdict": "CORRECT",
+        "correct": true,
+        "self_correct": true,
+        "derive_kind": "count",
+        "derived": false,
+        "search_ms": 699.82,
+        "context_tokens": 29802,
+        "answer_k": 10,
+        "full_recall@answer_k": 1.0,
+        "full_recall@k": 1.0
+      },
+      {
+        "qid": "7161e7e2",
+        "category": "single-session-assistant",
+        "is_abstention": false,
+        "question": "I'm checking our previous chat about the shift rotation sheet for GM social media agents. Can you remind me what was the rotation for Admon on a Sunday?",
+        "reference": "Admon was assigned to the 8 am - 4 pm (Day Shift) on Sundays.",
+        "prediction": "8 am - 4 pm (Day Shift)",
+        "facts": "",
+        "verdict": "CORRECT",
+        "correct": true,
+        "self_correct": true,
+        "derive_kind": "direct",
+        "derived": false,
+        "search_ms": 700.74,
+        "context_tokens": 25081,
+        "answer_k": 10,
+        "full_recall@answer_k": 1.0,
+        "full_recall@k": 1.0
+      },
+      {
+        "qid": "8a2466db",
+        "category": "single-session-preference",
+        "is_abstention": false,
+        "question": "Can you recommend some resources where I can learn more about video editing?",
+        "reference": "The user would prefer responses that suggest resources specifically tailored to Adobe Premiere Pro, especially those that delve into its advanced settings. They might not prefer general video editing resources or resources related to other video editing software.",
+        "prediction": "Since you're already enjoying and diving deep into Adobe Premiere Pro, I recommend continuing with resources specifically tailored to that software. Revisit the official Adobe Premiere Pro documentation and tutorials, and explore YouTube channels like Premiere Bro, Video Copilot, and Adobe Creative Cloud for in-depth guides on advanced techniques. For structured learning, consider online courses on platforms like Udemy or Skillshare that focus on Premiere Pro's color grading and advanced editing workflows.",
+        "facts": "",
+        "verdict": "CORRECT",
+        "correct": true,
+        "self_correct": true,
+        "derive_kind": "direct",
+        "derived": false,
+        "search_ms": 701.7,
+        "context_tokens": 33353,
+        "answer_k": 10,
+        "full_recall@answer_k": 1.0,
+        "full_recall@k": 1.0
+      },
+      {
+        "qid": "e47becba",
+        "category": "single-session-user",
+        "is_abstention": false,
+        "question": "What degree did I graduate with?",
+        "reference": "Business Administration",
+        "prediction": "Business Administration",
+        "facts": "",
+        "verdict": "CORRECT",
+        "correct": true,
+        "self_correct": true,
+        "derive_kind": "direct",
+        "derived": false,
+        "search_ms": 702.5,
+        "context_tokens": 19505,
+        "answer_k": 10,
+        "full_recall@answer_k": 1.0,
+        "full_recall@k": 1.0
+      }
+    ],
+    "name": "vector_only"
+  },
+  "evidence_granularity": "session",
+  "corpora": 5,
+  "documents": 235,
+  "questions": 5,
+  "k": 10,
+  "embedder": {
+    "name": "gemini",
+    "model": "text-embedding-004"
+  },
+  "configs": [
+    {
+      "config": {
+        "vector_weight": 1.0,
+        "lexical_weight": 0.0,
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 10,
+      "n_scored": 5,
+      "n_failed": 0,
+      "full_recall@k": 1.0,
+      "recall@k": 1.0,
+      "hit@k": 1.0,
+      "mrr": 0.9,
+      "ndcg@k": 0.8913,
+      "latency_ms_mean": 712.3108,
+      "by_category": {
+        "knowledge-update": {
+          "n": 1,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "multi-session": {
+          "n": 1,
+          "avg_evidence": 3.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-assistant": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-user": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.5
+        }
+      },
+      "errors": [],
+      "name": "vector_only"
+    },
+    {
+      "config": {
+        "vector_weight": 0.0,
+        "lexical_weight": 1.0,
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 10,
+      "n_scored": 5,
+      "n_failed": 0,
+      "full_recall@k": 1.0,
+      "recall@k": 1.0,
+      "hit@k": 1.0,
+      "mrr": 1.0,
+      "ndcg@k": 1.0,
+      "latency_ms_mean": 695.3297,
+      "by_category": {
+        "knowledge-update": {
+          "n": 1,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "multi-session": {
+          "n": 1,
+          "avg_evidence": 3.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-assistant": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-user": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "errors": [],
+      "name": "lexical_only"
+    },
+    {
+      "config": {
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 10,
+      "n_scored": 5,
+      "n_failed": 0,
+      "full_recall@k": 1.0,
+      "recall@k": 1.0,
+      "hit@k": 1.0,
+      "mrr": 1.0,
+      "ndcg@k": 1.0,
+      "latency_ms_mean": 701.1151,
+      "by_category": {
+        "knowledge-update": {
+          "n": 1,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "multi-session": {
+          "n": 1,
+          "avg_evidence": 3.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-assistant": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-user": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rrf"
+    },
+    {
+      "config": {
+        "use_rerank": true,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 10,
+      "n_scored": 5,
+      "n_failed": 0,
+      "full_recall@k": 1.0,
+      "recall@k": 1.0,
+      "hit@k": 1.0,
+      "mrr": 1.0,
+      "ndcg@k": 0.9614,
+      "latency_ms_mean": 715.5542,
+      "by_category": {
+        "knowledge-update": {
+          "n": 1,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "multi-session": {
+          "n": 1,
+          "avg_evidence": 3.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-assistant": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-user": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rerank"
+    },
+    {
+      "config": {
+        "use_rerank": true,
+        "use_mmr": false,
+        "use_decay": false,
+        "use_entity_expansion": true
+      },
+      "k": 10,
+      "n_scored": 5,
+      "n_failed": 0,
+      "full_recall@k": 1.0,
+      "recall@k": 1.0,
+      "hit@k": 1.0,
+      "mrr": 1.0,
+      "ndcg@k": 0.9614,
+      "latency_ms_mean": 3620.1768,
+      "by_category": {
+        "knowledge-update": {
+          "n": 1,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "multi-session": {
+          "n": 1,
+          "avg_evidence": 3.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-assistant": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-user": {
+          "n": 1,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.2065,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rerank_entity"
+    }
+  ]
+}

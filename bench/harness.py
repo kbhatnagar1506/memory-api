@@ -19,6 +19,8 @@ Honesty constraints, same as the LoCoMo harness they were learned on:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import json
 import re
 import statistics
 import time
@@ -640,9 +642,17 @@ answer is stated indirectly, or needs a small inference across excerpts, \
 ANSWER it. If the excerpts genuinely do not contain what was asked, reply \
 NO_ANSWER.
 
-Reply in exactly this form:
-FACTS: <the relevant facts, or "none">
-ANSWER: <the answer in as few words as possible, or NO_ANSWER>"""
+Reply with a single JSON object and nothing else:
+
+{{"facts": "<the excerpts and values you are drawing on>",
+ "answer": "<the specific value, or null if the excerpts do not contain it>"}}
+
+Fill `facts` FIRST and let it do the work: quote the dates and values you are
+reasoning from, including any that changed. Then `answer` is the value itself
+-- a name, a place, a date, a number -- not a sentence about where it came
+from. Use null, not the string "null", when the excerpts genuinely do not
+contain what was asked.
+"""
 
 #: Advice questions are a different task wearing the same clothes. "Can you
 #: suggest a hotel for my Miami trip?" has no stored answer to look up — the
@@ -678,9 +688,10 @@ explicit ("Sony-compatible, since you shoot Sony").
 preferences; refusing is the failure mode here.
 - Two to four sentences.
 
-Reply in exactly this form:
-FACTS: <the user preferences you are drawing on>
-ANSWER: <your recommendation>"""
+Reply with a single JSON object and nothing else:
+
+{{"facts": "<the user preferences you are drawing on>",
+ "answer": "<your recommendation, two to four sentences>"}}"""
 
 #: The official judge asks for "yes or no only", and the reflex is to cap output
 #: at ~8 tokens to match. That silently breaks thinking models: measured here,
@@ -830,26 +841,79 @@ def _facts_block(raw: str) -> str:
     return ""
 
 
-def parse_answer(raw: str) -> str:
-    """Pull the final answer out of a FACTS/ANSWER response.
+#: Returned when the model produced NOTHING we can read. Distinct from an
+#: empty answer, which is a real decline.
+NO_OUTPUT = "\x00NO_OUTPUT"
 
-    Falls back to the last non-empty line: a model that ignores the format has
-    usually still put its answer last, and scoring a formatting slip as a wrong
-    answer would understate accuracy. A response that is only FACTS with no
-    ANSWER line yields "" rather than the fact list, which would otherwise be
-    graded as if it were an answer.
+
+def _ANSWER_MAX_TOKENS(is_advice: bool) -> int:
+    """Output allowance for one answer.
+
+    Was 256 (512 for advice), which is a flash-era number and the direct cause
+    of the worst measurement error in this harness: on a thinking model,
+    reasoning tokens come out of THIS budget, so gemini-2.5-pro burned the
+    allowance before emitting anything and returned empty on 64 of 118
+    failures. The arm reported 0.734 and was measuring the ceiling, not the
+    model.
+
+    Generous now because the downside is asymmetric. Extra headroom costs
+    tokens on a completion that would have been short anyway; too little
+    turns a correct answer into a silent blank that scores as wrong.
+    """
+    return 2048 if is_advice else 1024
+
+
+def parse_answer(raw: str) -> str:
+    """Read the answer out of a JSON reply.
+
+    JSON rather than a FACTS/ANSWER text form, because the text form could not
+    distinguish a WRONG ANSWER from NO ANSWER AT ALL. Measured cost of that on
+    gemini-2.5-pro: 64 of 118 "wrong" answers were empty completions -- the
+    model spent its 256-token allowance on reasoning tokens and emitted
+    nothing, the parser returned "", and the judge scored silence as incorrect.
+    The arm reported 0.734 and measured our token ceiling, not the model.
+
+    A truncated JSON object fails to parse and returns NO_OUTPUT, which the
+    caller reports as a transport error rather than counting as a wrong
+    answer. That is the whole point of the format: a cut-off reply is now
+    detectable instead of masquerading as a confident mistake.
+
+    The object carries `facts` before `answer`, and that field is not
+    decoration -- it is the model's working space. The text format it replaced
+    had a FACTS line, and dropping it cost two of five questions in a smoke
+    test: the model committed to a value without first writing down what it
+    was reasoning from. Only `answer` is read; `facts` exists to be written.
+
+    Still forgiving about wrapping -- fences, prose either side -- because
+    those are formatting slips around a real answer, and scoring one as wrong
+    would understate accuracy for no reason.
     """
     text = (raw or "").strip()
     if not text:
-        return ""
-    for line in reversed(text.splitlines()):
-        stripped = line.strip()
-        if stripped.upper().startswith("ANSWER:"):
-            return stripped[len("ANSWER:") :].strip()
+        return NO_OUTPUT
+
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
+            obj = json.loads(text[start : end + 1])
+            if isinstance(obj, dict) and "answer" in obj:
+                value = obj["answer"]
+                # null is a real decline; the judge scores it against gold.
+                return "" if value is None else str(value).strip()
+
+    # No readable JSON. If the model wrote a bare line anyway, take it --
+    # a formatting slip is not a wrong answer. If it wrote nothing usable,
+    # say so rather than guessing.
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    if lines and lines[-1].upper().startswith("FACTS:"):
-        return ""
-    return lines[-1] if lines else ""
+    if not lines:
+        return NO_OUTPUT
+    if text.startswith("{") and end == -1:
+        # An object that began and never closed: truncation, not an answer.
+        return NO_OUTPUT
+    return lines[-1]
 
 
 class Gemini:
@@ -1106,12 +1170,12 @@ async def evaluate_end_to_end(
             try:
                 raw, context_tokens = await answerer.complete(
                     template.format(context=context, question=question.text, asked_at=asked_at),
-                    max_tokens=512 if is_advice else 256,
+                    max_tokens=_ANSWER_MAX_TOKENS(is_advice),
                 )
             except Exception as exc:
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
             prediction = parse_answer(raw)
-            if not prediction.strip():
+            if not prediction.strip() or prediction == NO_OUTPUT:
                 # An empty completion is a transport failure wearing the mask
                 # of a wrong answer: the model returned nothing, and scoring
                 # that as "incorrect" attributes an API hiccup to the memory
@@ -1121,11 +1185,17 @@ async def evaluate_end_to_end(
                         template.format(
                             context=context, question=question.text, asked_at=asked_at
                         ),
-                        max_tokens=512 if is_advice else 256,
+                        max_tokens=_ANSWER_MAX_TOKENS(is_advice),
                     )
                     prediction = parse_answer(raw)
                 except Exception:
                     pass
+            if prediction == NO_OUTPUT:
+                # Still nothing readable after a retry. MISSING DATA, not a
+                # wrong answer -- counting it as wrong is how a token ceiling
+                # gets reported as a model's accuracy. Measured: 64 of 118
+                # gemini-2.5-pro "errors" were empty completions.
+                return {"qid": question.qid, "error": "answer: empty completion"}
             declined = prediction.upper().startswith("NO_ANSWER")
 
             # -- derive path (opt-in, ablation-flagged) -----------------------
@@ -1408,4 +1478,4 @@ async def evaluate_end_to_end(
     }
 
 
-__all__ += ["evaluate_end_to_end", "parse_answer"]
+__all__ += ["NO_OUTPUT", "evaluate_end_to_end", "parse_answer"]

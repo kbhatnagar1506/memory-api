@@ -16,3 +16,4 @@ bench/data/*.json
 bench/data/cache/
 scripts/.demo_url
 scripts/.demo_corpus.json
+bench/lab/format_results.json

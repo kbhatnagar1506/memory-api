@@ -31,7 +31,13 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from .embeddings.base import Vector, cosine_similarity
-from .models import Memory, MemoryStatus, RelationEdge, RelationType, content_hash
+from .models import (
+    Memory,
+    MemoryStatus,
+    RelationEdge,
+    RelationType,
+    content_hash,
+)
 
 
 class DuplicateKind(StrEnum):
@@ -227,6 +233,31 @@ def propose_supersessions(
             continue
         if memory.status is not MemoryStatus.ACTIVE:
             continue
+        if len(memory.content) > _DOCUMENT_CHARS:
+            # A DOCUMENT IS NOT A FACT, and cannot be replaced wholesale.
+            #
+            # A long memory asserts many things at once. A later memory that
+            # revises ONE of them does not replace the rest, and supersession
+            # is all-or-nothing: it hides the whole row and cascades
+            # `_mark_derivations_stale` across everything extracted from it.
+            #
+            # Measured on a 10-session trace: two whole session records were
+            # superseded because a single number inside them changed later, and
+            # 8 supersessions removed 49 of 131 memories -- 37% of the corpus
+            # -- from default search. One wrong verdict took 19 true claims
+            # with it.
+            #
+            # `_is_less_specific` already blocks a short CLAIM from replacing a
+            # long document. It does not block a long document from replacing
+            # another long document: s07 at 822 chars against s03 at 1,123 is a
+            # token ratio of 0.8, above that guard's threshold, so it reached
+            # the adjudicator and was confirmed. Length is the signal the
+            # adjudicator cannot see.
+            #
+            # A document that genuinely disagrees gets CONTRADICTS, which hides
+            # nothing. Supersession stays available for the case it was built
+            # for -- one fact replacing one fact.
+            continue
         # Strictly older by event time. Equal timestamps are ambiguous, so we
         # decline rather than guess which one wins.
         if _as_naive(memory.occurred_at) >= _as_naive(new_memory.occurred_at):
@@ -379,6 +410,13 @@ _ANTONYMS: tuple[tuple[str, str], ...] = (
     ("prefer", "avoid"),
     ("confirmed", "cancelled"),
 )
+
+#: Above this, a memory is treated as a DOCUMENT rather than a single fact,
+#: and is never superseded. Chosen well above a restated fact ("I live in
+#: Madrid now" is 20 chars, a spend line ~45) and well below a session (the
+#: trace corpus averaged 1,026). Anything in between is ambiguous, and the
+#: safe reading of ambiguity here is "do not hide it".
+_DOCUMENT_CHARS = 500
 
 #: Numbers and dates are the highest-signal disagreement: two near-identical
 #: sentences differing only in a figure are almost always in conflict.

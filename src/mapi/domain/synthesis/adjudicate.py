@@ -101,6 +101,12 @@ the same fact replaces nothing: "affiliated with Reakon Labs" does NOT \
 replace "Principal Engineer and co-founder of Reakon Labs since May 2026", \
 it just says less.
 
+  * A statement that CONFIRMS the old value replaces nothing. "Redis is \
+unchanged at 45 dollars" does NOT replace "Redis costs 45 dollars" -- it says \
+the old statement is still true.
+  * Mentioning the same THING is not replacing a fact about it. "We are not \
+moving off Redis" does not replace "Redis backs the rate limiter".
+
 Replacing hides the old statement from search, so when in doubt, do not.
 
 New statement:
@@ -112,7 +118,12 @@ Existing statements:
 Reply with a JSON array and nothing else. Include ONLY the ones the new \
 statement replaces; reply with [] if it replaces none.
 
-[{{"n": <number>, "reason": "<six words or fewer>", "confidence": <0.0-1.0>}}]"""
+For each one, name the ATTRIBUTE that changed and quote BOTH values. If you \
+cannot fill `old_value` and `new_value` with two DIFFERENT values, it is not \
+a replacement and must not be listed.
+
+[{{"n": <number>, "attribute": "<what changed>", "old_value": "<before>",
+  "new_value": "<after>", "confidence": <0.0-1.0>}}]"""
 
 
 #: A statement replacing another must not say strictly LESS than it.
@@ -281,6 +292,91 @@ async def adjudicate_contradictions(
     return verdicts
 
 
+#: Currency, unit and phrasing noise that should not make two equal values
+#: look different.
+_VALUE_NOISE = ("dollars", "dollar", "usd", "eur", "euros", "per month", "a month")
+
+
+def _same_value(left: object, right: object) -> bool:
+    """Whether two quoted values say the same thing.
+
+    Numbers are compared AS NUMBERS, because "$45.00" and "45 dollars" are one
+    value wearing two formats and a string comparison calls them different --
+    which would let a confirmation through as a replacement, the exact failure
+    this check exists to stop.
+    """
+    def numbers(value: object) -> list[float]:
+        text = str(value).replace(",", "")
+        return [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", text)]
+
+    def words(value: object) -> str:
+        text = str(value).strip().lower()
+        for noise in _VALUE_NOISE:
+            text = text.replace(noise, " ")
+        text = re.sub(r"[^a-z ]+", " ", text)
+        return " ".join(text.split())
+
+    left_n, right_n = numbers(left), numbers(right)
+    if left_n and right_n:
+        return left_n == right_n
+    return words(left) == words(right)
+
+
+def parse_supersede_verdicts(
+    raw: str, candidates: Sequence[tuple[str, str]]
+) -> list[Verdict]:
+    """Read supersession verdicts, rejecting any that fail their own evidence.
+
+    The model is made to name the attribute and quote BOTH values, and then the
+    values are checked here. That is the whole mechanism: prose rules in the
+    prompt did not hold, and the failures were all one shape -- a new statement
+    that CONFIRMED or merely mentioned the old one being read as replacing it.
+
+    Audited on a 10-session trace before this check existed: 5 of 9 applied
+    supersessions were wrong, and the clearest was "Redis is unchanged at 45"
+    hiding "Redis costs 45 dollars a month". A model that has to write
+    old_value and new_value cannot express that as a replacement without
+    writing the same value twice -- which is exactly what this rejects.
+    """
+    verdicts: list[Verdict] = []
+    seen: set[int] = set()
+    for obj in _decode(raw):
+        if not isinstance(obj, dict):
+            continue
+        try:
+            index = int(obj["n"]) - 1
+            confidence = float(obj.get("confidence", 0.0))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not 0 <= index < len(candidates) or index in seen:
+            continue
+        if confidence < MIN_CONFIDENCE:
+            continue
+
+        old_value = obj.get("old_value")
+        new_value = obj.get("new_value")
+        if old_value is None or new_value is None:
+            # Could not name what changed, so nothing demonstrably changed.
+            log.info("supersede_rejected", why="no values", index=index)
+            continue
+        if _same_value(old_value, new_value):
+            log.info(
+                "supersede_rejected", why="same value", value=str(old_value)[:40]
+            )
+            continue
+
+        seen.add(index)
+        attribute = str(obj.get("attribute") or "attribute").strip()[:60]
+        verdicts.append(
+            Verdict(
+                memory_id=candidates[index][0],
+                reason=f"{attribute}: {old_value} -> {new_value}"[:120],
+                confidence=min(confidence, 1.0),
+            )
+        )
+    return verdicts
+
+
 async def adjudicate_supersessions(
     statement: str,
     candidates: Sequence[tuple[str, str]],
@@ -328,7 +424,7 @@ async def adjudicate_supersessions(
         log.warning("supersede_adjudication_failed", error=str(exc)[:160])
         return []
 
-    verdicts = parse_verdicts(raw, usable)
+    verdicts = parse_supersede_verdicts(raw, usable)
     log.info(
         "adjudicated_supersessions", confirmed=len(verdicts), shortlisted=len(usable)
     )
@@ -344,5 +440,6 @@ __all__ = [
     "adjudicate_contradictions",
     "adjudicate_supersessions",
     "format_candidates",
+    "parse_supersede_verdicts",
     "parse_verdicts",
 ]

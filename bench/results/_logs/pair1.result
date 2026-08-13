@@ -1,0 +1,5 @@
+=== pair one 11:43:24 ===
+--- base2 ---
+    accuracy=0.824 [0.787,0.856] abstention=0.6667 errors=3 (337s)
+--- derive2 ---
+    accuracy=0.830 [0.793,0.861] abstention=0.6667 errors=6 (667s)

@@ -23,7 +23,7 @@ import pytest
 
 from mapi.config import Settings
 from mapi.domain.embeddings import DeterministicEmbedder
-from mapi.domain.models import MemoryStatus, Organization, RelationType, Space
+from mapi.domain.models import Memory, MemoryStatus, Organization, RelationType, Space
 from mapi.domain.retrieval.pipeline import SearchRequest
 from mapi.domain.retrieval.rerank import HeuristicReranker
 from mapi.service import MemoryService
@@ -41,7 +41,13 @@ async def _confirming(prompt: str) -> str:
     both are about the standup, only one replaces anything. Audited against
     a real corpus, similarity alone hid four true memories out of five.
     """
-    return '[{"n": 1, "reason": "restated with a new time", "confidence": 0.95}]'
+    # Names the attribute and BOTH values, because that is the real contract:
+    # a verdict that cannot quote two different values is rejected in code, so
+    # a stub that omits them would be testing a path production never takes.
+    return (
+        '[{"n": 1, "attribute": "start time", "old_value": "9:30am",'
+        ' "new_value": "10:15am", "confidence": 0.95}]'
+    )
 
 
 async def _refusing(prompt: str) -> str:
@@ -235,3 +241,55 @@ async def test_the_adjudicator_can_refuse_a_shortlisted_supersession() -> None:
 def test_floor_must_be_a_probability(floor: float) -> None:
     with pytest.raises(ValueError):
         _settings(floor)
+
+
+# -- a document is not a fact ----------------------------------------------
+#
+# A long memory asserts many things at once, and supersession is all-or-
+# nothing: it hides the whole row and cascades `_mark_derivations_stale` over
+# everything extracted from it. Measured on a 10-session trace, two whole
+# session records were superseded because one number inside them changed
+# later, and 8 supersessions removed 49 of 131 memories -- 37% of the corpus.
+
+
+def _mem(content: str, when: datetime) -> Memory:
+    from mapi.core.ids import new_id
+
+    return Memory(
+        org_id=new_id("org"),
+        space_id=new_id("space"),
+        content=content,
+        occurred_at=when,
+    )
+
+
+def test_a_long_document_is_never_proposed_for_supersession() -> None:
+    from mapi.domain.consolidation import propose_supersessions
+
+    session = _mem(
+        "Reviewed spend this morning. Cloud SQL is 340 dollars a month, Redis "
+        "is 45, Heroku dynos come to 100. " + ("Discussion of alerting. " * 22),
+        BASE,
+    )
+    assert len(session.content) > 500
+    later = _mem(
+        "Reviewed spend again. Cloud SQL is 410 dollars a month, and the second "
+        "dyno took Heroku to 175. " + ("More discussion of the same. " * 20),
+        BASE + timedelta(days=60),
+    )
+    # Inside the supersession band [0.72, 0.97): above the ceiling a pair is a
+    # near-duplicate, which is a different verdict entirely.
+    vector, close = [1.0, 0.0, 0.0], [0.9, 0.436, 0.0]
+
+    assert propose_supersessions(later, vector, [(session, close)]) == []
+
+
+def test_a_short_fact_is_still_eligible() -> None:
+    """The rule must aim supersession, not disable it."""
+    from mapi.domain.consolidation import propose_supersessions
+
+    old = _mem("I live in Berlin.", BASE)
+    new = _mem("I live in Madrid now.", BASE + timedelta(days=60))
+    vector, close = [1.0, 0.0, 0.0], [0.9, 0.436, 0.0]
+
+    assert propose_supersessions(new, vector, [(old, close)])

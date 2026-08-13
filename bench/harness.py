@@ -27,6 +27,8 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from mapi.domain.chunking import chunk_text, estimate_tokens
@@ -1107,6 +1109,57 @@ def evidence_budget(question: str, *, cap: int) -> int:
     return min(_EVIDENCE_BUDGET.get(classify(question), _DEFAULT_BUDGET), cap)
 
 
+@dataclass(frozen=True, slots=True)
+class _ReplayMemory:
+    """The three fields the answer path reads off a retrieved memory."""
+
+    id: str
+    content: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class _ReplayHit:
+    memory: _ReplayMemory
+    score: float
+
+
+def save_retrieval(path: Path, captured: dict[str, list[dict[str, Any]]]) -> None:
+    """Write what retrieval returned, per question.
+
+    Retrieval is deterministic -- same corpus, same cached embeddings, same
+    query, same pipeline parameters -- and today it produced FULL=0.968
+    hit=0.994 mrr=0.938 to three decimals across five separate arms. So
+    re-deriving it for every answer-side experiment is pure waste: measured on
+    this corpus, ingest (692s) plus the five-strategy sweep (801s) is 82% of an
+    arm's 1830s, against 337s of answering that is the only part which differs.
+
+    Capturing it turns a 30-minute arm into a 6-minute one, which is the
+    difference between testing four answer configurations and testing one.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(captured))
+
+
+def load_retrieval(path: Path) -> dict[str, list[_ReplayHit]]:
+    """Rehydrate captured retrieval into objects the answer path can read."""
+    raw = json.loads(path.read_text())
+    out: dict[str, list[_ReplayHit]] = {}
+    for qid, hits in raw.items():
+        out[qid] = [
+            _ReplayHit(
+                memory=_ReplayMemory(
+                    id=h["id"],
+                    content=h["content"],
+                    occurred_at=datetime.fromisoformat(h["occurred_at"]),
+                ),
+                score=float(h.get("score", 0.0)),
+            )
+            for h in hits
+        ]
+    return out
+
+
 async def evaluate_end_to_end(
     corpora: list[Corpus],
     ingested: Ingested,
@@ -1132,6 +1185,10 @@ async def evaluate_end_to_end(
     official_judge: bool = True,
     measure_judge_bias: bool = True,
     use_derive: bool = False,
+    #: Write what retrieval returned, for later answer-only replays.
+    capture_path: Path | None = None,
+    #: Replay a capture instead of searching. Skips ingest and the sweep.
+    replay: dict[str, list[_ReplayHit]] | None = None,
     verbose: bool = True,
     thinking_budget: int = 128,
     dynamic_k: bool = False,
@@ -1149,35 +1206,49 @@ async def evaluate_end_to_end(
     )
     semaphore = asyncio.Semaphore(concurrency)
     questions = [q for c in corpora for q in c.questions]
+    captured: dict[str, list[dict[str, Any]]] | None = (
+        {} if capture_path is not None else None
+    )
 
     async def one(question: Question) -> dict[str, Any]:
         space_id = ingested.spaces.get(question.corpus_id)
-        if space_id is None:
+        if space_id is None and replay is None:
             return {"qid": question.qid, "error": "no space"}
         async with semaphore:
             started = time.perf_counter()
             # Per-question evidence budget, not one k for everyone. `k` is
             # the ceiling; the question's shape decides how much to use.
             per_question_k = evidence_budget(question.text, cap=k) if dynamic_k else k
-            try:
-                response = await pipeline.search(
-                    SearchRequest(
-                        query=question.text,
-                        org_id=ingested.org_id,
-                        space_id=space_id,
-                        limit=per_question_k,
-                        known_speakers=ingested.speakers,
-                        asked_at=question.asked_at,
-                        max_per_source=max_per_source,
-                        route_by_kind=route_by_kind,
-                        filters=MemoryFilter(kinds=frozenset({MemoryKind.EPISODIC}))
-                        if episodes_only
-                        else MemoryFilter(),
-                        **config,
+            if replay is not None:
+                # Retrieval already happened, in an earlier run, and it is
+                # deterministic. A stand-in response lets every line below run
+                # untouched -- the answer path only reads `.results`.
+                hits = replay.get(question.qid)
+                if hits is None:
+                    return {"qid": question.qid, "error": "replay: question absent"}
+                response = SimpleNamespace(results=hits)
+            else:
+                response = None
+            if response is None:
+                try:
+                    response = await pipeline.search(
+                        SearchRequest(
+                            query=question.text,
+                            org_id=ingested.org_id,
+                            space_id=space_id,
+                            limit=per_question_k,
+                            known_speakers=ingested.speakers,
+                            asked_at=question.asked_at,
+                            max_per_source=max_per_source,
+                            route_by_kind=route_by_kind,
+                            filters=MemoryFilter(kinds=frozenset({MemoryKind.EPISODIC}))
+                            if episodes_only
+                            else MemoryFilter(),
+                            **config,
+                        )
                     )
-                )
-            except Exception as exc:
-                return {"qid": question.qid, "error": f"search: {exc}"[:200]}
+                except Exception as exc:
+                    return {"qid": question.qid, "error": f"search: {exc}"[:200]}
             search_ms = (time.perf_counter() - started) * 1000
 
             # Pass the WHOLE retrieved session, not the chunk that matched.
@@ -1191,6 +1262,16 @@ async def evaluate_end_to_end(
             # and temporal-reasoning, where retrieval is already at 1.000/0.910
             # and the only remaining question is which of several values wins.
             ordered = sorted(response.results, key=lambda h: h.memory.occurred_at)
+            if captured is not None:
+                captured[question.qid] = [
+                    {
+                        "id": h.memory.id,
+                        "content": h.memory.content,
+                        "occurred_at": h.memory.occurred_at.isoformat(),
+                        "score": getattr(h, "score", 0.0),
+                    }
+                    for h in ordered
+                ]
             context = "\n\n---\n\n".join(
                 # Full timestamp, not just the date: three questions have two
                 # gold sessions on the SAME day, and a date-only header leaves
@@ -1446,6 +1527,12 @@ async def evaluate_end_to_end(
         return row
 
     rows = await asyncio.gather(*(one_verbose(q) for q in questions))
+    if capture_path is not None and captured:
+        save_retrieval(capture_path, captured)
+        print(
+            f"  captured retrieval for {len(captured)} questions -> {capture_path}",
+            flush=True,
+        )
     ok = [r for r in rows if "error" not in r]
     errors = [r for r in rows if "error" in r]
     answerable = [r for r in ok if not r["is_abstention"]]

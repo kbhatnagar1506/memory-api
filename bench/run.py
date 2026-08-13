@@ -33,12 +33,20 @@ from mapi.core.logging import configure_logging
 from mapi.domain.embeddings import build_embedder
 from mapi.domain.retrieval.rerank import HeuristicReranker, NoopReranker
 from mapi.domain.synthesis.completer import build_extractor
+from mapi.store.memory import InMemoryStore
 
 from .cache import DiskClaimCache, DiskVectorCache
 from .datasets.base import Dataset
 from .datasets.locomo import LoCoMo
 from .datasets.longmemeval import LongMemEval
-from .harness import evaluate_end_to_end, evaluate_retrieval, extract_corpora, ingest
+from .harness import (
+    Ingested,
+    evaluate_end_to_end,
+    evaluate_retrieval,
+    extract_corpora,
+    ingest,
+    load_retrieval,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "bench" / "results"
@@ -91,6 +99,61 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
     documents = sum(len(c.documents) for c in corpora)
     questions = sum(len(c.questions) for c in corpora)
     print(f"  {len(corpora)} corpora, {documents} documents, {questions} questions")
+
+    # -- replay: answer from a captured retrieval, skipping everything before it
+    #
+    # Retrieval is deterministic on a fixed corpus with cached embeddings --
+    # measured today, FULL=0.968 hit=0.994 mrr=0.938 identical across five
+    # arms. Ingest (692s) plus the five-strategy sweep (801s) is 82% of an
+    # arm's 1830s runtime and produces the same numbers every time, so an
+    # answer-side experiment should not pay for it.
+    replay = load_retrieval(Path(args.replay_retrieval)) if args.replay_retrieval else None
+    if replay is not None:
+        print(f"  replaying captured retrieval for {len(replay)} questions", flush=True)
+        started = time.perf_counter()
+        end_to_end = await evaluate_end_to_end(
+            corpora,
+            Ingested(store=InMemoryStore(), org_id="replay"),
+            build_embedder(
+                Settings(
+                    store_backend=StoreBackend.MEMORY,
+                    embedding_backend=EmbeddingBackend(args.embeddings),
+                    embedding_dimensions=args.dimensions,
+                    embedding_model="text-embedding-004",
+                )
+            ),
+            NoopReranker(),
+            k=args.answer_k,
+            config={},
+            answer_model=args.answer_model,
+            judge_model=args.judge_model,
+            official_judge=not args.strict_judge,
+            use_derive=args.derive,
+            thinking_budget=args.thinking_budget,
+            dynamic_k=args.dynamic_k,
+            project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+            concurrency=args.concurrency,
+            replay=replay,
+        )
+        end_to_end["name"] = "replay"
+        lo, hi = end_to_end["accuracy_ci"]
+        print(
+            f"    accuracy={end_to_end['accuracy']:.3f} [{lo:.3f},{hi:.3f}] "
+            f"errors={len(end_to_end['errors'])} "
+            f"({time.perf_counter() - started:.0f}s)",
+            flush=True,
+        )
+        return {
+            "benchmark": name,
+            "corpora": len(corpora),
+            "documents": documents,
+            "questions": questions,
+            "k": args.answer_k,
+            "granularity": dataset.evidence_granularity,
+            "embedder": "replayed",
+            "results": [],
+            "end_to_end": end_to_end,
+        }
 
     settings = Settings(
         store_backend=StoreBackend.MEMORY,
@@ -225,6 +288,8 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
             dynamic_k=args.dynamic_k,
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             concurrency=args.concurrency,
+            capture_path=Path(args.capture_retrieval) if args.capture_retrieval else None,
+            replay=replay,
         )
         end_to_end["name"] = best["name"]
         lo, hi = end_to_end["accuracy_ci"]
@@ -501,6 +566,24 @@ async def main() -> int:
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--capture-retrieval",
+        metavar="PATH",
+        help=(
+            "write what retrieval returned, per question, for later replay. "
+            "Retrieval is deterministic, and ingest plus the sweep is 82%% of "
+            "an arm's runtime -- capturing once makes every answer-side "
+            "experiment a 6-minute run instead of a 30-minute one."
+        ),
+    )
+    parser.add_argument(
+        "--replay-retrieval",
+        metavar="PATH",
+        help=(
+            "answer from a captured retrieval instead of searching. Skips "
+            "ingest and the strategy sweep entirely."
+        ),
+    )
     parser.add_argument(
         "--contextual-embedding",
         action="store_true",

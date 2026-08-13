@@ -17,7 +17,7 @@ is the single most common write a memory system sees.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -337,7 +337,22 @@ class MemoryService:
         )
         pairs = [(mid, m.content) for mid, m in existing.items()]
         verdicts = await adjudicate_supersessions(memory.content, pairs, self.extractor)
-        return [by_id[v.memory_id] for v in verdicts if v.memory_id in by_id]
+        # Carry the ADJUDICATOR's reason onto the edge, not the cosine
+        # proposer's. The proposer explains why a pair was nominated ("same
+        # subject (similarity 0.83); shared tags"), which is the wrong
+        # question: what a reader needs months later is why the model APPROVED
+        # hiding a memory, and the verdict says that in the form
+        # "attribute: old -> new". Returning the original proposal threw the
+        # only auditable justification away.
+        return [
+            replace(
+                by_id[v.memory_id],
+                reason=v.reason,
+                confidence=v.confidence,
+            )
+            for v in verdicts
+            if v.memory_id in by_id
+        ]
 
     @staticmethod
     def _unexplained_conflicts(

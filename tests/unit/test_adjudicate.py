@@ -317,3 +317,72 @@ async def test_a_summary_never_reaches_the_adjudicator() -> None:
     )
     assert verdicts == []
     assert not called
+
+
+# -- a supersession must name what changed ---------------------------------
+#
+# Audited on a 10-session trace: 5 of 9 applied supersessions were wrong, and
+# every one was the same shape -- a new statement that CONFIRMED or merely
+# MENTIONED the old one, read as replacing it. The clearest was "Redis is
+# unchanged at 45" hiding "Redis costs 45 dollars a month".
+#
+# Prose rules in the prompt did not hold. So the model must now quote both
+# values, and the values are checked here: a verdict that cannot name two
+# different values is not a replacement.
+
+_PAIR = [("m1", "Redis costs 45 dollars a month."), ("m2", "Deploys on Heroku.")]
+
+
+def _verdicts(raw: str):
+    from mapi.domain.synthesis.adjudicate import parse_supersede_verdicts
+
+    return parse_supersede_verdicts(raw, _PAIR)
+
+
+def test_a_confirmation_is_not_a_replacement() -> None:
+    raw = (
+        '[{"n":1,"attribute":"monthly cost","old_value":"45 dollars",'
+        '"new_value":"45","confidence":0.95}]'
+    )
+    assert _verdicts(raw) == []
+
+
+def test_the_same_value_in_another_format_is_not_a_replacement() -> None:
+    """"$45.00" and "45 dollars" are one value wearing two formats."""
+    raw = (
+        '[{"n":1,"attribute":"cost","old_value":"$45.00",'
+        '"new_value":"45 dollars","confidence":0.99}]'
+    )
+    assert _verdicts(raw) == []
+
+
+def test_a_verdict_that_names_no_values_is_rejected() -> None:
+    """Could not say what changed, so nothing demonstrably changed."""
+    raw = '[{"n":1,"attribute":"redis","confidence":0.99}]'
+    assert _verdicts(raw) == []
+
+
+def test_a_genuine_change_is_confirmed_and_explains_itself() -> None:
+    raw = (
+        '[{"n":1,"attribute":"monthly cost","old_value":"45 dollars",'
+        '"new_value":"60 dollars","confidence":0.9}]'
+    )
+    out = _verdicts(raw)
+    assert [v.memory_id for v in out] == ["m1"]
+    assert "45" in out[0].reason and "60" in out[0].reason
+
+
+def test_a_textual_change_with_no_numbers_still_counts() -> None:
+    raw = (
+        '[{"n":2,"attribute":"host","old_value":"Heroku",'
+        '"new_value":"Cloud Run","confidence":0.9}]'
+    )
+    assert [v.memory_id for v in _verdicts(raw)] == ["m2"]
+
+
+def test_case_alone_is_not_a_change() -> None:
+    raw = (
+        '[{"n":2,"attribute":"host","old_value":"Heroku",'
+        '"new_value":"heroku","confidence":0.9}]'
+    )
+    assert _verdicts(raw) == []

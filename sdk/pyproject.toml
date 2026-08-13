@@ -1,6 +1,6 @@
 [project]
 name = "mapi-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python client for mapi — memory for AI agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,9 +23,11 @@ dependencies = ["httpx>=0.27"]
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "pytest-asyncio>=0.24", "respx>=0.21", "ruff>=0.8", "mypy>=1.13"]
 
-[project.urls]
-Homepage = "https://memory-api-7b178bde9ecc.herokuapp.com"
-Documentation = "https://memory-api-7b178bde9ecc.herokuapp.com/docs"
+# No [project.urls] for now. The links PyPI renders in the sidebar pointed at
+# a Heroku hostname, and a project page advertising an app URL invites people
+# to poke at it before it is meant to be poked at. Restore Homepage and
+# Documentation when there is a stable domain to point them at -- PyPI reads
+# these per release, so the next upload picks up whatever is here.
 
 [build-system]
 requires = ["hatchling"]

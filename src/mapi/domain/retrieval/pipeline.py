@@ -41,6 +41,7 @@ from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
 from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
 from ..synthesis.classify import QuestionKind, classify
+from ..synthesis.scope import extract_scope
 from ..synthesis.understand import QueryIntent, QueryUnderstanding
 from .confidence import RetrievalConfidence, assess
 from .decay import apply_decay
@@ -50,6 +51,7 @@ from .fusion import FusedItem, RankedList, reciprocal_rank_fusion
 from .mmr import MMRCandidate, maximal_marginal_relevance
 from .rerank import RerankCandidate, Reranker
 from .routing import allocate, apply_allocation
+from .temporal import apply_scope
 from .tuning import Fusion, fusion_for
 
 log = get_logger(__name__)
@@ -194,6 +196,14 @@ class SearchRequest:
     #: of weights for every question; see tuning.py for where the numbers
     #: come from (reasoned, not fitted).
     tune_by_intent: bool = True
+    #: The date the question was asked. Relative windows ("over the past six
+    #: months") are meaningless without it, and resolving them against the
+    #: wall clock would make the same question retrieve differently on
+    #: different days.
+    asked_at: datetime | None = None
+    #: Raise memories inside the window the question names. Inert when the
+    #: question names none.
+    use_temporal_scope: bool = True
     #: Weight of each first-stage strategy in fusion.
     vector_weight: float = 1.0
     lexical_weight: float = 1.0
@@ -608,6 +618,20 @@ class RetrievalPipeline:
                     + ("" if r.reranked else " (fallback)")
                 )
             scored.sort(key=lambda s: (-s.score, s.memory.id))
+
+        # -- stage 4b: the window the question asked for -------------------------
+        # After reranking, because a reranker judges topical relevance and has
+        # no idea what month anything happened in; before decay, so a stated
+        # window is applied to relevance rather than to an age-adjusted score.
+        #
+        # A BIAS, never a filter: event time is caller-supplied, may be absent,
+        # and "in March" is often the asker's approximation of something logged
+        # on 2 April. Filtering makes those unanswerable; boosting keeps every
+        # candidate reachable.
+        if request.use_temporal_scope and request.asked_at is not None:
+            scope = extract_scope(request.query, request.asked_at.date())
+            if scope is not None:
+                scored = apply_scope(scored, scope)
 
         # -- stage 5: recency decay ---------------------------------------------
         if request.use_decay:

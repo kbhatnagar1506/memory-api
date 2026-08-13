@@ -34,7 +34,7 @@ from ._resources import (
 )
 
 DEFAULT_BASE_URL = "https://memory-api-7b178bde9ecc.herokuapp.com"
-__client_version__ = "0.1.0"
+__client_version__ = "0.1.1"
 
 #: Retried automatically. 429 and the gateway family are transient by
 #: definition. 500 is deliberately absent: a request that made the server

@@ -1,0 +1,11 @@
+=== DERIVE+DYNAMIC-K started 08:53:35 ===
+run lme-v22-derive
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+    [1/500] 725 chunks, 0s elapsed, ~223s left
+    [25/500] 18630 chunks, 8s elapsed, ~155s left
+    [50/500] 37203 chunks, 16s elapsed, ~144s left
+    [75/500] 55693 chunks, 36s elapsed, ~202s left
+    [100/500] 74491 chunks, 44s elapsed, ~174s left

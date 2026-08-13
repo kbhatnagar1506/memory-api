@@ -1,0 +1,1314 @@
+=== BASELINE started 06:54:58 ===
+run lme-v21-baseline
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+    [1/500] 725 chunks, 0s elapsed, ~180s left
+    [25/500] 18630 chunks, 6s elapsed, ~122s left
+    [50/500] 37203 chunks, 12s elapsed, ~109s left
+    [75/500] 55693 chunks, 19s elapsed, ~108s left
+    [100/500] 74491 chunks, 25s elapsed, ~100s left
+    [125/500] 93199 chunks, 31s elapsed, ~93s left
+    [150/500] 111924 chunks, 43s elapsed, ~99s left
+    [175/500] 130674 chunks, 49s elapsed, ~91s left
+    [200/500] 149403 chunks, 110s elapsed, ~166s left
+    [225/500] 168180 chunks, 123s elapsed, ~150s left
+    [250/500] 186660 chunks, 133s elapsed, ~133s left
+    [275/500] 205409 chunks, 266s elapsed, ~218s left
+    [300/500] 224153 chunks, 275s elapsed, ~184s left
+    [325/500] 242864 chunks, 292s elapsed, ~157s left
+    [350/500] 261710 chunks, 466s elapsed, ~200s left
+    [375/500] 280405 chunks, 473s elapsed, ~158s left
+    [400/500] 299111 chunks, 480s elapsed, ~120s left
+    [425/500] 317813 chunks, 487s elapsed, ~86s left
+    [450/500] 336463 chunks, 687s elapsed, ~76s left
+    [475/500] 355147 chunks, 698s elapsed, ~37s left
+    [500/500] 373687 chunks, 707s elapsed, ~0s left
+  embedding cache: {'rows': 591528, 'hits': 372991, 'misses': 696}
+  ingested 23867 units (0 of them extracted claims) / 373687 chunks in 712s (78s embedding)
+    vector_only            FULL=0.968 hit=0.994 mrr=0.939 10604ms (169s)
+    lexical_only           FULL=0.916 hit=0.984 mrr=0.910 8724ms (139s)
+    hybrid_rrf             FULL=0.952 hit=0.994 mrr=0.943 9414ms (150s)
+    hybrid_rerank          FULL=0.890 hit=0.976 mrr=0.864 9119ms (147s)
+    hybrid_rerank_entity   FULL=0.890 hit=0.976 mrr=0.864 31161ms (495s)
+  end-to-end with vector_only (best full recall) ...
+    [  1/500] decline single-session-user      How much is the painting of a sunset worth in terms  -> 'NO_ANSWER' (gold 'The painting is worth triple w')
+    [  2/500] ok      single-session-user      How old was I when my grandma gave me the silver nec -> '18' (gold '18')
+    [  3/500] ok      single-session-user      How long did it take me to assemble the IKEA bookshe -> '4 hours' (gold '4 hours')
+    [  4/500] ok      single-session-user      What is my preferred gin-to-vermouth ratio for a cla -> '3:1' (gold '3:1')
+    [  5/500] ok      single-session-user      How many playlists do I have on Spotify?             -> '20' (gold '20')
+    [  6/500] ok      single-session-user      How many largemouth bass did I catch on my fishing t -> '12' (gold '12')
+    [  7/500] ok      single-session-user      Where do I take yoga classes?                        -> 'Serenity Yoga and at home using the Down Dog' (gold 'Serenity Yoga')
+    [  8/500] ok      single-session-user      What color did I repaint my bedroom walls?           -> 'a lighter shade of gray' (gold 'a lighter shade of gray')
+    [  9/500] ok      single-session-user      What is the name of the playlist I created on Spotif -> 'Summer Vibes' (gold 'Summer Vibes')
+    [ 10/500] ok      single-session-user      What was the discount I got on my first purchase fro -> '10%' (gold '10%')
+    [ 11/500] ok      single-session-user      What speed is my new internet plan?                  -> '500 Mbps' (gold '500 Mbps')
+    [ 12/500] ok      single-session-user      How much RAM did I upgrade my laptop to?             -> '16GB' (gold '16GB')
+    [ 13/500] ok      single-session-user      What breed is my dog?                                -> 'Golden Retriever' (gold 'Golden Retriever')
+    [ 14/500] ok      single-session-user      Where did I buy my new tennis racket from?           -> 'a sports store downtown' (gold 'the sports store downtown')
+    [ 15/500] ok      single-session-user      How many shirts did I pack for my 5-day trip to Cost -> '7' (gold '7')
+    [ 16/500] ok      single-session-user      What brand are my favorite running shoes?            -> 'Nike' (gold 'Nike')
+    [ 17/500] ok      single-session-user      Where did I attend my cousin's wedding?              -> 'the Grand Ballroom' (gold 'The Grand Ballroom')
+    [ 18/500] ok      single-session-user      What certification did I complete last month?        -> 'Data Science' (gold 'Data Science')
+    [ 19/500] ok      single-session-user      When did I volunteer at the local animal shelter's f -> "Valentine's Day" (gold 'February 14th')
+    [ 20/500] ok      single-session-user      What was my previous stance on spirituality?         -> 'staunch atheist' (gold 'A staunch atheist')
+    [ 21/500] ok      single-session-user      How long is my daily commute to work?                -> '45 minutes each way' (gold '45 minutes each way')
+    [ 22/500] ok      single-session-user      What is the name of my cat?                          -> 'Luna' (gold 'Luna')
+    [ 23/500] ok      single-session-user      What degree did I graduate with?                     -> 'Business Administration' (gold 'Business Administration')
+    [ 24/500] ok      single-session-user      How many amateur comedians did I watch perform at th -> '10' (gold '10')
+    [ 25/500] ok      single-session-user      How much did I spend on a designer handbag?          -> '$800' (gold '$800')
+    [ 26/500] ok      single-session-user      Where did I complete my Bachelor's degree in Compute -> 'UCLA' (gold 'University of California, Los ')
+    [ 27/500] ok      single-session-user      What play did I attend at the local community theate -> 'The Glass Menagerie' (gold 'The Glass Menagerie')
+    [ 28/500] ok      single-session-user      What was my previous occupation?                     -> 'marketing specialist at a small startup' (gold 'Marketing specialist at a smal')
+    [ 29/500] WRONG   single-session-user      Where did I attend for my study abroad program?      -> 'University of Melbourne' (gold 'University of Melbourne in Aus')
+    [ 30/500] ok      single-session-user      How many bikes do I own?                             -> '3' (gold 'three')
+    [ 31/500] ok      single-session-user      What was my last name before I changed it?           -> 'Johnson' (gold 'Johnson')
+    [ 32/500] ok      single-session-user      What did I buy for my sister's birthday gift?        -> 'a yellow dress and a pair of earrings to mat' (gold 'a yellow dress')
+    [ 33/500] ok      single-session-user      Where did I redeem a $5 coupon on coffee creamer?    -> 'Target' (gold 'Target')
+    [ 34/500] decline single-session-user      What book am I currently reading?                    -> 'NO_ANSWER' (gold 'The Seven Husbands of Evelyn H')
+    [ 35/500] decline single-session-user      What is the name of my hamster?                      -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 36/500] decline single-session-user      What is my ethnicity?                                -> 'NO_ANSWER' (gold 'A mix of Irish and Italian')
+    [ 37/500] decline single-session-user      How long was I in Korea for?                         -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 38/500] decline single-session-user      What did I bake for my uncle's birthday party?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 39/500] ok      single-session-user      What type of action figure did I buy from a thrift s -> 'rare blue Snaggletooth action figure' (gold 'a blue Snaggletooth')
+    [ 40/500] ok      single-session-user      How long did I wait for the decision on my asylum ap -> 'Over a year' (gold 'over a year')
+    [ 41/500] ok      single-session-user      What is the name of the music streaming service have -> 'Spotify' (gold 'Spotify')
+    [ 42/500] ok      single-session-user      What brand of shampoo do I currently use?            -> "Trader Joe's lavender scented shampoo" (gold "Trader Joe's")
+    [ 43/500] ok      single-session-user      What type of bulb did I replace in my bedside lamp?  -> 'Philips LED bulb' (gold 'Philips LED bulb')
+    [ 44/500] decline single-session-user      How long have I been collecting vintage films?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 45/500] decline single-session-user      How much time do I dedicate to practicing violin eve -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 46/500] ok      single-session-user      What type of rice is my favorite?                    -> 'Japanese short-grain rice' (gold 'Japanese short-grain rice')
+    [ 47/500] ok      single-session-user      Where does my sister Emily live?                     -> 'Denver' (gold 'Denver')
+    [ 48/500] ok      single-session-user      What type of cocktail recipe did I try last weekend? -> 'Lavender gin fizz' (gold 'lavender gin fizz')
+    [ 49/500] ok      single-session-user      Where did I buy my new bookshelf from?               -> 'IKEA' (gold 'IKEA')
+    [ 50/500] ok      single-session-user      What game did I finally beat last weekend?           -> 'Dark Souls 3 DLC' (gold 'Dark Souls 3 DLC')
+    [ 51/500] ok      single-session-user      What time do I usually get home from work on weeknig -> '6:30 pm' (gold '6:30 pm')
+    [ 52/500] ok      single-session-user      What health issue did I initially think was just a c -> 'bronchitis' (gold 'bronchitis')
+    [ 53/500] ok      single-session-user      How long was I in Japan for?                         -> 'two weeks' (gold 'two weeks')
+    [ 54/500] ok      single-session-user      How many skeins of worsted weight yarn did I find in -> '17' (gold '17')
+    [ 55/500] ok      single-session-user      How long did it take to move to the new apartment?   -> '5 hours' (gold '5 hours')
+    [ 56/500] ok      single-session-user      What did I bake for my niece's birthday party?       -> 'lemon blueberry cake' (gold 'a lemon blueberry cake')
+    [ 57/500] ok      single-session-user      How much screen time have I been averaging on Instag -> '2 hours' (gold '2 hours')
+    [ 58/500] ok      single-session-user      Who did I have a conversation with about destiny?    -> 'Sarah' (gold 'Sarah')
+    [ 59/500] ok      single-session-user      What size is my new Samsung TV?                      -> '55-inch' (gold '55-inch')
+    [ 60/500] ok      single-session-user      How many copies of my favorite artist's debut album  -> '500' (gold '500')
+    [ 61/500] ok      single-session-user      How long have I been collecting vintage cameras?     -> '3 months and 9 days' (gold 'three months')
+    [ 62/500] ok      single-session-user      How many hours did I spend watching documentaries on -> '10 hours' (gold '10')
+    [ 63/500] ok      single-session-user      Where did I go on a week-long trip with my family?   -> 'Hawaii' (gold 'Hawaii')
+    [ 64/500] ok      single-session-user      Where did I meet Sophia?                             -> 'Coffee Shop (City)' (gold 'a coffee shop in the city')
+    [ 65/500] decline single-session-user      What did my dad gave me as a birthday gift?          -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 66/500] ok      single-session-user      Where did I attend the Imagine Dragons concert?      -> 'Xfinity Center' (gold 'Xfinity Center')
+    [ 67/500] ok      single-session-user      Who gave me a new stand mixer as a birthday gift?    -> 'My sister' (gold 'my sister')
+    [ 68/500] ok      single-session-user      What time do I stop checking work emails and message -> '7 pm' (gold '7 pm')
+    [ 69/500] ok      single-session-user      How long did Alex marinate the BBQ ribs in special s -> '24 hours' (gold '24 hours')
+    [ 70/500] ok      single-session-user      How much time do I dedicate to practicing guitar eve -> '30 minutes daily' (gold '30 minutes')
+    [ 71/500] ok      multi-session            How many items of clothing do I need to pick up or r -> '3' (gold '3')
+    [ 72/500] decline multi-session            How many hours of jogging and yoga did I do last wee -> 'NO_ANSWER' (gold '0.5 hours')
+    [ 73/500] ok      multi-session            How much total money have I spent on bike-related ex -> '$185' (gold '$185')
+    [ 74/500] ok      multi-session            How many projects have I led or am currently leading -> '2' (gold '2')
+    [ 75/500] WRONG   multi-session            How many hours in total did I spend driving to my th -> '16-17 hours' (gold '15 hours for getting to the th')
+    [ 76/500] WRONG   multi-session            How many different types of citrus fruits have I use -> '5' (gold '3')
+    [ 77/500] ok      multi-session            How many weeks did it take me to watch all the Marve -> '3.5 weeks' (gold '3.5 weeks')
+    [ 78/500] ok      multi-session            How many different museums or galleries did I visit  -> '2' (gold '2')
+    [ 79/500] ok      multi-session            What is the total amount I spent on luxury items in  -> '$2,500' (gold '$2,500')
+    [ 80/500] ok      multi-session            What time did I go to bed on the day before I had a  -> '2 AM' (gold '2 AM')
+    [ 81/500] ok      multi-session            What is the average age of me, my parents, and my gr -> '59.6' (gold '59.6')
+    [ 82/500] ok      multi-session            How many different doctors did I visit?              -> '3' (gold 'I visited three different doct')
+    [ 83/500] WRONG   multi-session            How many babies were born to friends and family memb -> '7' (gold '5')
+    [ 84/500] WRONG   multi-session            How many plants did I acquire in the last month?     -> '2' (gold '3')
+    [ 85/500] WRONG   multi-session            How many model kits have I worked on or bought?      -> '4' (gold 'I have worked on or bought fiv')
+    [ 86/500] ok      multi-session            How many days did I spend on camping trips in the Un -> '8' (gold '8 days.')
+    [ 87/500] WRONG   multi-session            How many hours have I spent playing games in total?  -> '110 hours' (gold '140 hours')
+    [ 88/500] WRONG   multi-session            How many tanks do I currently have, including the on -> '4' (gold '3')
+    [ 89/500] ok      multi-session            How many weddings have I attended in this year?      -> '3' (gold 'I attended three weddings. The')
+    [ 90/500] ok      multi-session            How many days did I take social media breaks in tota -> '17' (gold '17 days')
+    [ 91/500] ok      multi-session            How many doctor's appointments did I go to in March? -> '2' (gold '2')
+    [ 92/500] WRONG   multi-session            How many times did I bake something in the past two  -> '5' (gold '4')
+    [ 93/500] ok      multi-session            Which social media platform did I gain the most foll -> 'TikTok' (gold 'TikTok')
+    [ 94/500] ok      multi-session            How many different types of food delivery services h -> '3' (gold '3')
+    [ 95/500] WRONG   multi-session            How many properties did I view before making an offe -> '5' (gold 'I viewed four properties befor')
+    [ 96/500] WRONG   multi-session            How many pieces of jewelry did I acquire in the last -> '4' (gold '3')
+    [ 97/500] WRONG   multi-session            How many health-related devices do I use in a day?   -> '3' (gold '4')
+    [ 98/500] ok      multi-session            How many fish are there in total in both of my aquar -> '17' (gold '17')
+    [ 99/500] WRONG   multi-session            How many different cuisines have I learned to cook o -> '5' (gold '4')
+    [100/500] ok      multi-session            How many pieces of furniture did I buy, assemble, se -> '4' (gold '4')
+    [101/500] ok      multi-session            How many movie festivals that I attended?            -> '4' (gold 'I attended four movie festival')
+    [102/500] ok      multi-session            How many days did it take for me to receive the new  -> '5 days' (gold '5 days. 6 days (including the ')
+    [103/500] ok      multi-session            How many different art-related events did I attend i -> '4' (gold '4')
+    [104/500] ok      multi-session            How many projects have I been working on simultaneou -> '2' (gold '2')
+    [105/500] WRONG   multi-session            Which grocery store did I spend the most money at in -> 'Walmart' (gold 'Thrive Market')
+    [106/500] ok      multi-session            How many days did it take for my laptop backpack to  -> '5' (gold '5 days. 6 days (including the ')
+    [107/500] ok      multi-session            How many days did I spend participating in faith-rel -> '3' (gold '3 days.')
+    [108/500] WRONG   multi-session            How many fitness classes do I attend in a typical we -> '4' (gold '5')
+    [109/500] WRONG   multi-session            How much more did I spend on accommodations per nigh -> 'More than $270' (gold '$270')
+    [110/500] WRONG   multi-session            How many musical instruments do I currently own?     -> '3' (gold 'I currently own 4 musical inst')
+    [111/500] decline multi-session            How much total money did I spend on attending worksh -> 'NO_ANSWER' (gold '$720')
+    [112/500] ok      multi-session            How much money did I raise in total through all the  -> '$5,850' (gold '$5,850')
+    [113/500] ok      multi-session            How many bikes did I service or plan to service in M -> '2' (gold '2')
+    [114/500] WRONG   multi-session            How many kitchen items did I replace or fix?         -> '6' (gold 'I replaced or fixed five items')
+    [115/500] ok      multi-session            How many online courses have I completed in total?   -> '5' (gold '5')
+    [116/500] WRONG   multi-session            How many music albums or EPs have I purchased or dow -> '2' (gold '3')
+    [117/500] decline multi-session            How many days did it take for my iPad case to arrive -> 'NO_ANSWER' (gold 'The information provided is no')
+    [118/500] decline multi-session            How many times did I bake egg tarts in the past two  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [119/500] decline multi-session            How many fish are there in my 30-gallon tank?        -> 'NO_ANSWER' (gold 'The information provided is no')
+    [120/500] decline multi-session            How many years in total did I spend in formal educat -> 'NO_ANSWER' (gold 'The information provided is no')
+    [121/500] WRONG   multi-session            How many different museums or galleries did I visit  -> 'none' (gold '0. You did not mention visitng')
+    [122/500] ok      multi-session            How much money did I raise for charity in total?     -> '$3,750' (gold '$3,750')
+    [123/500] ok      multi-session            How many days did I spend in total traveling in Hawa -> '15' (gold '15 days')
+    [124/500] ok      multi-session            How many times did I ride rollercoasters across all  -> '10' (gold '10 times')
+    [125/500] WRONG   multi-session            How many years in total did I spend in formal educat -> '8 years' (gold '10 years')
+    [126/500] ok      multi-session            How many magazine subscriptions do I currently have? -> '2' (gold '2')
+    [127/500] WRONG   single-session-preference My kitchen's becoming a bit of a mess again. Any tip -> "Since you've been actively organizing your k" (gold 'The user would prefer response')
+    [128/500] ok      multi-session            How many total pieces of writing have I completed si -> '23' (gold '23')
+    [129/500] ok      multi-session            What is the total amount of money I earned from sell -> '$495' (gold '$495')
+    [130/500] ok      single-session-preference Can you recommend some recent publications or confer -> 'Given your expertise in deep learning for me' (gold 'The user would prefer suggesti')
+    [131/500] ok      single-session-preference I've been thinking about ways to stay connected with -> 'Given your interest in fostering team connec' (gold 'The user would prefer response')
+    [132/500] ok      multi-session            How many days did I spend attending workshops, lectu -> '3' (gold '3 days')
+    [133/500] ok      multi-session            How many rare items do I have in total?              -> '99' (gold '99')
+    [134/500] WRONG   multi-session            How many days did I spend in total traveling in Hawa -> '10' (gold 'The information provided is no')
+    [135/500] WRONG   single-session-preference Can you suggest some activities that I can do in the -> 'Given your passion for dance and interest in' (gold 'The user would prefer suggesti')
+    [136/500] ok      single-session-preference I've been struggling with my slow cooker recipes. An -> "Since you're new to slow cooking and have su" (gold 'The user would prefer response')
+    [137/500] ok      single-session-preference Can you recommend some resources where I can learn m -> 'Since you enjoy using Adobe Premiere Pro and' (gold 'The user would prefer response')
+    [138/500] WRONG   single-session-preference Can you recommend a show or movie for me to watch to -> "Since you're hooked on true crime, I recomme" (gold 'The user would prefer recommen')
+    [139/500] ok      single-session-preference Can you suggest some accessories that would compleme -> 'Given your Sony A7R IV, Sony 24-70mm f/2.8 l' (gold 'The user would prefer suggesti')
+    [140/500] ok      single-session-preference I've been having trouble with the battery life on my -> 'Since you already have a portable power bank' (gold 'The user would prefer response')
+    [141/500] WRONG   single-session-preference I've been feeling a bit stuck with my paintings late -> "Since you've been feeling a bit disconnected" (gold 'The user would prefer response')
+    [142/500] WRONG   single-session-preference I've been thinking about making a cocktail for an up -> "Given your recent enjoyment of Hendrick's gi" (gold 'Considering their mixology cla')
+    [143/500] ok      single-session-preference Can you suggest a hotel for my upcoming trip to Miam -> 'For your trip to Miami, I recommend looking ' (gold 'The user would prefer suggesti')
+    [144/500] WRONG   multi-session            How many graduation ceremonies have I attended in th -> '2' (gold '3')
+    [145/500] ok      single-session-preference I was thinking about rearranging the furniture in my -> 'When rearranging your bedroom furniture, con' (gold 'The user would prefer response')
+    [146/500] ok      single-session-preference Can you recommend some interesting cultural events h -> 'Given your interest in language diversity, c' (gold 'The user would prefer response')
+    [147/500] ok      single-session-preference What should I serve for dinner this weekend with my  -> 'For dinner this weekend, consider making a f' (gold 'The user would prefer dinner s')
+    [148/500] ok      single-session-preference I'm thinking of inviting my colleagues over for a sm -> 'Since your lemon poppyseed cake was a hit wi' (gold 'The user would prefer baking s')
+    [149/500] WRONG   single-session-preference I've been feeling nostalgic lately. Do you think it  -> 'Given your recent focus on connecting with f' (gold 'The user would prefer response')
+    [150/500] decline multi-session            What percentage of packed shoes did I wear on my las -> 'NO_ANSWER' (gold '40%')
+    [151/500] WRONG   single-session-preference I've got some free time tonight, any documentary rec -> 'Since you\'ve enjoyed "Our Planet" and were r' (gold 'The user would prefer document')
+    [152/500] ok      single-session-preference I was thinking of trying a new coffee creamer recipe -> "Since you're already making your own creamer" (gold 'The user would prefer response')
+    [153/500] ok      multi-session            What was the approximate increase in Instagram follo -> '100 followers' (gold '100')
+    [154/500] ok      multi-session            What is the total distance of the hikes I did on two -> '8 miles' (gold '8 miles')
+    [155/500] ok      single-session-preference I'm trying to decide whether to buy a NAS device now -> 'Given your immediate need for more convenien' (gold 'The user would prefer response')
+    [156/500] WRONG   single-session-preference I noticed my bike seems to be performing even better -> "The replacement of the old bike's chain and " (gold 'The user would prefer response')
+    [157/500] ok      single-session-preference I've been sneezing quite a bit lately. Do you think  -> 'Given your recent concerns about keeping you' (gold 'The user would prefer response')
+    [158/500] ok      single-session-preference I'm getting excited about my visit to the music stor -> "Since you're considering upgrading from a St" (gold 'The user would prefer response')
+    [159/500] ok      multi-session            How many pages do I have left to read in 'The Nighti -> '190' (gold '190')
+    [160/500] WRONG   single-session-preference I'm planning my meal prep next week, any suggestions -> 'Since you enjoyed making lentil bolognese an' (gold 'The user would prefer response')
+    [161/500] ERROR   ?                                                                             -> answer: 
+    [162/500] ok      multi-session            How much cashback did I earn at SaveMart last Thursd -> '$0.75' (gold '$0.75')
+    [163/500] ok      multi-session            When did I submit my research paper on sentiment ana -> 'February 1st' (gold 'February 1st')
+    [164/500] ok      single-session-preference Can you suggest some useful accessories for my phone -> 'Given your iPhone 13 Pro and interest in dur' (gold 'The user would prefer suggesti')
+    [165/500] ok      multi-session            What is the total cost of the new food bowl, measuri -> '$50' (gold '$50')
+    [166/500] WRONG   multi-session            How many antique items did I inherit or acquire from -> '4' (gold '5')
+    [167/500] ok      multi-session            For my daily commute, how much more expensive was th -> '$6' (gold '$6')
+    [168/500] ok      single-session-preference I am planning another theme park weekend; do you hav -> 'Given your recent visits and strong interest' (gold 'The user would prefer theme pa')
+    [169/500] ok      single-session-preference I've been feeling like my chocolate chip cookies nee -> "Since you've been experimenting with turbina" (gold 'The user would prefer response')
+    [170/500] WRONG   single-session-preference I'm planning a trip to Denver soon. Any suggestions  -> "Since you love Denver's music scene and have" (gold 'The user would prefer response')
+    [171/500] ok      multi-session            How many plants did I initially plant for tomatoes a -> 'Tomatoes: 5, Cucumbers: 3' (gold '8')
+    [172/500] ok      multi-session            How much did I spend on car wash and parking ticket? -> '$65' (gold '$65')
+    [173/500] ok      multi-session            What is the total number of episodes I've listened t -> '27' (gold '27')
+    [174/500] ok      multi-session            Did I receive a higher percentage discount on my fir -> 'Yes' (gold 'Yes.')
+    [175/500] ok      single-session-preference Can you suggest some activities I can do during my c -> 'Given your interest in history and science p' (gold 'The user would prefer suggesti')
+    [176/500] ok      multi-session            How many hours do I work in a typical week during pe -> '50 hours' (gold '50')
+    [177/500] ok      multi-session            What percentage discount did I get on the book from  -> '20%' (gold '20%')
+    [178/500] ok      multi-session            What is the difference in price between my luxury bo -> '$750' (gold '$750')
+    [179/500] ok      multi-session            How much older am I than the average age of employee -> '2.5 years older' (gold '2.5 years')
+    [180/500] ok      multi-session            What was the total number of people reached by my Fa -> '12,000' (gold '12,000')
+    [181/500] ok      single-session-preference I’m a bit anxious about getting around Tokyo. Do you -> "Since you're already equipped with a Suica c" (gold 'The user would prefer response')
+    [182/500] ok      multi-session            What is the total cost of Lola's vet visit and flea  -> '$75' (gold '$75')
+    [183/500] ok      multi-session            How many Marvel movies did I re-watch?               -> '2' (gold '2')
+    [184/500] ok      multi-session            What is the total number of days I spent in Japan an -> '11 days' (gold '11 days (or 12 days, if April ')
+    [185/500] ok      multi-session            What percentage of the countryside property's price  -> '10%' (gold '10%')
+    [186/500] decline multi-session            How many years will I be when my friend Rachel gets  -> 'NO_ANSWER' (gold '33')
+    [187/500] ok      multi-session            What is the minimum amount I could get if I sold the -> '$5,150' (gold '$5,150')
+    [188/500] ok      multi-session            How many sports have I played competitively in the p -> '2' (gold 'two')
+    [189/500] ok      multi-session            What are the two hobbies that led me to join online  -> 'Photography, Cooking' (gold 'photography and cooking')
+    [190/500] ok      multi-session            How old was I when Alex was born?                    -> '11' (gold '11')
+    [191/500] ok      multi-session            How much more did I have to pay for the trip after t -> '$300' (gold '$300')
+    [192/500] WRONG   multi-session            How many points do I need to earn to redeem a free s -> '300' (gold '100')
+    [193/500] ok      multi-session            What is the total number of lunch meals I got from t -> '8' (gold '8 meals')
+    [194/500] ok      multi-session            What is the total distance I covered in my four road -> '3,000 miles' (gold '3,000 miles')
+    [195/500] ok      multi-session            What is the total number of goals and assists I have -> '5' (gold '5')
+    [196/500] ok      multi-session            What is the total number of online courses I've comp -> '20' (gold '20')
+    [197/500] ok      multi-session            At which university did I present a poster on my the -> 'Harvard University' (gold 'Harvard University')
+    [198/500] ok      multi-session            How much did I save on the Jimmy Choo heels?         -> '$300' (gold '$300')
+    [199/500] ok      multi-session            What is the total amount I spent on gifts for my cow -> '$200' (gold '$200')
+    [200/500] ok      multi-session            How much more was the pre-approval amount than the f -> '$25,000' (gold '$25,000')
+    [201/500] ok      multi-session            How much faster did I finish the 5K run compared to  -> '10 minutes' (gold '10 minutes')
+    [202/500] ok      multi-session            What is the total cost of the car cover and detailin -> '$140' (gold '$140')
+    [203/500] ok      multi-session            What is the total time it takes I to get ready and c -> '1 hour 30 minutes' (gold 'an hour and a half')
+    [204/500] WRONG   multi-session            How many dinner parties have I attended in the past  -> '4' (gold 'three')
+    [205/500] ok      multi-session            How many years older is my grandma than me?          -> '43 years' (gold '43')
+    [206/500] ok      multi-session            How much more miles per gallon was my car getting a  -> '2 miles per gallon' (gold '2')
+    [207/500] ok      multi-session            How much did I spend on each coffee mug for my cowor -> '$12' (gold '$12')
+    [208/500] WRONG   multi-session            How long have I been working in my current role?     -> '3 years and 9 months' (gold '1 year and 5 months')
+    [209/500] ok      multi-session            What is the total amount I spent on the designer han -> '$1300' (gold '$1,300')
+    [210/500] ok      multi-session            How much will I save by taking the train from the ai -> 'You would save approximately $30 to $150 by ' (gold '$50')
+    [211/500] ok      multi-session            How many days a week do I attend fitness classes?    -> '4' (gold '4 days.')
+    [212/500] WRONG   multi-session            What is the average GPA of my undergraduate and grad -> 'Undergraduate: 3.86/4.0, Graduate: 3.8/4.0' (gold '3.83')
+    [213/500] decline multi-session            How many pages do I have left to read in 'Sapiens'?  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [214/500] ok      multi-session            How much did I spend on gifts for my sister?         -> '$300' (gold '$300')
+    [215/500] ok      multi-session            What percentage of leadership positions do women hol -> '20%' (gold '20%')
+    [216/500] ok      multi-session            What is the total number of views on my most popular -> '1998' (gold '1,998')
+    [217/500] ok      multi-session            What is the total weight of the new feed I purchased -> '70 pounds' (gold '70 pounds')
+    [218/500] decline multi-session            How old will Rachel be when I get married?           -> 'NO_ANSWER' (gold 'The information provided is no')
+    [219/500] ok      multi-session            How many years older am I than when I graduated from -> '7 years' (gold '7')
+    [220/500] WRONG   multi-session            At which university did I present a poster for my un -> 'Harvard University' (gold 'The information provided is no')
+    [221/500] WRONG   multi-session            What time did I reach the clinic on Monday?          -> '1:00 PM' (gold '9:00 AM')
+    [222/500] ok      multi-session            How much have I made from selling eggs this month?   -> '$120' (gold '$120')
+    [223/500] ok      multi-session            What is the total number of siblings I have?         -> '4' (gold '4')
+    [224/500] decline multi-session            How many plants did I initially plant for tomatoes a -> '5 tomato plants, no information on chili pep' (gold 'The information provided is no')
+    [225/500] ok      multi-session            How much discount will I get on my next purchase at  -> '$5' (gold '$5')
+    [226/500] ok      multi-session            What is the total number of comments on my recent Fa -> '12 comments on the Facebook Live session and' (gold '33')
+    [227/500] WRONG   multi-session            What was the page count of the two novels I finished -> '440 pages and 341 pages' (gold '856')
+    [228/500] ok      multi-session            How much more money did I raise than my initial goal -> '$50' (gold '$50')
+    [229/500] ok      multi-session            How much earlier do I wake up on Fridays compared to -> '30 minutes earlier' (gold '30 minutes')
+    [230/500] decline multi-session            What is the total cost of my recently purchased head -> 'NO_ANSWER' (gold 'The information provided is no')
+    [231/500] ok      multi-session            How many minutes did I exceed my target time by in t -> '12 minutes' (gold '12')
+    [232/500] ok      multi-session            How many fun runs did I miss in March due to work co -> '2' (gold '2')
+    [233/500] WRONG   temporal-reasoning       How many days ago did I attend a baking class at a l -> '25' (gold '21 days. 22 days (including th')
+    [234/500] ok      temporal-reasoning       How many days passed between my visit to the Museum  -> '7' (gold '7 days. 8 days (including the ')
+    [235/500] ok      temporal-reasoning       How many weeks ago did I meet up with my aunt and re -> '4 weeks ago' (gold '4')
+    [236/500] ok      temporal-reasoning       How many days passed between the day I started water -> '24' (gold '24 days. 25 days (including th')
+    [237/500] WRONG   multi-session            How much will I save by taking the bus from the airp -> '¥16,800 or $151 USD (approximately)' (gold 'The information provided is no')
+    [238/500] decline temporal-reasoning       How many days ago did I meet Emma?                   -> 'NO_ANSWER' (gold '9 days ago. 10 days (including')
+    [239/500] ok      temporal-reasoning       How many days had passed since I finished reading 'T -> '18' (gold '18 days. 19 days (including th')
+    [240/500] ok      temporal-reasoning       How many months have passed since I last visited a m -> '5 months' (gold '5')
+    [241/500] ok      temporal-reasoning       How many days passed between the day I received feed -> '38' (gold '38 days. 39 days (including th')
+    [242/500] ok      temporal-reasoning       Which three events happened in the order from first  -> 'the day I helped my friend prepare the nurse' (gold 'First, I helped my friend prep')
+    [243/500] ok      temporal-reasoning       How many days did I spend on my solo camping trip to -> '3' (gold '2 days. 3 days (including the ')
+    [244/500] ok      temporal-reasoning       How many weeks ago did I start using the cashback ap -> '3 weeks ago' (gold '3 weeks ago')
+    [245/500] ok      temporal-reasoning       How many days had passed since I started taking ukul -> '24' (gold '24 days. 25 days (including th')
+    [246/500] ok      temporal-reasoning       How many days ago did I buy a smoker?                -> '10' (gold '10 days ago. 11 days (includin')
+    [247/500] ok      temporal-reasoning       How many days passed between the day I started playi -> '6' (gold '6 days. 7 days (including the ')
+    [248/500] ok      temporal-reasoning       How many weeks ago did I attend the friends and fami -> '2 weeks ago' (gold '2')
+    [249/500] ok      temporal-reasoning       How many days ago did I attend the Maundy Thursday s -> '4 days ago' (gold '4 days.')
+    [250/500] ok      temporal-reasoning       Which event happened first, my cousin's wedding or M -> "Michael's engagement party" (gold "Michael's engagement party")
+    [251/500] ok      temporal-reasoning       How many weeks passed between the time I sold homema -> '3 weeks' (gold '3 weeks')
+    [252/500] ok      temporal-reasoning       How many months have passed since I participated in  -> '2 months' (gold '2')
+    [253/500] WRONG   temporal-reasoning       What is the order of the three events: 'I signed up  -> '1. I used a Buy One Get One Free coupon on L' (gold 'First, I used a Buy One Get On')
+    [254/500] ok      temporal-reasoning       How many days passed between the day I attended the  -> '6' (gold '6 days. 7 days (including the ')
+    [255/500] WRONG   temporal-reasoning       How many weeks had passed since I recovered from the -> '11 weeks' (gold '15')
+    [256/500] WRONG   temporal-reasoning       What is the order of the three trips I took in the p -> 'Solo camping trip to Yosemite, road trip to ' (gold 'I went on a day hike to Muir W')
+    [257/500] ok      temporal-reasoning       How many weeks passed between the day I bought my ne -> '1 week' (gold '1 week')
+    [258/500] ok      temporal-reasoning       How many days passed between the day I cancelled my  -> '54 days' (gold '54 days. 55 days (including th')
+    [259/500] WRONG   temporal-reasoning       What is the order of the sports events I watched in  -> 'College Football National Championship, Chie' (gold 'First, I attended a NBA game a')
+    [260/500] ok      temporal-reasoning       How many months ago did I attend the Seattle Interna -> '4 months ago' (gold '4 months ago')
+    [261/500] ok      temporal-reasoning       Which mode of transport did I use most recently, a b -> 'Train' (gold 'train')
+    [262/500] ok      temporal-reasoning       How many days did it take me to finish 'The Nighting -> '21' (gold '21 days. 22 days (including th')
+    [263/500] ok      temporal-reasoning       How many days ago did I attend a networking event?   -> '26' (gold '26 days. 27 days (including th')
+    [264/500] ok      temporal-reasoning       What is the order of the three sports events I parti -> 'Spring Sprint Triathlon, Midsummer 5K Run, C' (gold 'I first completed the Spring S')
+    [265/500] ok      temporal-reasoning       How many days passed between the day I repotted the  -> '14' (gold '14 days. 15 days (including th')
+    [266/500] ok      temporal-reasoning       How many days passed between the day I finished read -> '1' (gold '1 day. 2 days (including the l')
+    [267/500] ok      temporal-reasoning       How many weeks have I been taking sculpting classes  -> '3 weeks' (gold '3')
+    [268/500] WRONG   temporal-reasoning       How many weeks in total do I spent on reading 'The N -> '- On 2022-' (gold "2 weeks for 'The Nightingale',")
+    [269/500] ok      temporal-reasoning       What is the order of airlines I flew with from earli -> 'JetBlue, Delta, United Airlines, American Ai' (gold 'JetBlue, Delta, United, Americ')
+    [270/500] ok      temporal-reasoning       How many days ago did I launch my website when I sig -> '19' (gold '19 days ago. 20 days (includin')
+    [271/500] ok      temporal-reasoning       How many weeks ago did I attend a bird watching work -> '4 weeks ago' (gold '4')
+    [272/500] WRONG   temporal-reasoning       What is the order of the six museums I visited from  -> '6. Modern Art' (gold 'Science Museum, Museum of Cont')
+    [273/500] ok      temporal-reasoning       How many months passed between the completion of my  -> '6 months' (gold '6 months')
+    [274/500] ok      temporal-reasoning       Who graduated first, second and third among Emma, Ra -> 'Emma, Rachel, Alex' (gold 'Emma graduated first, followed')
+    [275/500] ok      temporal-reasoning       How many days passed between the day I replaced my s -> '29' (gold '29 days. 30 days (including th')
+    [276/500] WRONG   temporal-reasoning       How many weeks ago did I attend the 'Summer Nights'  -> '6 weeks ago' (gold '3 weeks ago')
+    [277/500] WRONG   temporal-reasoning       What is the order of the concerts and musical events -> '' (gold 'The order of the concerts I at')
+    [278/500] decline temporal-reasoning       I received a piece of jewelry last Saturday from who -> 'NO_ANSWER' (gold 'my aunt')
+    [279/500] ok      temporal-reasoning       How many days ago did I go on a whitewater rafting t -> '3 days ago' (gold '3 days ago. 4 days (including ')
+    [280/500] decline temporal-reasoning       What was the significant buisiness milestone I menti -> 'NO_ANSWER' (gold 'I signed a contract with my fi')
+    [281/500] decline temporal-reasoning       Which bike did I fixed or serviced the past weekend? -> 'NO_ANSWER' (gold 'road bike')
+    [282/500] ok      temporal-reasoning       How many days ago did I watch the Super Bowl?        -> '17 days ago' (gold '17 days ago. 18 days (includin')
+    [283/500] ok      temporal-reasoning       How many days ago did I harvest my first batch of fr -> '3 days ago' (gold '3 days ago. 4 days (including ')
+    [284/500] ok      temporal-reasoning       I mentioned participating in a sports event two week -> "company's annual charity soccer tournament" (gold "The company's annual charity s")
+    [285/500] ok      temporal-reasoning       Which event did I participate in first, the charity  -> 'The charity bake sale' (gold 'I participated in the charity ')
+    [286/500] ok      temporal-reasoning       What did I do with Rachel on the Wednesday two month -> 'Started taking ukulele lessons with Rachel' (gold 'I started taking ukulele lesso')
+    [287/500] ok      temporal-reasoning       How many days ago did I participate in the 5K charit -> '7 days ago' (gold '7 days ago. 8 days (including ')
+    [288/500] ok      temporal-reasoning       How many days ago did I read the March 15th issue of -> '12 days ago' (gold '12 days ago. 13 days (includin')
+    [289/500] ok      temporal-reasoning       How many days passed between the day I fixed my moun -> '4' (gold '4 days. 5 days (including the ')
+    [290/500] ok      temporal-reasoning       Which book did I finish a week ago?                  -> 'The Nightingale' (gold "'The Nightingale' by Kristin H")
+    [291/500] ok      temporal-reasoning       Which event happened first, my participation in the  -> 'The vegan chili recipe post.' (gold 'You posted a recipe for vegan ')
+    [292/500] ok      temporal-reasoning       What is the artist that I started to listen to last  -> 'a bluegrass band that features a banjo playe' (gold 'a bluegrass band that features')
+    [293/500] WRONG   temporal-reasoning       I mentioned that I participated in an art-related ev -> 'Museum of Modern Art' (gold 'The Metropolitan Museum of Art')
+    [294/500] ok      temporal-reasoning       How many months ago did I attend the photography wor -> '3' (gold '3')
+    [295/500] ok      temporal-reasoning       Who did I meet with during the lunch last Tuesday?   -> 'Emma' (gold 'Emma')
+    [296/500] ok      temporal-reasoning       What gardening-related activity did I do two weeks a -> 'Planted 12 new tomato saplings' (gold 'planting 12 new tomato sapling')
+    [297/500] decline temporal-reasoning       I mentioned an investment for a competition four wee -> 'NO_ANSWER' (gold 'I got my own set of sculpting ')
+    [298/500] decline temporal-reasoning       What kitchen appliance did I buy 10 days ago?        -> 'NO_ANSWER' (gold 'a smoker')
+    [299/500] ok      temporal-reasoning       What was the the life event of one of my relatives t -> "My cousin's wedding" (gold "my cousin's wedding")
+    [300/500] ok      temporal-reasoning       What was the airline that I flied with on Valentine' -> 'American Airlines' (gold 'American Airlines')
+    [301/500] ok      temporal-reasoning       What charity event did I participate in a month ago? -> 'Walk for Hunger' (gold "the 'Walk for Hunger' charity ")
+    [302/500] ok      temporal-reasoning       Which seeds were started first, the tomatoes or the  -> 'Tomatoes' (gold 'Tomatoes')
+    [303/500] ok      temporal-reasoning       Which vehicle did I take care of first in February,  -> 'The bike' (gold 'bike')
+    [304/500] ok      temporal-reasoning       Who did I go with to the music event last Saturday?  -> 'my parents' (gold 'my parents')
+    [305/500] ok      temporal-reasoning       Which pair of shoes did I clean last month?          -> 'white Adidas sneakers' (gold 'white Adidas sneakers')
+    [306/500] ok      temporal-reasoning       What was the first issue I had with my new car after -> 'GPS system issue' (gold 'GPS system not functioning cor')
+    [307/500] ok      temporal-reasoning       I mentioned cooking something for my friend a couple -> "A chocolate cake for my friend's birthday pa" (gold 'a chocolate cake')
+    [308/500] WRONG   temporal-reasoning       I mentioned visiting a museum two months ago. Did I  -> 'Yes, with my dad.' (gold 'No, you did not visit with a f')
+    [309/500] ok      temporal-reasoning       Which event did I attend first, the 'Effective Time  -> "The 'Data Analysis using Python' webinar." (gold "'Data Analysis using Python' w")
+    [310/500] ok      temporal-reasoning       Which event happened first, the purchase of the coff -> 'The stand mixer malfunctioned first.' (gold 'The malfunction of the stand m')
+    [311/500] ok      temporal-reasoning       How many days before the 'Rack Fest' did I participa -> '4 days' (gold '4 days.')
+    [312/500] ok      temporal-reasoning       How many days had passed between the Hindu festival  -> '21' (gold '21 days. 22 days (including th')
+    [313/500] WRONG   temporal-reasoning       Which device did I got first, the Samsung Galaxy S22 -> 'Dell XPS 13' (gold 'Samsung Galaxy S22')
+    [314/500] ok      temporal-reasoning       What was the social media activity I participated 5  -> '#PlankChallenge' (gold 'You participated in a social m')
+    [315/500] ok      temporal-reasoning       How many days had passed between the Sunday mass at  -> '30' (gold '30 days. 31 days (including th')
+    [316/500] WRONG   temporal-reasoning       How many days did it take for me to find a house I l -> '' (gold '14 days. 15 days (including th')
+    [317/500] ok      temporal-reasoning       Where did I attend the religious activity last week? -> 'Maundy Thursday service at the Episcopal Chu' (gold 'the Episcopal Church')
+    [318/500] ok      temporal-reasoning       Which book did I finish reading first, 'The Hate U G -> 'The Hate U Give' (gold "'The Hate U Give'")
+    [319/500] ok      temporal-reasoning       How long had I been a member of 'Book Lovers Unite'  -> 'Two weeks' (gold 'Two weeks')
+    [320/500] ok      temporal-reasoning       How many days before the team meeting I was preparin -> '7' (gold '7 days. 8 days (including the ')
+    [321/500] ok      temporal-reasoning       How long did I take to finish 'The Seven Husbands of -> 'five and a half weeks' (gold '5.5 weeks')
+    [322/500] ok      temporal-reasoning       How many days had passed between the 'Walk for Hunge -> '14' (gold '14 days. 8 days (including the')
+    [323/500] ok      temporal-reasoning       How long had I been watching stand-up comedy special -> '2 months' (gold '2 months')
+    [324/500] ok      temporal-reasoning       Which device did I set up first, the smart thermosta -> 'Smart thermostat' (gold 'Smart thermostat')
+    [325/500] ok      temporal-reasoning       What time do I wake up on Tuesdays and Thursdays?    -> '6:45 AM' (gold '6:45 AM')
+    [326/500] ok      temporal-reasoning       How many days before I bought the iPhone 13 Pro did  -> '7' (gold '7 days. 8 days (including the ')
+    [327/500] ok      temporal-reasoning       How many days had passed since I bought my Adidas ru -> '14' (gold '14 days. 15 days (including th')
+    [328/500] WRONG   temporal-reasoning       How many months ago did I book the Airbnb in San Fra -> '3 months ago' (gold 'Five months ago')
+    [329/500] WRONG   temporal-reasoning       How long have I been working before I started my cur -> '5 years and 9 months' (gold '4 years and 9 months')
+    [330/500] ok      temporal-reasoning       How many charity events did I participate in before  -> '4' (gold '4')
+    [331/500] ok      temporal-reasoning       What was the date on which I attended the first BBQ  -> 'June 3rd' (gold 'June 3rd')
+    [332/500] WRONG   temporal-reasoning       Which show did I start watching first, 'The Crown' o -> 'The Crown' (gold "'Game of Thrones'")
+    [333/500] ok      temporal-reasoning       Which task did I complete first, fixing the fence or -> 'Fixing the fence' (gold 'Fixing the fence')
+    [334/500] ok      temporal-reasoning       Which item did I purchase first, the dog bed for Max -> 'Training pads for Luna' (gold 'Training pads for Luna')
+    [335/500] ok      temporal-reasoning       Which trip did I take first, the one to Europe with  -> 'The solo trip to Thailand.' (gold 'The solo trip to Thailand')
+    [336/500] ok      temporal-reasoning       Which device did I set up first, the smart thermosta -> 'The new router' (gold 'new router')
+    [337/500] WRONG   temporal-reasoning       How many days before my best friend's birthday party -> '5' (gold '7 days. 8 days (including the ')
+    [338/500] ok      temporal-reasoning       How long did I use my new binoculars before I saw th -> 'Two weeks' (gold 'Two weeks')
+    [339/500] ok      temporal-reasoning       Which group did I join first, 'Page Turners' or 'Mar -> 'Page Turners' (gold 'Page Turners')
+    [340/500] ok      temporal-reasoning       Who did I meet first, Mark and Sarah or Tom?         -> 'Tom' (gold 'Tom')
+    [341/500] ok      temporal-reasoning       How long had I been using the new area rug when I re -> '1 week' (gold 'One week. Answers ranging from')
+    [342/500] ok      temporal-reasoning       Which event happened first, the road trip to the coa -> 'The arrival of the new prime lens.' (gold 'The arrival of the new prime l')
+    [343/500] ok      temporal-reasoning       How old was I when I moved to the United States?     -> '27' (gold '27')
+    [344/500] ok      temporal-reasoning       Which trip did the narrator take first, the solo tri -> 'The family road trip across the American Sou' (gold 'The family road trip across th')
+    [345/500] ok      temporal-reasoning       How long had I been bird watching when I attended th -> 'Two months' (gold 'Two months')
+    [346/500] decline temporal-reasoning       When did I book the Airbnb in Sacramento?            -> 'NO_ANSWER' (gold 'The information provided is no')
+    [347/500] ok      temporal-reasoning       How many weeks have I been accepted into the exchang -> '1 week' (gold 'one week')
+    [348/500] ok      temporal-reasoning       Which health issue did I deal with first, the persis -> 'The persistent cough' (gold 'Persistent cough')
+    [349/500] decline temporal-reasoning       Which task did I complete first, fixing the fence or -> 'NO_ANSWER' (gold 'The information provided is no')
+    [350/500] decline temporal-reasoning       How long have I been working before I started my cur -> 'NO_ANSWER' (gold 'The information provided is no')
+    [351/500] ok      temporal-reasoning       Which gift did I buy first, the necklace for my sist -> 'The photo album for my mom' (gold 'the photo album for my mom')
+    [352/500] WRONG   temporal-reasoning       Which project did I start first, the Ferrari model o -> 'Ferrari model' (gold 'Japanese Zero fighter plane mo')
+    [353/500] ok      temporal-reasoning       Who became a parent first, Rachel or Alex?           -> 'Alex' (gold 'Alex')
+    [354/500] ok      temporal-reasoning       Which event happened first, the narrator losing thei -> 'The narrator receiving their new phone case.' (gold 'Receiving the new phone case')
+    [355/500] WRONG   temporal-reasoning       Who became a parent first, Tom or Alex?              -> 'Alex' (gold 'The information provided is no')
+    [356/500] ok      temporal-reasoning       Who did I meet first, the woman selling jam at the f -> "The woman selling jam at the farmer's market" (gold 'the woman selling jam at the f')
+    [357/500] ok      temporal-reasoning       Which airline did I fly with the most in March and A -> 'United Airlines' (gold 'United Airlines')
+    [358/500] WRONG   temporal-reasoning       How many days before I bought my iPad did I attend t -> '193' (gold 'The information provided is no')
+    [359/500] ok      temporal-reasoning       How many months before my anniversary did Rachel get -> '2 months' (gold '2')
+    [360/500] ok      temporal-reasoning       How long had I been taking guitar lessons when I bou -> 'four weeks' (gold 'Four weeks')
+    [361/500] ok      knowledge-update         What was my personal best time in the charity 5K run -> '25:50' (gold '25 minutes and 50 seconds (or ')
+    [362/500] ok      temporal-reasoning       Which streaming service did I start using most recen -> 'Disney+' (gold 'Disney+')
+    [363/500] ok      knowledge-update         How many hours have I spent on my abstract ocean scu -> '10-12 hours' (gold '10-12 hours')
+    [364/500] ok      temporal-reasoning       Which event did I participate in first, the volleyba -> 'The volleyball league' (gold 'volleyball league')
+    [365/500] WRONG   knowledge-update         How many Korean restaurants have I tried in my city? -> '3' (gold 'four')
+    [366/500] ok      knowledge-update         Where did Rachel move to after her recent relocation -> 'The suburbs' (gold 'the suburbs')
+    [367/500] ok      knowledge-update         Where do I initially keep my old sneakers?           -> 'under my bed' (gold 'under my bed')
+    [368/500] WRONG   temporal-reasoning       Which project did I start first, the Ferrari model o -> 'Ferrari model' (gold 'The information provided is no')
+    [369/500] ok      knowledge-update         How many short stories have I written since I starte -> '7' (gold 'seven')
+    [370/500] ok      temporal-reasoning       Which event happened first, my attendance at a cultu -> 'The start of Spanish classes.' (gold 'Spanish classes')
+    [371/500] ok      temporal-reasoning       Which event happened first, the meeting with Rachel  -> 'The meeting with Rachel' (gold 'The meeting with Rachel')
+    [372/500] ok      knowledge-update         How many titles are currently on my to-watch list?   -> '25' (gold '25')
+    [373/500] ok      knowledge-update         How many pages of 'A Short History of Nearly Everyth -> '220' (gold '220')
+    [374/500] ok      knowledge-update         How often do I attend yoga classes to help with my a -> 'Three times a week' (gold 'Three times a week.')
+    [375/500] ok      knowledge-update         What was the amount I was pre-approved for when I go -> '$400,000' (gold '$400,000')
+    [376/500] ok      knowledge-update         Is my mom using the same grocery list method as me?  -> 'Yes, as of 14 days ago.' (gold 'Yes.')
+    [377/500] ok      knowledge-update         How many stars do I need to reach the gold level on  -> '120 stars' (gold '120')
+    [378/500] ok      knowledge-update         What day of the week do I take a cocktail-making cla -> 'Friday' (gold 'Friday')
+    [379/500] ok      knowledge-update         How many sessions of the bereavement support group d -> '5' (gold 'five')
+    [380/500] ok      temporal-reasoning       How many days had passed between the day I bought a  -> '7' (gold '7 days. 8 days (including the ')
+    [381/500] ok      knowledge-update         Where did I go on my most recent family trip?        -> 'Paris' (gold 'Paris')
+    [382/500] ok      knowledge-update         How many new postcards have I added to my collection -> '25' (gold '25')
+    [383/500] ok      knowledge-update         Do I go to the gym more frequently than I did previo -> 'Yes' (gold 'Yes')
+    [384/500] ok      knowledge-update         How often do I see my therapist, Dr. Smith?          -> 'Every week' (gold 'every week')
+    [385/500] ok      knowledge-update         For the coffee-to-water ratio in my French press, di -> 'Less' (gold 'You switched to less water (5 ')
+    [386/500] ok      knowledge-update         What company is Rachel, an old colleague from my pre -> 'TechCorp' (gold 'TechCorp')
+    [387/500] ok      knowledge-update         How many engineers do I lead when I just started my  -> '4, then 5' (gold 'When you just started your new')
+    [388/500] ok      knowledge-update         How many bikes do I currently own?                   -> '4' (gold '4')
+    [389/500] ok      knowledge-update         How many videos of Corey Schafer's Python programmin -> '30' (gold '30')
+    [390/500] ok      knowledge-update         How long have I been sticking to my daily tidying ro -> '4 weeks' (gold '4 weeks')
+    [391/500] ok      knowledge-update         How many of Emma's recipes have I tried out?         -> '3' (gold '3')
+    [392/500] ok      knowledge-update         How long have I had my cat, Luna?                    -> 'About 9 months' (gold '9 months')
+    [393/500] ok      knowledge-update         How many episodes of the Science series have I compl -> '50' (gold '50')
+    [394/500] ok      knowledge-update         What brand of BBQ sauce am I currently obsessed with -> 'Kansas City Masterpiece BBQ sauce' (gold 'Kansas City Masterpiece')
+    [395/500] ok      knowledge-update         How many MCU films did I watch in the last 3 months? -> '5' (gold '5')
+    [396/500] ok      knowledge-update         How many times have I worn my new black Converse Chu -> '6' (gold 'six')
+    [397/500] ok      knowledge-update         What is my current highest score in Ticket to Ride?  -> '132 points' (gold '132 points')
+    [398/500] WRONG   knowledge-update         How long have I been living in my current apartment  -> '6 months and 4 days' (gold '3 months')
+    [399/500] ok      knowledge-update         How many tops have I bought from H&M so far?         -> '5' (gold 'five')
+    [400/500] ok      knowledge-update         What type of camera lens did I purchase most recentl -> '70-200mm zoom lens' (gold 'a 70-200mm zoom lens')
+    [401/500] ok      knowledge-update         How many Crash Course videos have I watched in the p -> '15' (gold '15')
+    [402/500] ok      knowledge-update         Did I finish reading 'The Nightingale' by Kristin Ha -> 'Yes' (gold 'Yes')
+    [403/500] ok      knowledge-update         How many issues of National Geographic have I finish -> '5' (gold 'Five')
+    [404/500] ok      knowledge-update         How long have I been using my Fitbit Charge 3?       -> '9 months' (gold '9 months')
+    [405/500] ok      knowledge-update         How long have my parents been staying with me in the -> '9 months' (gold 'nine months')
+    [406/500] WRONG   knowledge-update         Where did I get my guitar serviced?                  -> 'Rhythm Central on Main St' (gold 'The music shop on Main St.')
+    [407/500] WRONG   knowledge-update         What time do I usually go to the gym?                -> '7:00 pm' (gold '6:00 pm')
+    [408/500] ok      knowledge-update         Where is the painting 'Ethereal Dreams' by Emma Tayl -> "In the user's bedroom" (gold 'in my bedroom')
+    [409/500] ok      knowledge-update         How much did I earn at the Downtown Farmers Market o -> '$420' (gold '$420')
+    [410/500] ok      knowledge-update         How many dozen eggs do we currently have stocked up  -> '20 dozen' (gold '20')
+    [411/500] ok      knowledge-update         How many different species of birds have I seen in m -> '32' (gold '32')
+    [412/500] ok      knowledge-update         How many Instagram followers do I currently have?    -> '600' (gold '600')
+    [413/500] ok      knowledge-update         How many times have I tried making a Negroni at home -> '10 times' (gold '10')
+    [414/500] ok      knowledge-update         How much time do I dedicate to coding exercises each -> 'Two hours' (gold 'about two hours')
+    [415/500] ok      knowledge-update         How many autographed baseballs have I added to my co -> '15' (gold '15')
+    [416/500] WRONG   knowledge-update         What was my previous frequent flyer status on United -> 'None (or no status)' (gold 'Premier Silver')
+    [417/500] ok      knowledge-update         How much weight have I lost since I started going to -> '10 pounds' (gold '10 pounds')
+    [418/500] ok      knowledge-update         Where am I planning to stay for my birthday trip to  -> 'Oahu' (gold 'Oahu')
+    [419/500] ok      knowledge-update         What day of the week did I meet with my previous lan -> 'Wednesday' (gold 'Wednesday')
+    [420/500] WRONG   knowledge-update         What was my previous personal best time for the char -> '26 minutes and 30 seconds' (gold '27 minutes and 45 seconds')
+    [421/500] ok      knowledge-update         How often do I play tennis with my friends at the lo -> 'Previously: weekly. Now: every other week.' (gold 'Previously, you play tennis wi')
+    [422/500] ok      knowledge-update         What type of vehicle model am I currently working on -> 'Ford F-150 pickup truck model' (gold 'Ford F-150 pickup truck')
+    [423/500] decline knowledge-update         How long have I been living in my current apartment  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [424/500] decline knowledge-update         How many autographed football have I added to my col -> 'NO_ANSWER' (gold 'The information provided is no')
+    [425/500] WRONG   knowledge-update         How many followers do I have on Instagram now?       -> 'close to 1300' (gold '1300')
+    [426/500] decline knowledge-update         How often do I see Dr. Johnson?                      -> 'NO_ANSWER' (gold 'The information provided is no')
+    [427/500] decline knowledge-update         How many engineers do I lead when I just started my  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [428/500] ok      knowledge-update         What is my current record in the recreational volley -> '5-2' (gold '5-2')
+    [429/500] ok      knowledge-update         What was my previous goal for my Apex Legends level  -> 'Level 100' (gold 'level 100')
+    [430/500] ok      knowledge-update         How many largemouth bass did I catch with Alex on th -> '7' (gold '7')
+    [431/500] ok      knowledge-update         Do I have a spare screwdriver for opening up my lapt -> 'Yes' (gold 'Yes')
+    [432/500] WRONG   knowledge-update         How many free night's stays can I redeem at any Hilt -> "A single free night's stay" (gold 'Two')
+    [433/500] WRONG   knowledge-update         How many pre-1920 American coins do I have in my col -> '37' (gold '38')
+    [434/500] ok      knowledge-update         What new kitchen gadget did I invest in before getti -> 'Instant Pot' (gold 'Instant Pot')
+    [435/500] ok      single-session-assistant I'm planning to visit Bandung again and I was wonder -> 'Miss Bee Providore' (gold 'Miss Bee Providore')
+    [436/500] decline knowledge-update         How many Italian restaurants have I tried in my city -> 'NO_ANSWER' (gold 'The information provided is no')
+    [437/500] ok      knowledge-update         Before I purchased the gravel bike, do I have other  -> 'A road bike' (gold 'Yes. (You have a road bike too')
+    [438/500] ok      knowledge-update         What time do I wake up on Saturday mornings?         -> '7:30 am' (gold '7:30 am')
+    [439/500] ok      knowledge-update         How many times have I met up with Alex from Germany? -> 'Twice' (gold "We've met up twice.")
+    [440/500] ok      knowledge-update         How many projects have I completed since starting pa -> '5' (gold '5')
+    [441/500] ok      knowledge-update         How many women are on the team led by my former mana -> '6' (gold '6')
+    [442/500] ok      single-session-assistant I'm going back to our previous conversation about th -> 'blue' (gold 'The Plesiosaur had a blue scal')
+    [443/500] ok      single-session-assistant I'm planning my trip to Amsterdam again and I was wo -> 'International Budget Hostel' (gold 'International Budget Hostel')
+    [444/500] ok      single-session-assistant I think we discussed work from home jobs for seniors -> 'Transcriptionist' (gold 'Transcriptionist.')
+    [445/500] WRONG   knowledge-update         How often do I play table tennis with my friends at  -> 'Weekly' (gold 'The information provided is no')
+    [446/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> '38' (gold '38 subjects')
+    [447/500] ok      single-session-assistant I wanted to check back on our previous conversation  -> 'doc martin' (gold 'Doc Martin')
+    [448/500] ok      knowledge-update         Where do I currently keep my old sneakers?           -> 'in a shoe rack in my closet' (gold 'in a shoe rack in my closet')
+    [449/500] ok      single-session-assistant Can you remind me of the name of the romantic Italia -> 'Roscioli' (gold 'Roscioli')
+    [450/500] ok      knowledge-update         Did I mostly recently increase or decrease the limit -> 'Increased' (gold 'You increased the limit (from ')
+    [451/500] ok      single-session-assistant I was thinking about our previous conversation about -> 'Evolution' (gold 'Evolution')
+    [452/500] ok      single-session-assistant I'm planning to revisit Orlando. I was wondering if  -> 'The Sugar Factory' (gold 'The Sugar Factory at Icon Park')
+    [453/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Hoop Dance' (gold 'Hoop Dance')
+    [454/500] ok      single-session-assistant I'm checking our previous chat about the shift rotat -> '8 am - 4 pm (Day Shift)' (gold 'Admon was assigned to the 8 am')
+    [455/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Ruby, Python, PHP, SQL, Java, Node.js, Flask' (gold 'I recommended learning Ruby, P')
+    [456/500] ok      single-session-assistant I remember you told me about the refining processes  -> 'Atmospheric distillation, Fluid catalytic cr' (gold 'Atmospheric distillation, flui')
+    [457/500] WRONG   single-session-assistant I'm going back to our previous conversation about th -> '1. To identify molecular subtypes of endomet' (gold 'The three objectives were: 1) ')
+    [458/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Manolo García' (gold 'Manolo García')
+    [459/500] ok      single-session-assistant I'm planning to visit the Vatican again and I was wo -> 'Roscioli' (gold 'Roscioli')
+    [460/500] ok      single-session-assistant I'm going back to our previous conversation about DI -> 'Mod Podge' (gold 'Mod Podge or another sealant')
+    [461/500] ok      single-session-assistant I'm planning to go back to the Natural Park of Monca -> 'GR-90' (gold 'The GR-90 trail.')
+    [462/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Mindful.org' (gold 'Mindful.org.')
+    [463/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Dr. Arati Prabhakar' (gold 'Dr. Arati Prabhakar')
+    [464/500] ok      single-session-assistant I remember you provided a list of 100 prompt paramet -> 'Sound effects' (gold "The 27th parameter was 'Sound ")
+    [465/500] ok      single-session-assistant I was thinking about our previous conversation about -> 'biometric authentication or one-time passwor' (gold 'I mentioned biometric authenti')
+    [466/500] ok      single-session-assistant In our previous chat, you suggested 'sexual compulsi -> 'Sexual fixations, Problematic sexual behavio' (gold "I suggested 'sexual fixations'")
+    [467/500] ok      single-session-assistant I'm going back to our previous chat about the Lost T -> '4' (gold '4')
+    [468/500] ok      single-session-assistant I was going through our previous conversation about  -> 'The Library is a sphere whose exact center i' (gold "According to Borges, 'The Libr")
+    [469/500] ok      single-session-assistant I'm looking back at our previous chess game and I wa -> '28. Kg3' (gold '28. Kg3')
+    [470/500] ok      knowledge-update         How many trips have I taken my Canon EOS 80D camera  -> '5' (gold 'five')
+    [471/500] ok      single-session-assistant I was going through our previous conversation about  -> '2-3 eggs' (gold '2-3 eggs')
+    [472/500] ok      single-session-assistant I was going through our previous chat and I wanted t -> 'Chapter 4 of Book 1, titled "Vocal Prayer an' (gold "Chapter 4 of Book 1, titled 'V")
+    [473/500] ok      single-session-assistant I'm planning another trip to New York City and I was -> 'By Chloe' (gold 'By Chloe')
+    [474/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Nu, pogodi!' (gold 'Nu, pogodi!')
+    [475/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> 'Absinthe' (gold 'Absinthe')
+    [476/500] ok      single-session-assistant I'm planning my trip to Speyer again and I wanted to -> '+49 (0) 62 32 / 14 23 - 0' (gold '+49 (0) 62 32 / 14 23 - 0')
+    [477/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Jaipur Rugs' (gold 'Jaipur Rugs')
+    [478/500] decline single-session-assistant I'm looking back at our previous conversation where  -> 'NO_ANSWER' (gold 'C D E F G A B A G F E D C')
+    [479/500] ok      single-session-assistant I was going through our previous conversation and I  -> 'Patagonia, Southwest Airlines' (gold 'Patagonia and Southwest Airlin')
+    [480/500] WRONG   single-session-assistant I wanted to follow up on our previous conversation a -> '<https://www.youtube.com/watch?v=UfOvNlX9Hh0' (gold "The video is 'How to Sit Prope")
+    [481/500] ok      single-session-assistant I'm looking back at our previous chat about the DHL  -> '$2,000' (gold '$2,000')
+    [482/500] ok      single-session-assistant Can you remind me what was the average improvement i -> 'approximately 20%' (gold 'The average improvement in fra')
+    [483/500] ok      single-session-assistant I was going through our previous chat. Can you remin -> 'Revolution Hall' (gold 'Revolution Hall')
+    [484/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> '10 minutes' (gold '10 minutes')
+    [485/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Memrise' (gold 'Memrise')
+    [486/500] ok      single-session-assistant I was thinking back to our previous conversation abo -> 'Fissionator' (gold 'Fissionator.')
+    [487/500] ok      single-session-assistant I was looking back at our previous conversation abou -> '@jessica_poole_jewellery' (gold '@jessica_poole_jewellery')
+    [488/500] ok      single-session-assistant I'm going back to our previous conversation about mu -> 'MusicTheory.net' (gold 'MusicTheory.net')
+    [489/500] ok      single-session-assistant I'm trying to recall what the designation on my jump -> 'LIV' (gold 'The designation on your jumpsu')
+    [490/500] ok      single-session-assistant I was looking back at our previous chat and I wanted -> '12' (gold 'The Chiefs played the Jaguars ')
+    [491/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> '2014' (gold '2014.')
+    [492/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Pennsylvania' (gold 'Pennsylvania')
+    [493/500] ok      single-session-assistant I was going through our previous chat and I was wond -> 'an untidy, stained white shirt' (gold 'Andy was wearing an untidy, st')
+    [494/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> 'Pilsner or lager' (gold 'I recommended using a Pilsner ')
+    [495/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Patagonia' (gold 'Patagonia')
+    [496/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Veja' (gold 'Veja')
+    [497/500] ok      single-session-assistant I'm going back to our previous conversation about tr -> 'Nostalgia' (gold 'Nostalgia')
+    [498/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Grilled Snapper with Mango Salsa' (gold 'Grilled Snapper with Mango Sal')
+    [499/500] ok      single-session-assistant I was going through our previous conversation about  -> '6S' (gold 'The 6S algorithm is implemente')
+    [500/500] ok      single-session-assistant I remember you told me to dilute tea tree oil with a -> '1:10 ratio' (gold 'The recommended ratio is 1:10,')
+    accuracy=0.827 [0.790,0.859] abstention=0.7333 errors=1 (477s)
+
+wrote /Users/krishnabhatnagar/mapi/bench/results/lme-v21-baseline/report.md
+=== CONTEXTUAL started 07:39:01 ===
+run lme-v21-contextual
+
+=== longmemeval (session-level evidence) ===
+  500 corpora, 23867 documents, 500 questions
+  embedder: gemini/text-embedding-004  ingesting ...
+    [1/500] 725 chunks, 0s elapsed, ~190s left
+    [25/500] 18630 chunks, 67s elapsed, ~1269s left
+    [50/500] 37203 chunks, 131s elapsed, ~1176s left
+    [75/500] 55693 chunks, 191s elapsed, ~1084s left
+2026-08-13T02:12:58.563564Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:58.582644Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:58.632410Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:58.833640Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:58.833925Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:59.163448Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:12:59.163666Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+    [100/500] 74491 chunks, 268s elapsed, ~1072s left
+    [125/500] 93199 chunks, 324s elapsed, ~972s left
+    [150/500] 111924 chunks, 385s elapsed, ~898s left
+2026-08-13T02:16:52.695729Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:16:52.697219Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.697558Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.697780Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.697911Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.698314Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.698653Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.698921Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.699069Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.699322Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.703957Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.704100Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.704405Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.704678Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.704799Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705006Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705219Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705335Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705428Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705564Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705649Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705732Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705823Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.705917Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.706007Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.706095Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.706372Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:16:52.706525Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:16:52.706667Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:16:52.706808Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.706942Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:16:52.707049Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+    [175/500] 130674 chunks, 469s elapsed, ~870s left
+    [200/500] 149403 chunks, 523s elapsed, ~784s left
+2026-08-13T02:19:27.989423Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.006603Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.006778Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.007205Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.007517Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.007692Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.007808Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.007906Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008006Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008086Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008180Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008271Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008369Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008467Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008568Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008694Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008792Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008885Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.008985Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009082Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009177Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009269Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009364Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009460Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009550Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009652Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009751Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.009963Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.010508Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.010962Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.011262Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:19:28.011434Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+    [225/500] 168180 chunks, 632s elapsed, ~772s left
+    [250/500] 186660 chunks, 687s elapsed, ~687s left
+2026-08-13T02:22:51.918231Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.926300Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.926596Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.926821Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.927083Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.927429Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.927654Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.927876Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.928250Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.928446Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.928659Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.928848Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929003Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929086Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929192Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929293Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929389Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929486Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929619Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929714Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929791Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929885Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.929981Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.930071Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.930171Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.930263Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.930356Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.932293Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.932400Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.932911Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.933287Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:22:51.933984Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+    [275/500] 205409 chunks, 927s elapsed, ~759s left
+    [300/500] 224153 chunks, 1102s elapsed, ~735s left
+2026-08-13T02:30:36.034292Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.046140Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.049110Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.049396Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.053018Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.053213Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.053477Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.053737Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.053837Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.054198Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.054549Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.054649Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.054943Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055212Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055301Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055506Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055595Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055689Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055784Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055871Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.055950Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056030Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056192Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056302Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056423Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056523Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056630Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056720Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056831Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.056936Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.057031Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:30:36.057170Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+    [325/500] 242864 chunks, 1345s elapsed, ~724s left
+    [350/500] 261710 chunks, 1427s elapsed, ~612s left
+2026-08-13T02:37:58.450874Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.452689Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.453207Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.453931Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.454169Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.454348Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.455243Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.458948Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.459199Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.459951Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460158Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460359Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460555Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460714Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460856Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.460964Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.461182Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.461357Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.461561Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.461747Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.461883Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.462071Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.462223Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.462331Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.462446Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.462650Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.463349Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.463504Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.463595Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.463761Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.464660Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:37:58.464810Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:48.330274Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:48.609359Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:48.628847Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:49.056960Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:49.084343Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:49.575698Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:38:49.576883Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+    [375/500] 280405 chunks, 1838s elapsed, ~613s left
+    [400/500] 299111 chunks, 1923s elapsed, ~481s left
+2026-08-13T02:46:23.158372Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.159423Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.159713Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.160652Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.162540Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.163881Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.169664Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.176195Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.179438Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.180223Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.181725Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.188236Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.188828Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.189156Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.189287Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.189469Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.189646Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.189949Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.190081Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.195333Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.198999Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.203234Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.205167Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.207855Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:46:23.208383Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.208860Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.209318Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.209871Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.210197Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.210523Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:46:23.210920Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+    [425/500] 317813 chunks, 2259s elapsed, ~399s left
+    [450/500] 336463 chunks, 2337s elapsed, ~260s left
+    [475/500] 355147 chunks, 2395s elapsed, ~126s left
+2026-08-13T02:54:10.773595Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.781388Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.789180Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.790059Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.790809Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.790939Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791049Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791144Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791636Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791742Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791852Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.791954Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792049Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792150Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792261Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792352Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792464Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792554Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792645Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792755Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792842Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.792927Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.793016Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.793117Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.793219Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.794783Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:54:10.794894Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.794987Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.795083Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.795295Z [warning  ] embedding_timeout              attempt=1 provider=gemini
+2026-08-13T02:54:10.795654Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+2026-08-13T02:54:10.795859Z [warning  ] embedding_error                attempt=1 error= provider=gemini
+    [500/500] 373687 chunks, 2745s elapsed, ~0s left
+  embedding cache: {'rows': 934732, 'hits': 28566, 'misses': 345121}
+  ingested 23867 units (0 of them extracted claims) / 373687 chunks in 2748s (20808s embedding)
+    vector_only            FULL=0.972 hit=0.992 mrr=0.934 10426ms (166s)
+    lexical_only           FULL=0.916 hit=0.984 mrr=0.910 11423ms (182s)
+    hybrid_rrf             FULL=0.956 hit=0.996 mrr=0.944 10762ms (171s)
+    hybrid_rerank          FULL=0.878 hit=0.970 mrr=0.872 10023ms (161s)
+    hybrid_rerank_entity   FULL=0.878 hit=0.970 mrr=0.872 36647ms (582s)
+  end-to-end with vector_only (best full recall) ...
+    [  1/500] ok      single-session-user      What is my preferred gin-to-vermouth ratio for a cla -> '3:1' (gold '3:1')
+    [  2/500] ok      single-session-user      How old was I when my grandma gave me the silver nec -> '18' (gold '18')
+    [  3/500] ok      single-session-user      What was the discount I got on my first purchase fro -> '10%' (gold '10%')
+    [  4/500] ok      single-session-user      Where did I redeem a $5 coupon on coffee creamer?    -> 'Target' (gold 'Target')
+    [  5/500] ok      single-session-user      What certification did I complete last month?        -> 'Data Science' (gold 'Data Science')
+    [  6/500] ok      single-session-user      How many shirts did I pack for my 5-day trip to Cost -> '7' (gold '7')
+    [  7/500] ok      single-session-user      Where did I attend my cousin's wedding?              -> 'Grand Ballroom' (gold 'The Grand Ballroom')
+    [  8/500] ok      single-session-user      What play did I attend at the local community theate -> 'The Glass Menagerie' (gold 'The Glass Menagerie')
+    [  9/500] ok      single-session-user      How long did it take me to assemble the IKEA bookshe -> '4 hours' (gold '4 hours')
+    [ 10/500] ok      single-session-user      How many largemouth bass did I catch on my fishing t -> '12' (gold '12')
+    [ 11/500] ok      single-session-user      How long is my daily commute to work?                -> '45 minutes each way' (gold '45 minutes each way')
+    [ 12/500] ok      single-session-user      How much is the painting of a sunset worth in terms  -> 'Triple' (gold 'The painting is worth triple w')
+    [ 13/500] ok      single-session-user      What color did I repaint my bedroom walls?           -> 'a lighter shade of gray' (gold 'a lighter shade of gray')
+    [ 14/500] ok      single-session-user      When did I volunteer at the local animal shelter's f -> "Valentine's Day" (gold 'February 14th')
+    [ 15/500] ok      single-session-user      How much did I spend on a designer handbag?          -> '$800' (gold '$800')
+    [ 16/500] ok      single-session-user      How many playlists do I have on Spotify?             -> '20' (gold '20')
+    [ 17/500] ok      single-session-user      How much RAM did I upgrade my laptop to?             -> '16GB' (gold '16GB')
+    [ 18/500] ok      single-session-user      What breed is my dog?                                -> 'Golden Retriever' (gold 'Golden Retriever')
+    [ 19/500] ok      single-session-user      What is the name of the playlist I created on Spotif -> 'Summer Vibes' (gold 'Summer Vibes')
+    [ 20/500] ok      single-session-user      What did I buy for my sister's birthday gift?        -> 'a yellow dress and a pair of earrings to mat' (gold 'a yellow dress')
+    [ 21/500] ok      single-session-user      What degree did I graduate with?                     -> 'Business Administration' (gold 'Business Administration')
+    [ 22/500] ok      single-session-user      How many bikes do I own?                             -> '3' (gold 'three')
+    [ 23/500] ok      single-session-user      Where did I buy my new tennis racket from?           -> 'a sports store downtown' (gold 'the sports store downtown')
+    [ 24/500] ok      single-session-user      What was my previous occupation?                     -> 'marketing specialist at a small startup' (gold 'Marketing specialist at a smal')
+    [ 25/500] ok      single-session-user      What speed is my new internet plan?                  -> '500 Mbps' (gold '500 Mbps')
+    [ 26/500] ok      single-session-user      What was my previous stance on spirituality?         -> 'staunch atheist' (gold 'A staunch atheist')
+    [ 27/500] WRONG   single-session-user      Where did I attend for my study abroad program?      -> 'University of Melbourne' (gold 'University of Melbourne in Aus')
+    [ 28/500] ok      single-session-user      What was my last name before I changed it?           -> 'Johnson' (gold 'Johnson')
+    [ 29/500] ok      single-session-user      Where do I take yoga classes?                        -> 'Serenity Yoga' (gold 'Serenity Yoga')
+    [ 30/500] ok      single-session-user      What brand are my favorite running shoes?            -> 'Nike' (gold 'Nike')
+    [ 31/500] ok      single-session-user      What is the name of my cat?                          -> 'Luna' (gold 'Luna')
+    [ 32/500] ok      single-session-user      How many amateur comedians did I watch perform at th -> '10' (gold '10')
+    [ 33/500] decline single-session-user      What book am I currently reading?                    -> 'NO_ANSWER' (gold 'The Seven Husbands of Evelyn H')
+    [ 34/500] ok      single-session-user      What did I bake for my niece's birthday party?       -> 'lemon blueberry cake' (gold 'a lemon blueberry cake')
+    [ 35/500] ok      single-session-user      How much screen time have I been averaging on Instag -> '2 hours' (gold '2 hours')
+    [ 36/500] ok      single-session-user      Where did I attend the Imagine Dragons concert?      -> 'Xfinity Center' (gold 'Xfinity Center')
+    [ 37/500] ok      single-session-user      What size is my new Samsung TV?                      -> '55-inch' (gold '55-inch')
+    [ 38/500] ok      single-session-user      How many skeins of worsted weight yarn did I find in -> '17' (gold '17')
+    [ 39/500] ok      single-session-user      How long did it take to move to the new apartment?   -> '5 hours' (gold '5 hours')
+    [ 40/500] ok      single-session-user      How long did Alex marinate the BBQ ribs in special s -> '24 hours' (gold '24 hours')
+    [ 41/500] WRONG   single-session-user      What type of action figure did I buy from a thrift s -> 'Snaggletooth' (gold 'a blue Snaggletooth')
+    [ 42/500] ok      single-session-user      What is the name of the music streaming service have -> 'Spotify' (gold 'Spotify')
+    [ 43/500] ok      single-session-user      What type of rice is my favorite?                    -> 'Japanese short-grain rice' (gold 'Japanese short-grain rice')
+    [ 44/500] ok      single-session-user      How long was I in Japan for?                         -> 'two weeks' (gold 'two weeks')
+    [ 45/500] ok      single-session-user      Who did I have a conversation with about destiny?    -> 'Sarah' (gold 'Sarah')
+    [ 46/500] decline single-session-user      What is the name of my hamster?                      -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 47/500] ok      single-session-user      How many copies of my favorite artist's debut album  -> '500' (gold '500')
+    [ 48/500] ok      single-session-user      Where does my sister Emily live?                     -> 'Denver' (gold 'Denver')
+    [ 49/500] ok      single-session-user      How long have I been collecting vintage cameras?     -> '3 months' (gold 'three months')
+    [ 50/500] ok      single-session-user      How much time do I dedicate to practicing guitar eve -> '30 minutes daily' (gold '30 minutes')
+    [ 51/500] ok      single-session-user      What is my ethnicity?                                -> 'Irish and Italian' (gold 'A mix of Irish and Italian')
+    [ 52/500] ok      single-session-user      What type of cocktail recipe did I try last weekend? -> 'Lavender gin fizz' (gold 'lavender gin fizz')
+    [ 53/500] ok      single-session-user      Who gave me a new stand mixer as a birthday gift?    -> 'my sister' (gold 'my sister')
+    [ 54/500] ok      single-session-user      Where did I go on a week-long trip with my family?   -> 'Hawaii' (gold 'Hawaii')
+    [ 55/500] ok      single-session-user      How many hours did I spend watching documentaries on -> '10 hours' (gold '10')
+    [ 56/500] ok      single-session-user      What type of bulb did I replace in my bedside lamp?  -> 'Philips LED bulb' (gold 'Philips LED bulb')
+    [ 57/500] ok      single-session-user      What time do I stop checking work emails and message -> '7 pm' (gold '7 pm')
+    [ 58/500] ok      single-session-user      What brand of shampoo do I currently use?            -> "Trader Joe's lavender scented shampoo" (gold "Trader Joe's")
+    [ 59/500] ok      single-session-user      What game did I finally beat last weekend?           -> 'Dark Souls 3 DLC' (gold 'Dark Souls 3 DLC')
+    [ 60/500] decline single-session-user      How long was I in Korea for?                         -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 61/500] decline single-session-user      How long have I been collecting vintage films?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 62/500] ok      single-session-user      How long did I wait for the decision on my asylum ap -> 'Over a year' (gold 'over a year')
+    [ 63/500] ok      single-session-user      Where did I meet Sophia?                             -> 'Coffee Shop (City)' (gold 'a coffee shop in the city')
+    [ 64/500] ok      single-session-user      Where did I buy my new bookshelf from?               -> 'IKEA' (gold 'IKEA')
+    [ 65/500] ok      single-session-user      What health issue did I initially think was just a c -> 'bronchitis' (gold 'bronchitis')
+    [ 66/500] decline single-session-user      What did I bake for my uncle's birthday party?       -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 67/500] decline single-session-user      How much time do I dedicate to practicing violin eve -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 68/500] ok      single-session-user      Where did I complete my Bachelor's degree in Compute -> 'UCLA' (gold 'University of California, Los ')
+    [ 69/500] decline single-session-user      What did my dad gave me as a birthday gift?          -> 'NO_ANSWER' (gold 'You did not mention this infor')
+    [ 70/500] ok      single-session-user      What time do I usually get home from work on weeknig -> 'around 6:30 pm' (gold '6:30 pm')
+    [ 71/500] WRONG   multi-session            How many hours in total did I spend driving to my th -> '16-17 hours' (gold '15 hours for getting to the th')
+    [ 72/500] ok      multi-session            How many days did I spend on camping trips in the Un -> '8' (gold '8 days.')
+    [ 73/500] WRONG   multi-session            How many different types of citrus fruits have I use -> '5' (gold '3')
+    [ 74/500] ok      multi-session            What time did I go to bed on the day before I had a  -> '2 AM' (gold '2 AM')
+    [ 75/500] ok      multi-session            How many movie festivals that I attended?            -> '4' (gold 'I attended four movie festival')
+    [ 76/500] WRONG   multi-session            How much more did I spend on accommodations per nigh -> 'Over $270' (gold '$270')
+    [ 77/500] WRONG   multi-session            How many times did I bake something in the past two  -> '6' (gold '4')
+    [ 78/500] ok      multi-session            How many pieces of furniture did I buy, assemble, se -> '4' (gold '4')
+    [ 79/500] WRONG   multi-session            How many different cuisines have I learned to cook o -> '5' (gold '4')
+    [ 80/500] ok      multi-session            How many plants did I acquire in the last month?     -> '3' (gold '3')
+    [ 81/500] ok      multi-session            How many days did I take social media breaks in tota -> '17' (gold '17 days')
+    [ 82/500] ok      multi-session            What is the total amount I spent on luxury items in  -> '$2,500' (gold '$2,500')
+    [ 83/500] ok      multi-session            How many different museums or galleries did I visit  -> '2' (gold '2')
+    [ 84/500] ok      multi-session            How many different types of food delivery services h -> '3' (gold '3')
+    [ 85/500] ok      multi-session            How many model kits have I worked on or bought?      -> '5' (gold 'I have worked on or bought fiv')
+    [ 86/500] WRONG   multi-session            How many weddings have I attended in this year?      -> '3' (gold 'I attended three weddings. The')
+    [ 87/500] ok      multi-session            How many items of clothing do I need to pick up or r -> '3' (gold '3')
+    [ 88/500] WRONG   multi-session            How many tanks do I currently have, including the on -> '4' (gold '3')
+    [ 89/500] ok      multi-session            How many different doctors did I visit?              -> '3' (gold 'I visited three different doct')
+    [ 90/500] WRONG   multi-session            How many hours have I spent playing games in total?  -> '110 hours' (gold '140 hours')
+    [ 91/500] WRONG   multi-session            How many properties did I view before making an offe -> '2' (gold 'I viewed four properties befor')
+    [ 92/500] ok      multi-session            How much total money have I spent on bike-related ex -> '$185' (gold '$185')
+    [ 93/500] WRONG   multi-session            How many projects have I led or am currently leading -> '3' (gold '2')
+    [ 94/500] WRONG   multi-session            How many babies were born to friends and family memb -> '6' (gold '5')
+    [ 95/500] ok      multi-session            How many weeks did it take me to watch all the Marve -> '3.5 weeks' (gold '3.5 weeks')
+    [ 96/500] ok      multi-session            How many doctor's appointments did I go to in March? -> '2' (gold '2')
+    [ 97/500] ok      multi-session            How many days did it take for me to receive the new  -> '5 days' (gold '5 days. 6 days (including the ')
+    [ 98/500] ok      multi-session            How many fish are there in total in both of my aquar -> '17' (gold '17')
+    [ 99/500] ok      multi-session            Which social media platform did I gain the most foll -> 'TikTok' (gold 'TikTok')
+    [100/500] decline multi-session            How many hours of jogging and yoga did I do last wee -> 'NO_ANSWER' (gold '0.5 hours')
+    [101/500] ok      multi-session            What is the average age of me, my parents, and my gr -> '59.6' (gold '59.6')
+    [102/500] WRONG   multi-session            How many health-related devices do I use in a day?   -> '3' (gold '4')
+    [103/500] WRONG   multi-session            How many fitness classes do I attend in a typical we -> '4' (gold '5')
+    [104/500] WRONG   multi-session            Which grocery store did I spend the most money at in -> 'Walmart' (gold 'Thrive Market')
+    [105/500] WRONG   multi-session            How many different art-related events did I attend i -> '3' (gold '4')
+    [106/500] decline multi-session            How many times did I bake egg tarts in the past two  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [107/500] decline multi-session            How many different museums or galleries did I visit  -> 'NO_ANSWER' (gold '0. You did not mention visitng')
+    [108/500] ok      multi-session            How much money did I raise in total through all the  -> '$5,850' (gold '$5,850')
+    [109/500] decline multi-session            How many days did it take for my iPad case to arrive -> 'NO_ANSWER' (gold 'The information provided is no')
+    [110/500] WRONG   multi-session            How many pieces of jewelry did I acquire in the last -> '4' (gold '3')
+    [111/500] decline multi-session            How many fish are there in my 30-gallon tank?        -> 'NO_ANSWER' (gold 'The information provided is no')
+    [112/500] decline multi-session            How many years in total did I spend in formal educat -> 'NO_ANSWER' (gold 'The information provided is no')
+    [113/500] ok      multi-session            How many days did I spend attending workshops, lectu -> '3' (gold '3 days')
+    [114/500] WRONG   multi-session            How many days did I spend in total traveling in Hawa -> '10' (gold 'The information provided is no')
+    [115/500] WRONG   multi-session            How many years in total did I spend in formal educat -> '8' (gold '10 years')
+    [116/500] ok      multi-session            How much money did I raise for charity in total?     -> '$3,750' (gold '$3,750')
+    [117/500] ok      multi-session            How many projects have I been working on simultaneou -> '2' (gold '2')
+    [118/500] ok      multi-session            How many total pieces of writing have I completed si -> '23' (gold '23')
+    [119/500] WRONG   multi-session            How many kitchen items did I replace or fix?         -> '6' (gold 'I replaced or fixed five items')
+    [120/500] ok      multi-session            How many rare items do I have in total?              -> '99' (gold '99')
+    [121/500] ok      multi-session            How much total money did I spend on attending worksh -> '$720' (gold '$720')
+    [122/500] ok      multi-session            How many days did it take for my laptop backpack to  -> '5' (gold '5 days. 6 days (including the ')
+    [123/500] ok      multi-session            How many days did I spend in total traveling in Hawa -> '15 days' (gold '15 days')
+    [124/500] ok      multi-session            How many online courses have I completed in total?   -> 'Five' (gold '5')
+    [125/500] WRONG   single-session-preference Can you recommend a show or movie for me to watch to -> 'Given your recent binge of "Crime Junkie" an' (gold 'The user would prefer recommen')
+    [126/500] ok      multi-session            How many times did I ride rollercoasters across all  -> '10' (gold '10 times')
+    [127/500] ok      single-session-preference Can you recommend some resources where I can learn m -> 'Since you enjoy using Adobe Premiere Pro and' (gold 'The user would prefer response')
+    [128/500] WRONG   multi-session            How many music albums or EPs have I purchased or dow -> '2' (gold '3')
+    [129/500] ok      multi-session            How many graduation ceremonies have I attended in th -> '3' (gold '3')
+    [130/500] ok      multi-session            How many magazine subscriptions do I currently have? -> '2' (gold '2')
+    [131/500] WRONG   multi-session            How many musical instruments do I currently own?     -> '3' (gold 'I currently own 4 musical inst')
+    [132/500] WRONG   multi-session            How many days did I spend participating in faith-rel -> '2' (gold '3 days.')
+    [133/500] ok      multi-session            What is the total amount of money I earned from sell -> '$495' (gold '$495')
+    [134/500] ok      multi-session            How many bikes did I service or plan to service in M -> '2' (gold '2')
+    [135/500] ok      single-session-preference Can you suggest some accessories that would compleme -> 'Given your Sony A7R IV, Sony 24-70mm f/2.8 l' (gold 'The user would prefer suggesti')
+    [136/500] ok      single-session-preference I've been thinking about ways to stay connected with -> "Since you've already explored virtual coffee" (gold 'The user would prefer response')
+    [137/500] ok      single-session-preference Can you recommend some interesting cultural events h -> 'Given your interest in language diversity, c' (gold 'The user would prefer response')
+    [138/500] WRONG   single-session-preference I've been struggling with my slow cooker recipes. An -> "Since you've successfully made beef stew and" (gold 'The user would prefer response')
+    [139/500] ok      single-session-preference Can you recommend some recent publications or confer -> 'Given your expertise in deep learning for me' (gold 'The user would prefer suggesti')
+    [140/500] ok      single-session-preference My kitchen's becoming a bit of a mess again. Any tip -> 'To keep your kitchen clean, focus on daily h' (gold 'The user would prefer response')
+    [141/500] WRONG   single-session-preference Can you suggest some activities that I can do in the -> 'Given your passion for dance and interest in' (gold 'The user would prefer suggesti')
+    [142/500] ok      single-session-preference What should I serve for dinner this weekend with my  -> 'For dinner this weekend, consider making a f' (gold 'The user would prefer dinner s')
+    [143/500] ok      single-session-preference Can you suggest a hotel for my upcoming trip to Miam -> 'For your trip to Miami, I recommend looking ' (gold 'The user would prefer suggesti')
+    [144/500] WRONG   single-session-preference I've been thinking about making a cocktail for an up -> "Given your recent enjoyment of Hendrick's gi" (gold 'Considering their mixology cla')
+    [145/500] ok      single-session-preference I've been feeling a bit stuck with my paintings late -> "Since you're already doing a 30-day painting" (gold 'The user would prefer response')
+    [146/500] ok      single-session-preference I'm thinking of inviting my colleagues over for a sm -> "Since you've had success with lemon poppysee" (gold 'The user would prefer baking s')
+    [147/500] ok      single-session-preference I was thinking about rearranging the furniture in my -> 'When rearranging your bedroom furniture, con' (gold 'The user would prefer response')
+    [148/500] WRONG   single-session-preference I'm planning my meal prep next week, any suggestions -> 'Given your enjoyment of Mexican-inspired dis' (gold 'The user would prefer response')
+    [149/500] ok      multi-session            For my daily commute, how much more expensive was th -> '$6' (gold '$6')
+    [150/500] ok      multi-session            How many antique items did I inherit or acquire from -> '5' (gold '5')
+    [151/500] ok      single-session-preference I noticed my bike seems to be performing even better -> "The user replaced the old bike's chain and c" (gold 'The user would prefer response')
+    [152/500] ok      multi-session            What was the approximate increase in Instagram follo -> '100 followers' (gold '100')
+    [153/500] WRONG   single-session-preference I'm planning a trip to Denver soon. Any suggestions  -> "Since you've already enjoyed Denver's vibran" (gold 'The user would prefer response')
+    [154/500] ok      multi-session            What is the total distance of the hikes I did on two -> '8 miles' (gold '8 miles')
+    [155/500] WRONG   single-session-preference I've been feeling nostalgic lately. Do you think it  -> 'Given your happy high school memories and yo' (gold 'The user would prefer response')
+    [156/500] WRONG   single-session-preference I am planning another theme park weekend; do you hav -> 'Given your enjoyment of Southern California ' (gold 'The user would prefer theme pa')
+    [157/500] ok      multi-session            How many pages do I have left to read in 'The Nighti -> '190' (gold '190')
+    [158/500] WRONG   single-session-preference I've got some free time tonight, any documentary rec -> "Since you're interested in nature and wildli" (gold 'The user would prefer document')
+    [159/500] ok      single-session-preference Can you suggest some useful accessories for my phone -> 'Given your iPhone 13 Pro and interest in wir' (gold 'The user would prefer suggesti')
+    [160/500] ok      single-session-preference I've been feeling like my chocolate chip cookies nee -> "Since you've been experimenting with turbina" (gold 'The user would prefer response')
+    [161/500] ok      single-session-preference I’m a bit anxious about getting around Tokyo. Do you -> "Since you're already equipped with a Suica c" (gold 'The user would prefer response')
+    [162/500] WRONG   single-session-preference I'm trying to decide whether to buy a NAS device now -> 'Given your strong emphasis on data security ' (gold 'The user would prefer response')
+    [163/500] ok      single-session-preference Can you suggest some activities I can do during my c -> 'Given your 35-45 minute bike commute and enj' (gold 'The user would prefer suggesti')
+    [164/500] ok      single-session-preference I've been sneezing quite a bit lately. Do you think  -> 'Given your cat that sheds a lot and your rec' (gold 'The user would prefer response')
+    [165/500] ok      single-session-preference I was thinking of trying a new coffee creamer recipe -> "Since you're already making your own creamer" (gold 'The user would prefer response')
+    [166/500] WRONG   multi-session            When did I submit my research paper on sentiment ana -> '2023-05-22' (gold 'February 1st')
+    [167/500] ok      multi-session            How much cashback did I earn at SaveMart last Thursd -> '$0.75' (gold '$0.75')
+    [168/500] ok      multi-session            How many plants did I initially plant for tomatoes a -> '5 tomato plants and 3 cucumber plants' (gold '8')
+    [169/500] ok      multi-session            How many hours do I work in a typical week during pe -> '50 hours' (gold '50')
+    [170/500] ok      multi-session            How much older am I than the average age of employee -> '2.5 years older' (gold '2.5 years')
+    [171/500] ok      multi-session            What percentage discount did I get on the book from  -> '20%' (gold '20%')
+    [172/500] ok      multi-session            What percentage of packed shoes did I wear on my las -> '40%' (gold '40%')
+    [173/500] ok      multi-session            What is the total number of episodes I've listened t -> '27' (gold '27')
+    [174/500] ok      multi-session            What is the difference in price between my luxury bo -> '$750' (gold '$750')
+    [175/500] ok      single-session-preference I'm getting excited about my visit to the music stor -> "Since you're considering upgrading from a St" (gold 'The user would prefer response')
+    [176/500] ok      multi-session            How much did I save on the designer handbag at TK Ma -> '$300' (gold '$300')
+    [177/500] ok      multi-session            How much did I spend on car wash and parking ticket? -> '$65' (gold '$65')
+    [178/500] ok      multi-session            Did I receive a higher percentage discount on my fir -> 'Yes' (gold 'Yes.')
+    [179/500] ok      multi-session            What are the two hobbies that led me to join online  -> 'Photography and cooking' (gold 'photography and cooking')
+    [180/500] ok      multi-session            What is the total cost of the new food bowl, measuri -> '$50' (gold '$50')
+    [181/500] ok      single-session-preference I've been having trouble with the battery life on my -> "Since you're already using a portable power " (gold 'The user would prefer response')
+    [182/500] ok      multi-session            What was the total number of people reached by my Fa -> '12,000 people' (gold '12,000')
+    [183/500] ok      multi-session            What is the total number of days I spent in Japan an -> '11 days' (gold '11 days (or 12 days, if April ')
+    [184/500] ok      multi-session            How many Marvel movies did I re-watch?               -> '2' (gold '2')
+    [185/500] ok      multi-session            What is the minimum amount I could get if I sold the -> '$5,150' (gold '$5,150')
+    [186/500] WRONG   multi-session            How old was I when Alex was born?                    -> '42' (gold '11')
+    [187/500] ok      multi-session            What is the total number of goals and assists I have -> '3 goals and 2 assists' (gold '5')
+    [188/500] ok      multi-session            How many sports have I played competitively in the p -> '2' (gold 'two')
+    [189/500] ok      multi-session            How many years will I be when my friend Rachel gets  -> '33' (gold '33')
+    [190/500] ok      multi-session            How much more was the pre-approval amount than the f -> '$25,000' (gold '$25,000')
+    [191/500] ok      multi-session            What is the total cost of Lola's vet visit and flea  -> '$75' (gold '$75')
+    [192/500] ok      multi-session            What is the total number of lunch meals I got from t -> '8' (gold '8 meals')
+    [193/500] decline multi-session            How many years older is my grandma than me?          -> 'NO_ANSWER' (gold '43')
+    [194/500] WRONG   multi-session            How many dinner parties have I attended in the past  -> '4' (gold 'three')
+    [195/500] WRONG   multi-session            How much will I save by taking the train from the ai -> '$112 - $152 USD' (gold '$50')
+    [196/500] ok      multi-session            How much more did I have to pay for the trip after t -> '$300' (gold '$300')
+    [197/500] decline multi-session            What was the page count of the two novels I finished -> 'NO_ANSWER' (gold '856')
+    [198/500] WRONG   multi-session            How long have I been working in my current role?     -> '2 years and 4 months' (gold '1 year and 5 months')
+    [199/500] ok      multi-session            At which university did I present a poster on my the -> 'Harvard University' (gold 'Harvard University')
+    [200/500] ok      multi-session            What is the total number of comments on my recent Fa -> '33' (gold '33')
+    [201/500] ok      multi-session            How many days a week do I attend fitness classes?    -> '4' (gold '4 days.')
+    [202/500] ok      multi-session            What is the total number of online courses I've comp -> '20' (gold '20')
+    [203/500] ok      multi-session            How much more money did I raise than my initial goal -> '$50' (gold '$50')
+    [204/500] decline multi-session            How many pages do I have left to read in 'Sapiens'?  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [205/500] ok      multi-session            How many minutes did I exceed my target time by in t -> '12 minutes' (gold '12')
+    [206/500] ok      multi-session            What is the total number of views on my most popular -> '1998' (gold '1,998')
+    [207/500] ok      multi-session            What is the total amount I spent on the designer han -> '$1300' (gold '$1,300')
+    [208/500] ok      multi-session            How much did I spend on gifts for my sister?         -> '$300' (gold '$300')
+    [209/500] WRONG   multi-session            How many points do I need to earn to redeem a free s -> '300' (gold '100')
+    [210/500] ok      multi-session            How much did I save on the Jimmy Choo heels?         -> '$300' (gold '$300')
+    [211/500] ok      multi-session            How much more miles per gallon was my car getting a  -> '2 miles per gallon' (gold '2')
+    [212/500] ok      multi-session            What percentage of the countryside property's price  -> '10%' (gold '10%')
+    [213/500] ok      multi-session            How much discount will I get on my next purchase at  -> '$5' (gold '$5')
+    [214/500] decline multi-session            How many plants did I initially plant for tomatoes a -> '5 tomato plants, no chili pepper plants ment' (gold 'The information provided is no')
+    [215/500] ok      multi-session            How much did I spend on each coffee mug for my cowor -> '$12' (gold '$12')
+    [216/500] ok      multi-session            What percentage of leadership positions do women hol -> '20%' (gold '20%')
+    [217/500] ok      multi-session            What is the total weight of the new feed I purchased -> '70 pounds' (gold '70 pounds')
+    [218/500] ok      multi-session            How many years older am I than when I graduated from -> '7' (gold '7')
+    [219/500] ok      multi-session            What is the total distance I covered in my four road -> '3,000 miles' (gold '3,000 miles')
+    [220/500] ok      multi-session            What is the total time it takes I to get ready and c -> '1 hour and 30 minutes' (gold 'an hour and a half')
+    [221/500] WRONG   multi-session            What is the average GPA of my undergraduate and grad -> 'Undergraduate: 3.86/4.0, Graduate: 3.8/4.0' (gold '3.83')
+    [222/500] decline multi-session            How old will Rachel be when I get married?           -> 'NO_ANSWER' (gold 'The information provided is no')
+    [223/500] decline temporal-reasoning       How many months have passed since I participated in  -> 'NO_ANSWER' (gold '2')
+    [224/500] ok      multi-session            How much have I made from selling eggs this month?   -> '$120' (gold '$120')
+    [225/500] ok      multi-session            What is the total cost of the car cover and detailin -> '$140' (gold '$140')
+    [226/500] WRONG   multi-session            What is the total cost of my recently purchased head -> '$578' (gold 'The information provided is no')
+    [227/500] WRONG   multi-session            How much will I save by taking the bus from the airp -> '¥16,800 or $151 USD (approximately)' (gold 'The information provided is no')
+    [228/500] ok      multi-session            How many fun runs did I miss in March due to work co -> '2' (gold '2')
+    [229/500] ok      multi-session            How much earlier do I wake up on Fridays compared to -> '30 minutes earlier' (gold '30 minutes')
+    [230/500] WRONG   multi-session            What time did I reach the clinic on Monday?          -> '1:00 PM' (gold '9:00 AM')
+    [231/500] ok      multi-session            What is the total amount I spent on gifts for my cow -> '$200' (gold '$200')
+    [232/500] ok      multi-session            What is the total number of siblings I have?         -> '4' (gold '4')
+    [233/500] ok      multi-session            How much faster did I finish the 5K run compared to  -> '10 minutes faster' (gold '10 minutes')
+    [234/500] decline temporal-reasoning       How many days ago did I meet Emma?                   -> 'NO_ANSWER' (gold '9 days ago. 10 days (including')
+    [235/500] decline temporal-reasoning       How many days ago did I attend a baking class at a l -> 'NO_ANSWER' (gold '21 days. 22 days (including th')
+    [236/500] ok      temporal-reasoning       How many weeks ago did I meet up with my aunt and re -> '4' (gold '4')
+    [237/500] ok      temporal-reasoning       How many days passed between the day I started playi -> '6' (gold '6 days. 7 days (including the ')
+    [238/500] WRONG   multi-session            At which university did I present a poster for my un -> 'Harvard University' (gold 'The information provided is no')
+    [239/500] WRONG   temporal-reasoning       Which three events happened in the order from first  -> 'The day I helped my friend prepare the nurse' (gold 'First, I helped my friend prep')
+    [240/500] ok      temporal-reasoning       Which event happened first, my cousin's wedding or M -> "Michael's engagement party" (gold "Michael's engagement party")
+    [241/500] ok      temporal-reasoning       How many days passed between the day I attended the  -> '6' (gold '6 days. 7 days (including the ')
+    [242/500] ok      temporal-reasoning       How many days passed between my visit to the Museum  -> '7' (gold '7 days. 8 days (including the ')
+    [243/500] ok      temporal-reasoning       How many days passed between the day I started water -> '24' (gold '24 days. 25 days (including th')
+    [244/500] ok      temporal-reasoning       What is the order of the three events: 'I signed up  -> 'I used a Buy One Get One Free coupon on Luvs' (gold 'First, I used a Buy One Get On')
+    [245/500] WRONG   temporal-reasoning       What is the order of the three trips I took in the p -> 'Solo camping trip to Yosemite, road trip to ' (gold 'I went on a day hike to Muir W')
+    [246/500] ok      temporal-reasoning       Which mode of transport did I use most recently, a b -> 'Train' (gold 'train')
+    [247/500] WRONG   temporal-reasoning       What is the order of the six museums I visited from  -> '6. Modern Art' (gold 'Science Museum, Museum of Cont')
+    [248/500] ok      temporal-reasoning       How many days passed between the day I received feed -> '38' (gold '38 days. 39 days (including th')
+    [249/500] ok      temporal-reasoning       How many weeks passed between the day I bought my ne -> '1 week' (gold '1 week')
+    [250/500] ok      temporal-reasoning       How many weeks ago did I start using the cashback ap -> '3 weeks ago' (gold '3 weeks ago')
+    [251/500] ok      temporal-reasoning       How many days ago did I buy a smoker?                -> '10 days ago' (gold '10 days ago. 11 days (includin')
+    [252/500] ok      temporal-reasoning       How many days ago did I attend the Maundy Thursday s -> '4 days ago' (gold '4 days.')
+    [253/500] ok      temporal-reasoning       How many days had passed since I started taking ukul -> '24' (gold '24 days. 25 days (including th')
+    [254/500] WRONG   temporal-reasoning       How many weeks had passed since I recovered from the -> '11 weeks' (gold '15')
+    [255/500] ok      temporal-reasoning       How many weeks passed between the time I sold homema -> '3 weeks' (gold '3 weeks')
+    [256/500] ok      temporal-reasoning       How many weeks ago did I attend the friends and fami -> '2 weeks ago' (gold '2')
+    [257/500] ok      temporal-reasoning       How many days had passed since I finished reading 'T -> '18' (gold '18 days. 19 days (including th')
+    [258/500] ok      temporal-reasoning       How many days did it take me to finish 'The Nighting -> '21' (gold '21 days. 22 days (including th')
+    [259/500] ok      temporal-reasoning       How many days did I spend on my solo camping trip to -> '3' (gold '2 days. 3 days (including the ')
+    [260/500] ok      temporal-reasoning       What is the order of airlines I flew with from earli -> 'JetBlue, Delta, United Airlines, American Ai' (gold 'JetBlue, Delta, United, Americ')
+    [261/500] WRONG   temporal-reasoning       What is the order of the concerts and musical events -> '' (gold 'The order of the concerts I at')
+    [262/500] ok      temporal-reasoning       How many days passed between the day I repotted the  -> '14' (gold '14 days. 15 days (including th')
+    [263/500] ok      temporal-reasoning       How many weeks have I been taking sculpting classes  -> '3 weeks' (gold '3')
+    [264/500] WRONG   temporal-reasoning       How many weeks in total do I spent on reading 'The N -> '- On 2022-' (gold "2 weeks for 'The Nightingale',")
+    [265/500] ok      temporal-reasoning       How many days passed between the day I replaced my s -> '29' (gold '29 days. 30 days (including th')
+    [266/500] ok      temporal-reasoning       How many months ago did I attend the Seattle Interna -> '4' (gold '4 months ago')
+    [267/500] ok      temporal-reasoning       How many days passed between the day I cancelled my  -> '54' (gold '54 days. 55 days (including th')
+    [268/500] ok      temporal-reasoning       What is the order of the three sports events I parti -> 'Spring Sprint Triathlon, Midsummer 5K Run, c' (gold 'I first completed the Spring S')
+    [269/500] WRONG   temporal-reasoning       What is the order of the sports events I watched in  -> '' (gold 'First, I attended a NBA game a')
+    [270/500] ok      temporal-reasoning       How many months have passed since I last visited a m -> '5' (gold '5')
+    [271/500] ok      temporal-reasoning       How many days passed between the day I finished read -> '1' (gold '1 day. 2 days (including the l')
+    [272/500] ok      temporal-reasoning       How many days ago did I attend a networking event?   -> '26' (gold '26 days. 27 days (including th')
+    [273/500] ok      temporal-reasoning       How many months passed between the completion of my  -> '6 months' (gold '6 months')
+    [274/500] ok      temporal-reasoning       Which event did I participate in first, the charity  -> 'Charity bake sale' (gold 'I participated in the charity ')
+    [275/500] ok      temporal-reasoning       How many days ago did I launch my website when I sig -> '19' (gold '19 days ago. 20 days (includin')
+    [276/500] ok      temporal-reasoning       How many days ago did I watch the Super Bowl?        -> '17 days ago' (gold '17 days ago. 18 days (includin')
+    [277/500] ok      temporal-reasoning       How many weeks ago did I attend a bird watching work -> '4' (gold '4')
+    [278/500] ok      temporal-reasoning       How many days ago did I go on a whitewater rafting t -> '3 days ago' (gold '3 days ago. 4 days (including ')
+    [279/500] ok      temporal-reasoning       How many months ago did I attend the photography wor -> '3' (gold '3')
+    [280/500] ok      temporal-reasoning       How many weeks ago did I attend the 'Summer Nights'  -> '4 weeks ago' (gold '3 weeks ago')
+    [281/500] ok      temporal-reasoning       Which book did I finish a week ago?                  -> 'The Nightingale' (gold "'The Nightingale' by Kristin H")
+    [282/500] decline temporal-reasoning       Which bike did I fixed or serviced the past weekend? -> 'NO_ANSWER' (gold 'road bike')
+    [283/500] decline temporal-reasoning       What kitchen appliance did I buy 10 days ago?        -> 'NO_ANSWER' (gold 'a smoker')
+    [284/500] decline temporal-reasoning       What did I do with Rachel on the Wednesday two month -> 'NO_ANSWER' (gold 'I started taking ukulele lesso')
+    [285/500] decline temporal-reasoning       I received a piece of jewelry last Saturday from who -> 'NO_ANSWER' (gold 'my aunt')
+    [286/500] ok      temporal-reasoning       Who graduated first, second and third among Emma, Ra -> 'Emma, Rachel, Alex' (gold 'Emma graduated first, followed')
+    [287/500] ok      temporal-reasoning       How many days ago did I harvest my first batch of fr -> '3 days ago' (gold '3 days ago. 4 days (including ')
+    [288/500] decline temporal-reasoning       I mentioned an investment for a competition four wee -> 'NO_ANSWER' (gold 'I got my own set of sculpting ')
+    [289/500] ok      temporal-reasoning       How many days ago did I participate in the 5K charit -> '7 days ago' (gold '7 days ago. 8 days (including ')
+    [290/500] ok      temporal-reasoning       How many days passed between the day I fixed my moun -> '4' (gold '4 days. 5 days (including the ')
+    [291/500] WRONG   temporal-reasoning       What is the artist that I started to listen to last  -> 'a bluegrass band' (gold 'a bluegrass band that features')
+    [292/500] ok      temporal-reasoning       How many days ago did I read the March 15th issue of -> '12 days ago' (gold '12 days ago. 13 days (includin')
+    [293/500] ok      temporal-reasoning       What charity event did I participate in a month ago? -> 'Walk for Hunger' (gold "the 'Walk for Hunger' charity ")
+    [294/500] ok      temporal-reasoning       What was the social media activity I participated 5  -> '#PlankChallenge' (gold 'You participated in a social m')
+    [295/500] ok      temporal-reasoning       Which event happened first, my participation in the  -> 'The post about the vegan chili recipe.' (gold 'You posted a recipe for vegan ')
+    [296/500] ok      temporal-reasoning       What gardening-related activity did I do two weeks a -> 'Planted 12 new tomato saplings' (gold 'planting 12 new tomato sapling')
+    [297/500] WRONG   temporal-reasoning       I mentioned that I participated in an art-related ev -> 'Museum of Modern Art' (gold 'The Metropolitan Museum of Art')
+    [298/500] ok      temporal-reasoning       How many days did it take for me to find a house I l -> '14' (gold '14 days. 15 days (including th')
+    [299/500] decline temporal-reasoning       How long have I been working before I started my cur -> 'NO_ANSWER' (gold '4 years and 9 months')
+    [300/500] ok      temporal-reasoning       Which pair of shoes did I clean last month?          -> 'white Adidas sneakers' (gold 'white Adidas sneakers')
+    [301/500] ok      temporal-reasoning       What was the first issue I had with my new car after -> 'GPS system issue' (gold 'GPS system not functioning cor')
+    [302/500] ok      temporal-reasoning       Which event did I attend first, the 'Effective Time  -> "The 'Data Analysis using Python' webinar" (gold "'Data Analysis using Python' w")
+    [303/500] ok      temporal-reasoning       What was the airline that I flied with on Valentine' -> 'American Airlines' (gold 'American Airlines')
+    [304/500] ok      temporal-reasoning       Which item did I purchase first, the dog bed for Max -> 'Training pads for Luna' (gold 'Training pads for Luna')
+    [305/500] ok      temporal-reasoning       I mentioned cooking something for my friend a couple -> 'A chocolate cake' (gold 'a chocolate cake')
+    [306/500] ok      temporal-reasoning       I mentioned participating in a sports event two week -> "company's annual charity soccer tournament" (gold "The company's annual charity s")
+    [307/500] ok      temporal-reasoning       Where did I attend the religious activity last week? -> 'Episcopal Church' (gold 'the Episcopal Church')
+    [308/500] ok      temporal-reasoning       How many days before the 'Rack Fest' did I participa -> '4' (gold '4 days.')
+    [309/500] ok      temporal-reasoning       Which book did I finish reading first, 'The Hate U G -> 'The Hate U Give' (gold "'The Hate U Give'")
+    [310/500] ok      temporal-reasoning       How many days had passed between the 'Walk for Hunge -> '14' (gold '14 days. 8 days (including the')
+    [311/500] ok      temporal-reasoning       How many days had passed between the Hindu festival  -> '21' (gold '21 days. 22 days (including th')
+    [312/500] WRONG   temporal-reasoning       How many charity events did I participate in before  -> '0' (gold '4')
+    [313/500] ok      temporal-reasoning       Which vehicle did I take care of first in February,  -> 'The bike.' (gold 'bike')
+    [314/500] ok      temporal-reasoning       Who did I go with to the music event last Saturday?  -> 'my parents' (gold 'my parents')
+    [315/500] ok      temporal-reasoning       Who did I meet with during the lunch last Tuesday?   -> 'Emma' (gold 'Emma')
+    [316/500] ok      temporal-reasoning       Which task did I complete first, fixing the fence or -> 'Fixing the fence' (gold 'Fixing the fence')
+    [317/500] WRONG   temporal-reasoning       I mentioned visiting a museum two months ago. Did I  -> 'Yes' (gold 'No, you did not visit with a f')
+    [318/500] ok      temporal-reasoning       Which device did I set up first, the smart thermosta -> 'Smart thermostat' (gold 'Smart thermostat')
+    [319/500] ok      temporal-reasoning       What was the the life event of one of my relatives t -> "Cousin's wedding" (gold "my cousin's wedding")
+    [320/500] ok      temporal-reasoning       How long did I take to finish 'The Seven Husbands of -> 'five and a half weeks' (gold '5.5 weeks')
+    [321/500] ok      temporal-reasoning       Which seeds were started first, the tomatoes or the  -> 'Tomatoes' (gold 'Tomatoes')
+    [322/500] WRONG   temporal-reasoning       What was the significant buisiness milestone I menti -> 'Collaborated with an influencer who promoted' (gold 'I signed a contract with my fi')
+    [323/500] ok      temporal-reasoning       How many days before the team meeting I was preparin -> '7' (gold '7 days. 8 days (including the ')
+    [324/500] ok      temporal-reasoning       How many days had passed between the Sunday mass at  -> '30' (gold '30 days. 31 days (including th')
+    [325/500] WRONG   temporal-reasoning       Which device did I got first, the Samsung Galaxy S22 -> 'Dell XPS 13' (gold 'Samsung Galaxy S22')
+    [326/500] ok      temporal-reasoning       Which show did I start watching first, 'The Crown' o -> 'Game of Thrones' (gold "'Game of Thrones'")
+    [327/500] ok      temporal-reasoning       How long had I been watching stand-up comedy special -> '2 months' (gold '2 months')
+    [328/500] ok      temporal-reasoning       How long had I been a member of 'Book Lovers Unite'  -> '2 weeks' (gold 'Two weeks')
+    [329/500] ok      temporal-reasoning       How many months ago did I book the Airbnb in San Fra -> '5 months ago' (gold 'Five months ago')
+    [330/500] ok      temporal-reasoning       Which event happened first, the purchase of the coff -> 'The malfunction of the stand mixer.' (gold 'The malfunction of the stand m')
+    [331/500] ok      temporal-reasoning       What was the date on which I attended the first BBQ  -> 'June 3rd' (gold 'June 3rd')
+    [332/500] ok      temporal-reasoning       How many days had passed since I bought my Adidas ru -> '14' (gold '14 days. 15 days (including th')
+    [333/500] ok      temporal-reasoning       Which airline did I fly with the most in March and A -> 'United Airlines' (gold 'United Airlines')
+    [334/500] ok      temporal-reasoning       What time do I wake up on Tuesdays and Thursdays?    -> '6:45 AM' (gold '6:45 AM')
+    [335/500] ok      temporal-reasoning       Which device did I set up first, the smart thermosta -> 'The new router' (gold 'new router')
+    [336/500] ok      temporal-reasoning       Which event happened first, the road trip to the coa -> 'The arrival of the new prime lens.' (gold 'The arrival of the new prime l')
+    [337/500] ok      temporal-reasoning       How many days before I bought the iPhone 13 Pro did  -> '7' (gold '7 days. 8 days (including the ')
+    [338/500] ok      temporal-reasoning       How long had I been using the new area rug when I re -> 'One week' (gold 'One week. Answers ranging from')
+    [339/500] ok      temporal-reasoning       Which trip did I take first, the one to Europe with  -> 'The solo trip to Thailand' (gold 'The solo trip to Thailand')
+    [340/500] ok      temporal-reasoning       How many days before my best friend's birthday party -> '7' (gold '7 days. 8 days (including the ')
+    [341/500] ok      temporal-reasoning       How old was I when I moved to the United States?     -> '27' (gold '27')
+    [342/500] decline temporal-reasoning       How many days before I bought my iPad did I attend t -> 'NO_ANSWER' (gold 'The information provided is no')
+    [343/500] decline temporal-reasoning       How long have I been working before I started my cur -> 'NO_ANSWER' (gold 'The information provided is no')
+    [344/500] ok      temporal-reasoning       Which event happened first, the narrator losing thei -> 'The narrator receiving their new phone case' (gold 'Receiving the new phone case')
+    [345/500] ok      temporal-reasoning       Which health issue did I deal with first, the persis -> 'The persistent cough' (gold 'Persistent cough')
+    [346/500] decline temporal-reasoning       When did I book the Airbnb in Sacramento?            -> 'NO_ANSWER' (gold 'The information provided is no')
+    [347/500] ok      temporal-reasoning       Who did I meet first, the woman selling jam at the f -> "The woman selling jam at the farmer's market" (gold 'the woman selling jam at the f')
+    [348/500] ok      temporal-reasoning       Which gift did I buy first, the necklace for my sist -> 'The photo album for my mom' (gold 'the photo album for my mom')
+    [349/500] ok      temporal-reasoning       Which event happened first, the meeting with Rachel  -> 'The meeting with Rachel' (gold 'The meeting with Rachel')
+    [350/500] ok      temporal-reasoning       Which trip did the narrator take first, the solo tri -> 'The family road trip across the American Sou' (gold 'The family road trip across th')
+    [351/500] ok      temporal-reasoning       How long had I been taking guitar lessons when I bou -> 'Four weeks' (gold 'Four weeks')
+    [352/500] ok      temporal-reasoning       How long had I been bird watching when I attended th -> 'two months' (gold 'Two months')
+    [353/500] ok      temporal-reasoning       Which event happened first, my attendance at a cultu -> 'The start of my Spanish classes' (gold 'Spanish classes')
+    [354/500] WRONG   temporal-reasoning       Who became a parent first, Tom or Alex?              -> 'Alex' (gold 'The information provided is no')
+    [355/500] WRONG   temporal-reasoning       Which project did I start first, the Ferrari model o -> 'Ferrari model' (gold 'The information provided is no')
+    [356/500] WRONG   temporal-reasoning       Which task did I complete first, fixing the fence or -> 'Fixing the fence' (gold 'The information provided is no')
+    [357/500] ok      knowledge-update         Where did Rachel move to after her recent relocation -> 'The suburbs' (gold 'the suburbs')
+    [358/500] ok      temporal-reasoning       How many days had passed between the day I bought a  -> '7' (gold '7 days. 8 days (including the ')
+    [359/500] WRONG   temporal-reasoning       Which project did I start first, the Ferrari model o -> 'The Ferrari model' (gold 'Japanese Zero fighter plane mo')
+    [360/500] ok      temporal-reasoning       Which streaming service did I start using most recen -> 'Disney+' (gold 'Disney+')
+    [361/500] ok      temporal-reasoning       How long did I use my new binoculars before I saw th -> 'Two weeks' (gold 'Two weeks')
+    [362/500] ok      temporal-reasoning       Which event did I participate in first, the volleyba -> 'The volleyball league' (gold 'volleyball league')
+    [363/500] ok      temporal-reasoning       How many months before my anniversary did Rachel get -> '2 months' (gold '2')
+    [364/500] ok      temporal-reasoning       Who did I meet first, Mark and Sarah or Tom?         -> 'Tom' (gold 'Tom')
+    [365/500] ok      temporal-reasoning       Who became a parent first, Rachel or Alex?           -> 'Alex' (gold 'Alex')
+    [366/500] ok      knowledge-update         How many hours have I spent on my abstract ocean scu -> '10-12 hours' (gold '10-12 hours')
+    [367/500] ok      knowledge-update         What was my personal best time in the charity 5K run -> '25:50' (gold '25 minutes and 50 seconds (or ')
+    [368/500] ok      temporal-reasoning       Which group did I join first, 'Page Turners' or 'Mar -> 'Page Turners' (gold 'Page Turners')
+    [369/500] ok      knowledge-update         Is my mom using the same grocery list method as me?  -> 'Yes' (gold 'Yes.')
+    [370/500] ok      temporal-reasoning       How many weeks have I been accepted into the exchang -> '1 week' (gold 'one week')
+    [371/500] ok      knowledge-update         Where did I go on my most recent family trip?        -> 'Paris' (gold 'Paris')
+    [372/500] WRONG   knowledge-update         What day of the week do I take a cocktail-making cla -> 'Thursday' (gold 'Friday')
+    [373/500] ok      knowledge-update         How often do I attend yoga classes to help with my a -> 'Three times a week' (gold 'Three times a week.')
+    [374/500] ok      knowledge-update         How many bikes do I currently own?                   -> '4' (gold '4')
+    [375/500] WRONG   knowledge-update         How many Korean restaurants have I tried in my city? -> '3' (gold 'four')
+    [376/500] ok      knowledge-update         Where do I initially keep my old sneakers?           -> 'under my bed' (gold 'under my bed')
+    [377/500] ok      knowledge-update         How many pages of 'A Short History of Nearly Everyth -> '220' (gold '220')
+    [378/500] ok      knowledge-update         How many short stories have I written since I starte -> '7' (gold 'seven')
+    [379/500] ok      knowledge-update         How many engineers do I lead when I just started my  -> '4, 5' (gold 'When you just started your new')
+    [380/500] ok      knowledge-update         How many titles are currently on my to-watch list?   -> '25' (gold '25')
+    [381/500] ok      knowledge-update         What was the amount I was pre-approved for when I go -> '$400,000' (gold '$400,000')
+    [382/500] ok      knowledge-update         How many sessions of the bereavement support group d -> '5' (gold 'five')
+    [383/500] ok      knowledge-update         How many stars do I need to reach the gold level on  -> '120 stars' (gold '120')
+    [384/500] ok      knowledge-update         How many episodes of the Science series have I compl -> '50' (gold '50')
+    [385/500] ok      knowledge-update         What company is Rachel, an old colleague from my pre -> 'TechCorp' (gold 'TechCorp')
+    [386/500] ok      knowledge-update         Do I go to the gym more frequently than I did previo -> 'Yes' (gold 'Yes')
+    [387/500] ok      knowledge-update         How long have I been using my Fitbit Charge 3?       -> '9 months' (gold '9 months')
+    [388/500] ok      knowledge-update         How many MCU films did I watch in the last 3 months? -> '5' (gold '5')
+    [389/500] ok      knowledge-update         For the coffee-to-water ratio in my French press, di -> 'Less' (gold 'You switched to less water (5 ')
+    [390/500] ok      knowledge-update         How often do I see my therapist, Dr. Smith?          -> 'Every week' (gold 'every week')
+    [391/500] ok      knowledge-update         How many of Emma's recipes have I tried out?         -> '3' (gold '3')
+    [392/500] ok      knowledge-update         What type of camera lens did I purchase most recentl -> '70-200mm zoom lens' (gold 'a 70-200mm zoom lens')
+    [393/500] ok      knowledge-update         Where is the painting 'Ethereal Dreams' by Emma Tayl -> "above the user's bed" (gold 'in my bedroom')
+    [394/500] decline knowledge-update         What time do I usually go to the gym?                -> 'NO_ANSWER' (gold '6:00 pm')
+    [395/500] ok      knowledge-update         What is my current highest score in Ticket to Ride?  -> '132 points' (gold '132 points')
+    [396/500] ok      knowledge-update         Did I finish reading 'The Nightingale' by Kristin Ha -> 'Yes' (gold 'Yes')
+    [397/500] ok      knowledge-update         How many videos of Corey Schafer's Python programmin -> '30' (gold '30')
+    [398/500] ok      knowledge-update         How many dozen eggs do we currently have stocked up  -> '20 dozen' (gold '20')
+    [399/500] WRONG   knowledge-update         How long have I been living in my current apartment  -> '6 months and 4 days' (gold '3 months')
+    [400/500] ok      knowledge-update         How many times have I worn my new black Converse Chu -> '6' (gold 'six')
+    [401/500] ok      knowledge-update         How many Instagram followers do I currently have?    -> '600' (gold '600')
+    [402/500] ok      knowledge-update         Where did I get my guitar serviced?                  -> 'Rhythm Central on Main St' (gold 'The music shop on Main St.')
+    [403/500] ok      knowledge-update         How many times have I tried making a Negroni at home -> '10 times' (gold '10')
+    [404/500] ok      knowledge-update         How long have my parents been staying with me in the -> '9 months' (gold 'nine months')
+    [405/500] ok      knowledge-update         How many new postcards have I added to my collection -> '25' (gold '25')
+    [406/500] ok      knowledge-update         Where am I planning to stay for my birthday trip to  -> 'Oahu' (gold 'Oahu')
+    [407/500] ok      knowledge-update         What brand of BBQ sauce am I currently obsessed with -> 'Kansas City Masterpiece BBQ sauce' (gold 'Kansas City Masterpiece')
+    [408/500] ok      knowledge-update         How many issues of National Geographic have I finish -> '5' (gold 'Five')
+    [409/500] ok      knowledge-update         How long have I had my cat, Luna?                    -> '9 months' (gold '9 months')
+    [410/500] ok      knowledge-update         How many autographed baseballs have I added to my co -> '15' (gold '15')
+    [411/500] ok      knowledge-update         How much did I earn at the Downtown Farmers Market o -> '$420' (gold '$420')
+    [412/500] ok      knowledge-update         How long have I been sticking to my daily tidying ro -> '4 weeks' (gold '4 weeks')
+    [413/500] ok      knowledge-update         How many tops have I bought from H&M so far?         -> '5' (gold 'five')
+    [414/500] ok      knowledge-update         How many Crash Course videos have I watched in the p -> '15' (gold '15')
+    [415/500] WRONG   knowledge-update         What was my previous personal best time for the char -> '26 minutes and 30 seconds' (gold '27 minutes and 45 seconds')
+    [416/500] WRONG   knowledge-update         What was my previous frequent flyer status on United -> 'None (or no status)' (gold 'Premier Silver')
+    [417/500] ok      knowledge-update         How many different species of birds have I seen in m -> '32' (gold '32')
+    [418/500] WRONG   knowledge-update         How many pre-1920 American coins do I have in my col -> '37' (gold '38')
+    [419/500] ok      knowledge-update         How often do I play tennis with my friends at the lo -> 'Previously: weekly. Now: every other week.' (gold 'Previously, you play tennis wi')
+    [420/500] decline knowledge-update         How many Italian restaurants have I tried in my city -> 'NO_ANSWER' (gold 'The information provided is no')
+    [421/500] ok      knowledge-update         How many free night's stays can I redeem at any Hilt -> 'Two' (gold 'Two')
+    [422/500] decline knowledge-update         How many engineers do I lead when I just started my  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [423/500] ok      knowledge-update         How much time do I dedicate to coding exercises each -> 'Two hours' (gold 'about two hours')
+    [424/500] WRONG   knowledge-update         How many followers do I have on Instagram now?       -> 'close to 1300' (gold '1300')
+    [425/500] ok      knowledge-update         What day of the week did I meet with my previous lan -> 'Wednesday' (gold 'Wednesday')
+    [426/500] ok      knowledge-update         How many projects have I completed since starting pa -> '5' (gold '5')
+    [427/500] ok      knowledge-update         What was my previous goal for my Apex Legends level  -> 'Level 100' (gold 'level 100')
+    [428/500] ok      knowledge-update         How many largemouth bass did I catch with Alex on th -> '7' (gold '7')
+    [429/500] decline knowledge-update         How long have I been living in my current apartment  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [430/500] decline knowledge-update         How often do I see Dr. Johnson?                      -> 'NO_ANSWER' (gold 'The information provided is no')
+    [431/500] decline knowledge-update         How many autographed football have I added to my col -> 'NO_ANSWER' (gold 'The information provided is no')
+    [432/500] ok      knowledge-update         What is my current record in the recreational volley -> '5-2' (gold '5-2')
+    [433/500] ok      knowledge-update         How many women are on the team led by my former mana -> '6' (gold '6')
+    [434/500] ok      knowledge-update         How many times have I met up with Alex from Germany? -> 'Twice' (gold "We've met up twice.")
+    [435/500] ok      knowledge-update         How many trips have I taken my Canon EOS 80D camera  -> '5' (gold 'five')
+    [436/500] ok      knowledge-update         What type of vehicle model am I currently working on -> 'Ford F-150 pickup truck model' (gold 'Ford F-150 pickup truck')
+    [437/500] decline knowledge-update         How often do I play table tennis with my friends at  -> 'NO_ANSWER' (gold 'The information provided is no')
+    [438/500] decline knowledge-update         Before I purchased the gravel bike, do I have other  -> 'NO_ANSWER' (gold 'Yes. (You have a road bike too')
+    [439/500] ok      knowledge-update         What time do I wake up on Saturday mornings?         -> '7:30 am' (gold '7:30 am')
+    [440/500] WRONG   knowledge-update         Where do I currently keep my old sneakers?           -> 'under my bed' (gold 'in a shoe rack in my closet')
+    [441/500] ok      knowledge-update         How much weight have I lost since I started going to -> '10 pounds' (gold '10 pounds')
+    [442/500] ok      single-session-assistant I'm planning to visit Bandung again and I was wonder -> 'Miss Bee Providore' (gold 'Miss Bee Providore')
+    [443/500] ok      knowledge-update         Did I mostly recently increase or decrease the limit -> 'Increased' (gold 'You increased the limit (from ')
+    [444/500] ok      knowledge-update         Do I have a spare screwdriver for opening up my lapt -> 'Yes' (gold 'Yes')
+    [445/500] ok      knowledge-update         What new kitchen gadget did I invest in before getti -> 'Instant Pot' (gold 'Instant Pot')
+    [446/500] ok      single-session-assistant I think we discussed work from home jobs for seniors -> 'Transcriptionist' (gold 'Transcriptionist.')
+    [447/500] ok      single-session-assistant I wanted to check back on our previous conversation  -> 'doc martin' (gold 'Doc Martin')
+    [448/500] ok      single-session-assistant I'm going back to our previous chat about the Lost T -> '4' (gold '4')
+    [449/500] ok      single-session-assistant In our previous chat, you suggested 'sexual compulsi -> 'Sexual fixations, Problematic sexual behavio' (gold "I suggested 'sexual fixations'")
+    [450/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> '38' (gold '38 subjects')
+    [451/500] ok      single-session-assistant I'm planning my trip to Amsterdam again and I was wo -> 'International Budget Hostel' (gold 'International Budget Hostel')
+    [452/500] ok      single-session-assistant I was going through our previous conversation about  -> 'The Library is a sphere whose exact center i' (gold "According to Borges, 'The Libr")
+    [453/500] ok      single-session-assistant I'm checking our previous chat about the shift rotat -> '8 am - 4 pm (Day Shift)' (gold 'Admon was assigned to the 8 am')
+    [454/500] ok      single-session-assistant Can you remind me of the name of the romantic Italia -> 'Roscioli' (gold 'Roscioli')
+    [455/500] ok      single-session-assistant I'm planning to go back to the Natural Park of Monca -> 'GR-90' (gold 'The GR-90 trail.')
+    [456/500] ok      single-session-assistant I'm going back to our previous conversation about th -> 'blue' (gold 'The Plesiosaur had a blue scal')
+    [457/500] ok      single-session-assistant I remember you provided a list of 100 prompt paramet -> 'Sound effects' (gold "The 27th parameter was 'Sound ")
+    [458/500] ok      single-session-assistant I'm planning to visit the Vatican again and I was wo -> 'Roscioli' (gold 'Roscioli')
+    [459/500] ok      single-session-assistant I'm planning to revisit Orlando. I was wondering if  -> 'The Sugar Factory' (gold 'The Sugar Factory at Icon Park')
+    [460/500] ok      single-session-assistant I remember you told me about the refining processes  -> 'Atmospheric distillation, Fluid catalytic cr' (gold 'Atmospheric distillation, flui')
+    [461/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Manolo García' (gold 'Manolo García')
+    [462/500] ok      single-session-assistant I'm going back to our previous conversation about DI -> 'Mod Podge or another sealant' (gold 'Mod Podge or another sealant')
+    [463/500] ok      single-session-assistant I was thinking about our previous conversation about -> 'Biometric authentication or one-time passwor' (gold 'I mentioned biometric authenti')
+    [464/500] ok      single-session-assistant I was going through our previous conversation about  -> '2-3 eggs' (gold '2-3 eggs')
+    [465/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> 'Absinthe' (gold 'Absinthe')
+    [466/500] ok      single-session-assistant I was going through our previous chat and I wanted t -> 'Chapter 4 of Book 1, titled "Vocal Prayer an' (gold "Chapter 4 of Book 1, titled 'V")
+    [467/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Ruby, Python, PHP, SQL, Java, Node.js, Flask' (gold 'I recommended learning Ruby, P')
+    [468/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Mindful.org' (gold 'Mindful.org.')
+    [469/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Hoop Dance' (gold 'Hoop Dance')
+    [470/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Memrise' (gold 'Memrise')
+    [471/500] ok      single-session-assistant Can you remind me what was the average improvement i -> 'approximately 20%' (gold 'The average improvement in fra')
+    [472/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> '2014' (gold '2014.')
+    [473/500] ok      single-session-assistant I'm looking back at our previous chess game and I wa -> '28. Kg3' (gold '28. Kg3')
+    [474/500] ok      single-session-assistant I was thinking about our previous conversation about -> 'Evolution' (gold 'Evolution')
+    [475/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Jaipur Rugs' (gold 'Jaipur Rugs')
+    [476/500] ok      single-session-assistant I'm looking back at our previous chat about the DHL  -> '$2,000' (gold '$2,000')
+    [477/500] WRONG   single-session-assistant I wanted to follow up on our previous conversation a -> 'https://www.youtube.com/watch?v=UfOvNlX9Hh0' (gold "The video is 'How to Sit Prope")
+    [478/500] ok      single-session-assistant I'm planning my trip to Speyer again and I wanted to -> '+49 (0) 62 32 / 14 23 - 0' (gold '+49 (0) 62 32 / 14 23 - 0')
+    [479/500] ok      single-session-assistant I was going through our previous conversation and I  -> 'Patagonia, Southwest Airlines' (gold 'Patagonia and Southwest Airlin')
+    [480/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Nu, pogodi!' (gold 'Nu, pogodi!')
+    [481/500] WRONG   single-session-assistant I'm going back to our previous conversation about th -> '1. To identify molecular subtypes of endomet' (gold 'The three objectives were: 1) ')
+    [482/500] ok      single-session-assistant I was looking back at our previous conversation abou -> '@jessica_poole_jewellery' (gold '@jessica_poole_jewellery')
+    [483/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Dr. Arati Prabhakar' (gold 'Dr. Arati Prabhakar')
+    [484/500] ok      single-session-assistant I'm planning another trip to New York City and I was -> 'By Chloe' (gold 'By Chloe')
+    [485/500] ok      single-session-assistant I was going through our previous conversation about  -> '6S' (gold 'The 6S algorithm is implemente')
+    [486/500] ok      single-session-assistant I was thinking back to our previous conversation abo -> 'Fissionator' (gold 'Fissionator.')
+    [487/500] ok      single-session-assistant I was going through our previous chat. Can you remin -> 'Revolution Hall' (gold 'Revolution Hall')
+    [488/500] ok      single-session-assistant I was going through our previous chat and I was wond -> 'an untidy, stained white shirt' (gold 'Andy was wearing an untidy, st')
+    [489/500] ok      single-session-assistant I was looking back at our previous chat and I wanted -> '12' (gold 'The Chiefs played the Jaguars ')
+    [490/500] ok      single-session-assistant I'm looking back at our previous conversation about  -> 'Pilsner or lager' (gold 'I recommended using a Pilsner ')
+    [491/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> 'Pennsylvania' (gold 'Pennsylvania')
+    [492/500] ok      single-session-assistant I'm going back to our previous conversation about mu -> 'MusicTheory.net' (gold 'MusicTheory.net')
+    [493/500] ok      single-session-assistant I'm looking back at our previous conversation where  -> 'C D E F G A B A G F E D C' (gold 'C D E F G A B A G F E D C')
+    [494/500] ok      single-session-assistant I'm trying to recall what the designation on my jump -> 'LIV' (gold 'The designation on your jumpsu')
+    [495/500] ok      single-session-assistant I was going through our previous conversation about  -> 'Veja' (gold 'Veja')
+    [496/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Patagonia' (gold 'Patagonia')
+    [497/500] ok      single-session-assistant I wanted to follow up on our previous conversation a -> '10 minutes' (gold '10 minutes')
+    [498/500] ok      single-session-assistant I was looking back at our previous conversation abou -> 'Grilled Snapper with Mango Salsa' (gold 'Grilled Snapper with Mango Sal')
+    [499/500] ok      single-session-assistant I remember you told me to dilute tea tree oil with a -> '1:10 ratio' (gold 'The recommended ratio is 1:10,')
+    [500/500] ok      single-session-assistant I'm going back to our previous conversation about tr -> 'Nostalgia' (gold 'Nostalgia')
+    accuracy=0.830 [0.793,0.861] abstention=0.7667 errors=0 (240s)
+
+wrote /Users/krishnabhatnagar/mapi/bench/results/lme-v21-contextual/report.md
+=== DONE 08:53:31 ===

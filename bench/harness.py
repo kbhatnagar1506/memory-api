@@ -29,6 +29,7 @@ from typing import Any
 
 from mapi.domain.chunking import chunk_text, estimate_tokens
 from mapi.domain.embeddings.base import EmbeddingProvider
+from mapi.domain.embeddings.context import build_header, for_embedding
 from mapi.domain.models import Chunk, Memory, MemoryKind, Organization, Space
 from mapi.domain.retrieval.pipeline import RetrievalPipeline, SearchRequest
 from mapi.domain.retrieval.rerank import Reranker
@@ -269,6 +270,7 @@ async def ingest(
     cache: DiskVectorCache | None = None,
     claims_by_doc: dict[str, list[tuple[str, str]]] | None = None,
     extract_mode: str = "off",
+    contextual_embedding: bool = False,
 ) -> Ingested:
     """Bulk-load documents, chunked and embedded in token-bounded batches.
 
@@ -340,6 +342,7 @@ async def ingest(
 
             # Chunk first, then batch by token budget across the flattened chunks.
             pieces: list[str] = []
+            embed_inputs: list[str] = []
             owner: list[int] = []
             for position, (text_to_store, _document) in enumerate(units):
                 parts = (
@@ -351,18 +354,44 @@ async def ingest(
                     or []
                 )
                 texts_for_doc = [p.text for p in parts] or [text_to_store[:2000]]
+                # Embedded WITH a context header, STORED without one.
+                #
+                # The harness builds memories itself rather than going
+                # through `service.ingest`, so the write path's contextual
+                # embedding does not reach it. Applying the same function
+                # here is what makes the feature measurable at all -- without
+                # this the run scores an unchanged system and reports it as a
+                # result.
+                #
+                # `pieces` is what gets embedded; `texts_for_doc` is what gets
+                # stored. Keeping them separate variables is the invariant.
+                header = (
+                    build_header(
+                        occurred_at=document.occurred_at,
+                        source=document.speaker,
+                        metadata=document.metadata,
+                    )
+                    if contextual_embedding
+                    else ""
+                )
                 for text in texts_for_doc:
                     pieces.append(text)
+                    embed_inputs.append(for_embedding(text, header))
                     owner.append(position)
 
             started = time.perf_counter()
-            vectors: list[list[float]] = [None] * len(pieces)  # type: ignore[list-item]
+            vectors: list[list[float]] = [None] * len(embed_inputs)  # type: ignore[list-item]
 
             # Content-addressed cache first: re-running the same corpus with a
             # changed ANSWER path should cost nothing on the embedding side.
-            pending = list(range(len(pieces)))
+            pending = list(range(len(embed_inputs)))
             if cache is not None:
-                keys = [cache_key(embedder.model, embedder.dimensions, t) for t in pieces]
+                # Keyed on the EMBED INPUT, so turning contextual embedding on
+                # is a cache miss rather than a silent reuse of the old vector.
+                keys = [
+                    cache_key(embedder.model, embedder.dimensions, t)
+                    for t in embed_inputs
+                ]
                 found = cache.get_many(keys)
                 pending = []
                 for index, key in enumerate(keys):
@@ -374,12 +403,15 @@ async def ingest(
 
             if pending:
                 batches = _token_batches(
-                    [pieces[i] for i in pending],
+                    [embed_inputs[i] for i in pending],
                     max_items=batch_size,
                     max_tokens=max_request_tokens,
                 )
                 results = await asyncio.gather(
-                    *(embed_batch([pieces[pending[i]] for i in batch]) for batch in batches)
+                    *(
+                        embed_batch([embed_inputs[pending[i]] for i in batch])
+                        for batch in batches
+                    )
                 )
                 fresh: list[tuple[str, list[float]]] = []
                 for batch, batch_vectors in zip(batches, results, strict=True):
@@ -387,7 +419,9 @@ async def ingest(
                         index = pending[local_index]
                         vectors[index] = vector
                         if cache is not None:
-                            key = cache_key(embedder.model, embedder.dimensions, pieces[index])
+                            key = cache_key(
+                                embedder.model, embedder.dimensions, embed_inputs[index]
+                            )
                             fresh.append((key, vector))
                 if cache is not None and fresh:
                     cache.put_many(fresh)
@@ -490,6 +524,11 @@ async def evaluate_retrieval(
                         space_id=space_id,
                         limit=k,
                         known_speakers=ingested.speakers,
+                        # A benchmark-provided input, not a label: it is what
+                        # "how many weeks ago" is measured from, and every
+                        # system evaluated here receives it. Without it a
+                        # relative window cannot be resolved at all.
+                        asked_at=question.asked_at,
                         **config,
                     )
                 )
@@ -1024,6 +1063,7 @@ async def evaluate_end_to_end(
                         space_id=space_id,
                         limit=per_question_k,
                         known_speakers=ingested.speakers,
+                        asked_at=question.asked_at,
                         max_per_source=max_per_source,
                         route_by_kind=route_by_kind,
                         filters=MemoryFilter(kinds=frozenset({MemoryKind.EPISODIC}))

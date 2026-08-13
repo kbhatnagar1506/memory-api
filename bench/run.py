@@ -152,6 +152,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
         corpus_concurrency=args.corpus_concurrency,
         claims_by_doc=claims_by_doc,
         extract_mode=args.extract,
+        contextual_embedding=args.contextual_embedding,
     )
     print(f"  embedding cache: {cache.stats()}", flush=True)
     print(
@@ -500,6 +501,16 @@ async def main() -> int:
     parser.add_argument("--extraction-model", default="gemini-2.5-flash")
     parser.add_argument("--extract-concurrency", type=int, default=64)
     parser.add_argument("--extraction-max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--contextual-embedding",
+        action="store_true",
+        help=(
+            "embed each chunk with a one-line date/source/title header. The "
+            "STORED text is unchanged, so this adds no retrieval units and "
+            "cannot cause the crowding that cost the extraction arms 21-54 "
+            "questions."
+        ),
+    )
     parser.add_argument(
         "--episodes-only",
         action="store_true",

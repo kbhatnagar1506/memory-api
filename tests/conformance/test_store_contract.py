@@ -86,7 +86,20 @@ async def _make_store(kind: str):
     return _POSTGRES_STORE, None
 
 
-@pytest.fixture(params=["memory", "postgres"])
+#: The `postgres` marker rides on the parametrization, not on the tests.
+#:
+#: Gating was `pytest.skip` inside `_make_store` and nothing else, so the
+#: marker declared in pyproject.toml was never applied to anything and
+#: `-m "not postgres"` selected the entire suite. Skipping still happens (the
+#: fixture cannot know whether a URL is set until it looks), but the marker now
+#: makes deselection possible, which is what a developer without Docker wants.
+_BACKENDS = [
+    pytest.param("memory", id="memory"),
+    pytest.param("postgres", id="postgres", marks=pytest.mark.postgres),
+]
+
+
+@pytest.fixture(params=_BACKENDS)
 async def backend(request):
     store, closer = await _make_store(request.param)
     yield store

@@ -53,6 +53,19 @@ packages = ["src/mapi"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo root on sys.path, for two reasons.
+#
+# `tests/unit/test_bench.py` imports `bench.*`, and `bench/` is not an
+# installed package -- it resolves only when the repo root is importable.
+# Without this line, pytest inserts each test module's BASEDIR (`tests/unit`,
+# which has no __init__.py) rather than the rootdir, so bare `pytest` fails
+# COLLECTION with ModuleNotFoundError and takes the whole run with it. CI runs
+# bare `pytest` (.github/workflows/ci.yml), so the suite was red there while
+# passing locally under `python -m pytest`, which puts CWD on the path itself.
+#
+# It also makes `from tests.support import ...` resolve, via PEP 420 namespace
+# packages -- which is why `tests/` deliberately has no __init__.py.
+pythonpath = ["."]
 asyncio_mode = "auto"
 # Session-scoped async fixtures need a session-scoped loop, or every test
 # gets a fresh loop and a pool bound to a closed one.
@@ -62,6 +75,7 @@ addopts = "-q --strict-markers"
 markers = [
     "postgres: requires a live PostgreSQL with pgvector (skipped when absent)",
     "live_llm: calls a real embedding/LLM provider (skipped without credentials)",
+    "slow: sweeps a corpus or measures latency; excluded with -m 'not slow'",
 ]
 filterwarnings = ["error::DeprecationWarning:mapi.*"]
 

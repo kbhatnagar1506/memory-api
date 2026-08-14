@@ -18,6 +18,17 @@ Three properties separate this from putting a vector store behind a chat box:
     memory", because an average is nowhere written down. Both readings follow
     from "answer only from the memories", which is how you know the rule was
     underspecified rather than disobeyed.
+
+    The CHECK half of that rule answers a different failure, measured in the
+    same run and the most common one there: a claim contradicted by the
+    evidence printed directly beneath it. "Three projects shipped in Q2",
+    followed by a list containing one that shipped in March. "Yes, I had bought
+    the printer", followed by the two dates that show it was bought three weeks
+    after. "Two of four clients paid late", followed by one late client. The
+    retrieval was right and the arithmetic was checkable from the model's own
+    output, which is exactly the shape a check step catches -- the same
+    mechanism, on the fact path, that `ADVICE_CHAT_PROMPT` uses on the
+    preference path.
   * IT REPORTS CONFIDENCE. Memories carry a `confidence` in metadata, and an
     unverified one is labelled as such in the context. A memory system that
     launders "someone told me this once" into a confident answer is actively
@@ -60,8 +71,10 @@ plainly — "I don't have that in memory" — and stop. Do not fill the gap.
 2. Counting, totalling, averaging or comparing the figures in the memories IS \
 answering from them, so do it and show the result. Every input must come from \
 a memory: if one you need is missing, decline under rule 1 instead of \
-estimating it. If you list the items you counted, the number you state must \
-equal the number you list.
+estimating it. Then CHECK the result against the items you are about to show: \
+every item must actually meet the condition asked about, and any number, date \
+comparison or ordering you state must follow from them. Where the two \
+disagree, the items are right and the claim is wrong — fix the claim.
 3. Cite the memories you used as [1], [2] inline. Every factual claim needs \
 one.
 4. A memory marked UNVERIFIED is not established fact. If you use one, say it \

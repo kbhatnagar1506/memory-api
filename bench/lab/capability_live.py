@@ -13,37 +13,66 @@ retrieve perfectly and still answer badly, and the whole argument of the lab
 work has been that those two failures need separating. This file deliberately
 puts the model back in.
 
-WHAT IS COVERED -- 39 capabilities, because "remembering" is not one skill:
+WHAT IS COVERED -- 54 capabilities, because "remembering" is not one skill:
 
     LOOKUP        direct, order, temporal, multi, list_all, paraphrase
-    ARITHMETIC    count, sum, max, min, average, group_by, date_arith, compare
+    ARITHMETIC    count, sum, max, min, average, group_by, ratio, delta,
+                  date_arith, duration, compare, unit, counterfactual
     CHANGE        supersede (value moved), reversal (the thing was undone),
                   retraction (the first statement was wrong), refinement
                   (vague became exact), partial_update (one field moved and
                   the rest did not), contradict (two sources disagree)
+    TIME          as_of (state at a past moment), relative_date, ongoing,
+                  same_day, planned, recurring, interval
     SHAPE         negation, attribution (X SAID y, which is not y), conditional,
-                  planned (booked, not happened), recurring, interval
-    HARDNESS      distractor (Haldern vs Halden), multi_hop, numeric (18 vs 180)
+                  causal, ambiguity, partial
+    ENTITY        coreference, role_change, multi_hop, distractor, near_duplicate
+    HARDNESS      numeric (18 vs 180), unit-suffixed figures
     PREFERENCE    explicit / implicit / negative / updated / composed
-    HONESTY       abstain, negative_existence, unverified, tenancy
+    HONESTY       abstain, negative_existence, unverified, tenancy, citations
 
 The change family is the point. Supersession is the tidy case everyone builds
 for; a reversal answered with the original value leaves the user holding a
 thing they returned, and a retraction answered with the original quotes a
 number that was never true. They fail differently and need testing separately.
 
-RESULT: 45/50, then 47, then 49 as each finding was fixed. Two of the first
-five failures were this file's own bugs -- a scorer that could not read "180cm"
-and a leak detector that flagged a coincidence of digits -- which is the usual
-ratio and the reason the replies are printed rather than just counted.
+CITATIONS ARE CHECKED, not counted. A reply can carry [3] against a claim
+memory 3 does not support and score as fully cited, which is the audit trail
+failing quietly. `EVIDENCE` maps a question to a substring of the memory that
+actually supports it, and the cited ids are checked against it.
 
-The one that remains is honest and is NOT a synthesis failure. Asked to total
-four invoices, retrieval returns all four and the answer is right; asked to
-AVERAGE the same four, it returns three (the query says nothing about a count,
-so the fourth ranks below the cut) and the model declines rather than dividing
-by the wrong denominator. That is rule 2 working: an aggregate needs every
-member of its set, cosine ranking guarantees no such thing, and the fix belongs
-in retrieval rather than in another sentence of prompt.
+RESULT: 60/67, then 62 after the findings below. Roughly a third of every
+failure round was this file's own bug -- a scorer that could not read "180cm",
+a leak detector that flagged a coincidence of digits, a corpus that wrote "day
+rate at 60 pounds an hour" and then expected 240 for four days. Printing the
+replies rather than counting them is what makes that separable.
+
+TWO PRODUCT FIXES CAME OUT OF IT, both in `synthesis/chat.CHAT_PROMPT`:
+arithmetic over stored figures is answering FROM memory rather than filling a
+gap, and a claim must be checked against the items shown beneath it. The second
+was the most common failure by far -- "three projects in Q2" over a list
+containing a March one, "two of four paid late" over a list of one.
+
+WHAT REMAINS, and it is not more prompt:
+
+  * AGGREGATION NEEDS A SET, AND RANKING DOES NOT RETURN SETS. For "average
+    invoice value" the four invoice rows rank 9, 15, 19 and 21. At k=20 three
+    arrive and the model declines rather than dividing by the wrong
+    denominator; at k=30 all four arrive and it answers correctly. No fixed k
+    is right, because the members of a set are not contiguous in a similarity
+    ranking -- this is `full_recall@k` versus `hit@k` showing up live, and the
+    fix is set-completion retrieval, not a bigger number.
+  * DATE COMPARISON. "Had I bought the Bambu when I shipped the Bramwell
+    housing?" answers "Yes" and then prints shipped 24 March, bought 15 April.
+    The check rule fixed the counting version of this and not the ordering one.
+  * OPEN-WORLD CATEGORIES. "Have I ever worked with an automotive client" is
+    answered with Bramwell CYCLES.
+
+Note the aggregation trade: before the check rule, `sum` sometimes computed a
+right answer and sometimes averaged three of four rows as if it were four. Now
+it declines when the set is short. The score went down and the behaviour got
+better, which is the correct direction for a memory system and worth stating
+plainly rather than hiding in a total.
 
     python -m bench.lab.capability_live
 """
@@ -82,7 +111,7 @@ def _d(y: int, m: int, day: int) -> datetime:
 MEMORIES: tuple[tuple[datetime, str, dict], ...] = (
     (
         _d(2026, 1, 12),
-        "I set my freelance day rate at 60 pounds an hour when I went independent.",
+        "I set my freelance day rate at 500 pounds when I went independent.",
         {},
     ),
     (
@@ -124,7 +153,7 @@ MEMORIES: tuple[tuple[datetime, str, dict], ...] = (
     ),
     (
         _d(2026, 5, 6),
-        "Raised my day rate from 60 to 85 pounds an hour. Nobody pushed back.",
+        "Raised my day rate from 500 to 700 pounds. Nobody pushed back.",
         {},
     ),
     (
@@ -249,6 +278,12 @@ MEMORIES: tuple[tuple[datetime, str, dict], ...] = (
     (_d(2026, 6, 1), "Sarah Okoye left Bramwell and moved to Vireo Health in June.", {}),
     (_d(2026, 4, 29), "The Okonjo fixture stands 180cm tall.", {}),
     (_d(2026, 4, 30), "The shelf pitch on the Okonjo fixture is 18cm.", {}),
+    # A NEAR-DUPLICATE of the Bambu purchase. Two memories describing one
+    # event is the normal state of an append-only store, and the failure it
+    # invites is arithmetic: a printer total of 3497 instead of 2198 means the
+    # same 1299 was counted twice. Nothing in the corpus says these are the
+    # same purchase; the model has to notice.
+    (_d(2026, 4, 16), "Paid 1299 for the Bambu, delivered Thursday.", {}),
 )
 
 #: A DIFFERENT space, same org. Nothing here may ever appear in an answer about
@@ -285,8 +320,8 @@ CASES: tuple[tuple[str, str, str | None], ...] = (
     ),
     ("temporal", "What did I do in March?", "bramwell|milan|fair|housing"),
     ("multi", "How much did I spend on 3D printers in total?", "2198|2 198"),
-    ("supersede", "What is my current day rate?", "85"),
-    ("supersede", "What should I quote a new client for a day's work?", "85"),
+    ("supersede", "What is my current day rate?", "700 + 500"),
+    ("supersede", "What should I quote a new client for a day's work?", "700 + 500"),
     ("contradict", "What is Bramwell's annual tooling budget?", "40000|52000"),
     ("unverified", "What did Sarah tell me about Bramwell's budget?", "40000"),
     ("abstain", "What is my accountant's name?", None),
@@ -308,7 +343,11 @@ CASES: tuple[tuple[str, str, str | None], ...] = (
         "A nicotine pouch brand wants a packaging refresh at double my rate. Should I take it?",
         "no|decline|turn|refuse|pass|avoid|reject|not",
     ),
-    ("pref_updated", "Quote me for a four-day job for a returning client.", "340|85 + 60|240"),
+    (
+        "pref_updated",
+        "Quote me for a four-day job for a returning client.",
+        "2800|700 + 500|2000",
+    ),
     (
         "pref_composed",
         "A tobacco-adjacent startup wants a device enclosure, drawings in inches, "
@@ -395,7 +434,87 @@ CASES: tuple[tuple[str, str, str | None], ...] = (
     ),
     ("numeric", "How tall is the Okonjo fixture?", "180 + 18"),
     ("numeric", "What is the shelf pitch on the Okonjo fixture?", "18 + 180"),
+    # -- BITEMPORAL: state as of a past moment, which is the thing this store's
+    # valid_from/valid_to columns exist for. "What is my rate" and "what was my
+    # rate in April" have different answers and only one of them is written
+    # down. Answering the second with 85 is reading today's value into the past.
+    ("as_of", "In April, what did I think my day rate was?", "500 + 700"),
+    (
+        "as_of",
+        "Had I bought the Bambu yet when I shipped the Bramwell housing?",
+        "no|not|hadn't|had not|after|later + april|march",
+    ),
+    # -- relative and derived time --------------------------------------------
+    (
+        "relative_date",
+        "What did I get up to last month?",
+        "glasgow|sleeper|train|tooling|budget|polycarbonate|morning|vireo",
+    ),
+    (
+        "duration",
+        "How long did the Vireo job take from signing to shipping?",
+        "21|twenty-one|three weeks|3 weeks",
+    ),
+    ("ongoing", "Am I still renting the Peckham unit?", "yes|still|since|continue"),
+    (
+        "same_day",
+        "Did I invoice Vireo before or after I shipped?",
+        "after|same|afternoon|later",
+    ),
+    # -- causal and counterfactual --------------------------------------------
+    ("causal", "Why did I buy the Bambu?", "prusa + keep up|slow|capacity|couldn't|could not"),
+    (
+        "causal",
+        "Why did I get rid of the resin printer?",
+        "toleranc|precision|accuracy|quality|vireo",
+    ),
+    (
+        "counterfactual",
+        "If I had never raised my rate, what would a four-day job bill at?",
+        "2000 + 500",
+    ),
+    ("delta", "How much has my day rate gone up this year?", "200 + 500|700"),
+    ("ratio", "What proportion of my clients paid late?", "one|1|quarter|25 + four|4|bramwell"),
+    # -- unit handling ---------------------------------------------------------
+    ("unit", "How tall is the Okonjo fixture in metres?", "1.8|1 8"),
+    # -- deduplication ---------------------------------------------------------
+    ("near_duplicate", "What did the Bambu cost me?", "1299 + 2598"),
+    # -- entity resolution -----------------------------------------------------
+    ("coreference", "Who told me about Bramwell's tooling budget?", "sarah"),
+    ("role_change", "Where does Sarah Okoye work now?", "vireo + bramwell"),
+    # -- answer quality --------------------------------------------------------
+    (
+        "partial",
+        "What did the resin printer cost me?",
+        "?no|not|don't|do not|unknown|unclear|doesn't say|does not say|no record",
+    ),
+    (
+        "ambiguity",
+        "How much did the Okonjo fixture come to?",
+        "3200 + 2300|invoice|corrected",
+    ),
 )
+
+#: question -> a substring of the memory that ACTUALLY supports the answer.
+#:
+#: Counting citations says nothing about whether they point anywhere useful. A
+#: reply can carry [3] against a claim memory 3 does not support and score as
+#: fully cited, which is the audit trail failing quietly rather than loudly.
+#: Only questions with one unambiguous supporting memory are listed -- an
+#: aggregate legitimately cites four, and demanding a particular one would
+#: measure formatting.
+EVIDENCE: dict[str, str] = {
+    "What printer did I buy in February?": "Prusa MK4",
+    "Which client did I sign first?": "first contract with Halden",
+    "What is my current day rate?": "Raised my day rate",
+    "How much did I invoice Okonjo Studio?": "Correction: the Okonjo invoice",
+    "What material is the Vireo enclosure?": "polycarbonate",
+    "What do I do every Tuesday?": "clean-down",
+    "Why did I buy the Bambu?": "could not keep up",
+    "Where does Sarah Okoye work now?": "moved to Vireo Health",
+    "What is the shelf pitch on the Okonjo fixture?": "shelf pitch",
+    "How tall is the Okonjo fixture?": "180cm tall",
+}
 
 
 async def main() -> None:
@@ -463,6 +582,16 @@ async def main() -> None:
         reply = result.reply
         low = reply.lower()
 
+        # Did the citation point at the memory that actually supports this?
+        # None when the question has no single unambiguous source.
+        marker = EVIDENCE.get(question)
+        by_id = {h.memory.id: h.memory.content for h in response.results}
+        cited_right: bool | None = None
+        if marker is not None:
+            cited_right = any(
+                marker.lower() in by_id.get(mid, "").lower() for mid in result.cited
+            )
+
         declined = any(
             phrase in low
             for phrase in (
@@ -498,6 +627,7 @@ async def main() -> None:
             "declined": declined,
             "leaked": leaked,
             "cited": len(result.cited),
+            "cited_right": cited_right,
             "used_unverified": result.used_unverified,
             "reply": reply,
         }
@@ -530,6 +660,13 @@ async def main() -> None:
 
     unver = [r for r in rows if r["capability"] == "unverified"]
     print(f"UNVERIFIED flagged on {sum(r['used_unverified'] for r in unver)}/{len(unver)}")
+
+    checked = [r for r in rows if r["cited_right"] is not None]
+    good = sum(bool(r["cited_right"]) for r in checked)
+    print(f"CITATIONS point at the supporting memory: {good}/{len(checked)}")
+    for r in checked:
+        if not r["cited_right"]:
+            print(f"  wrong/absent source: {r['question']}")
 
     print("\nFAILURES:")
     for r in rows:

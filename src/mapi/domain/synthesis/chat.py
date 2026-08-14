@@ -83,22 +83,53 @@ Answer:"""
 #: confidence versus a system reporting its own evidence gap. Quoting the
 #: preference FIRST also binds the recommendation to a citation, which is the
 #: same mechanism that grounds the fact path.
+#:
+#: THE THIRD STEP, and why two were not enough. Measured on 177 authored
+#: preference questions with retrieval switched off entirely -- every memory a
+#: persona has in the window, so the evidence is guaranteed present and any
+#: failure is the model's use of it. The two-step template scored 161/177; the
+#: three-step below scored 169/177, paired 12-4. Each addition traces to a
+#: failure that was read rather than guessed:
+#:
+#:   EVERY, however many      the omissions. Asked for a warm drink, the model
+#:                            applied the stored decaf preference and dropped
+#:                            the plant-milk one from a different memory.
+#:                            "the preference(s)" invites finding one.
+#:   avoidances rank equally  the negative kind. A prohibition is not a taste,
+#:                            and the model treats it as lower priority unless
+#:                            told otherwise.
+#:   CHECK, then ALL at once  the violations. It recommended "a Saturday
+#:                            afternoon" to a woman whose diary says Saturdays
+#:                            are pennant days from September to March, and
+#:                            tiramisu to someone avoiding dairy. NAMING a
+#:                            constraint does not stop you breaking it two
+#:                            lines later; checking the draft against each one
+#:                            does.
+#:
+#: A second model call that re-read and revised its own draft was also measured
+#: and is NOT here: it scored identically to this single call (169/177, paired
+#: 3-3), so the mechanism is the structure, not the extra pass, and the extra
+#: pass is twice the latency for nothing.
 ADVICE_CHAT_PROMPT = """\
 You are advising this user from a memory store. The numbered memories below \
 are what you know about them; they will NOT contain a ready-made answer -- \
 they contain what this user likes, avoids, owns and does.
 
-Work in two steps, both in your reply:
-1. Name the preference(s) that bear on this request, quoting the memory and \
-citing it as [1], [2] inline. If a preference CHANGED over time, use the \
-latest. If NO memory bears on the request, say "no stored preference applies \
-here" instead.
-2. Make one concrete recommendation that follows from exactly the preferences \
-you cited -- never from general taste. If none applied, still recommend, and \
-say plainly that it is a guess.
+Work in three steps, all in your reply:
+1. PREFERENCES: list EVERY preference in the memories that bears on this \
+request, one per line, however many there are -- what they AVOID counts as \
+much as what they like. Quote the memory and cite it as [1], [2] inline. If a \
+preference CHANGED over time, list only the latest. If NO memory bears on the \
+request, say "no stored preference applies here" instead.
+2. CHECK: for each one, state in a few words what the recommendation must do \
+to satisfy it.
+3. RECOMMENDATION: one concrete recommendation that satisfies ALL of them at \
+once, following from exactly the preferences you cited -- never from general \
+taste. If two genuinely conflict, say which you traded off and why. If none \
+applied, still recommend, and say plainly that it is a guess.
 
 A memory marked UNVERIFIED is not established fact; say so if you lean on it. \
-Be brief and concrete.
+Keep every step brief.
 
 {history}Memories:
 {memories}

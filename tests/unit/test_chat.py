@@ -261,6 +261,24 @@ async def test_every_other_question_keeps_the_decline_contract(question: str) ->
     assert "no stored preference applies here" not in seen["prompt"]
 
 
+#: Each of these was bought with a measurement, and a prompt is the easiest
+#: thing in a codebase to "tidy" back to something shorter. Pinned by the
+#: behaviour it produces, not by exact wording, so rephrasing stays allowed and
+#: DELETING the mechanism does not.
+@pytest.mark.parametrize(
+    ("element", "why"),
+    [
+        ("EVERY", "exhaustiveness: 'the preference(s)' invites the model to find one"),
+        ("AVOID", "a prohibition must rank with a taste, not below it"),
+        ("CHECK", "naming a constraint does not stop the model violating it"),
+        ("ALL of them at once", "the recommendation must satisfy the whole set"),
+        ("latest", "an updated preference must not be applied in its old form"),
+    ],
+)
+def test_the_advice_prompt_keeps_what_was_measured(element: str, why: str) -> None:
+    assert element in ADVICE_CHAT_PROMPT, why
+
+
 def test_the_two_contracts_are_not_accidentally_the_same() -> None:
     """A copy-paste that left both templates identical would make every test
     above pass while the routing did nothing."""

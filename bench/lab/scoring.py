@@ -52,6 +52,47 @@ def _normalize(text: str) -> str:
     return " ".join("".join(out).split())
 
 
+#: Below this, a one-space variant is not generated. "onto" would otherwise
+#: admit "on to", and two-letter needles would fragment into noise. Compounds
+#: worth catching ("bodyweight", "slipons", "secondhand") are all longer.
+_MIN_COMPOUND = 6
+
+
+def _compound_forms(needle: str) -> list[str]:
+    """The needle, plus the spellings English uses for the same compound.
+
+    MEASURED, not anticipated. On the k=ALL synthesis run two correct answers
+    were scored wrong for nothing but a space:
+
+        spec "slipons"      answer "a pair of slip-ons"    -> slip ons
+        spec "bodyweight"   answer "using your body weight"
+
+    `_normalize` turns a hyphen into a space, so the hyphenated form and the
+    closed form can never meet, and which of the three spellings a spec author
+    types is arbitrary. Both directions are generated:
+
+      * a closed needle gets ONE optional split point per position, so
+        "bodyweight" reaches "body weight" -- and only that. Inserting a
+        separator at every position at once would also match "b o d y w e i g
+        h t", which is not a spelling of anything.
+      * an open needle gets its spaces removed, so "second hand" reaches
+        "secondhand".
+
+    Word boundaries still apply to every variant, so this widens which
+    SPELLINGS match and never which words do.
+    """
+    forms = [needle]
+    if " " in needle:
+        # Every part must be a word in its own right. Without this, "cat s"
+        # closes to "cats" and matches a plain plural -- a one-letter token is
+        # not half of a compound, it is a typo or a split that never happened.
+        if all(len(part) >= 2 for part in needle.split()):
+            forms.append(needle.replace(" ", ""))
+    elif len(needle) >= _MIN_COMPOUND:
+        forms.extend(needle[:i] + " " + needle[i:] for i in range(2, len(needle) - 1))
+    return forms
+
+
 def _contains(answer_norm: str, surface: str) -> bool:
     """Word-boundary containment of a normalized surface in a normalized answer.
 
@@ -61,7 +102,10 @@ def _contains(answer_norm: str, surface: str) -> bool:
     needle = _normalize(surface)
     if not needle:
         return False
-    return re.search(rf"(?<![0-9a-z]){re.escape(needle)}(?![0-9a-z])", answer_norm) is not None
+    return any(
+        re.search(rf"(?<![0-9a-z]){re.escape(form)}(?![0-9a-z])", answer_norm) is not None
+        for form in _compound_forms(needle)
+    )
 
 
 @dataclass(frozen=True, slots=True)

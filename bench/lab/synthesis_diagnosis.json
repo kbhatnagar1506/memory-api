@@ -1,0 +1,1852 @@
+[
+ {
+  "kind": "explicit",
+  "question": "I'm booking my October flight to Albuquerque \u2014 which seat should I pick?",
+  "spec": "aisle + knee|knees",
+  "correct": true,
+  "answer": "Book an aisle seat. You've previously paid extra for one to avoid climbing over strangers due to knee issues, and you prefer them for flights over four hours so you can work.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "My work clogs are shot again. What features should I insist on in the replacement pair?",
+  "spec": "wide|roomy; arch|support|supportive + toe|feet",
+  "correct": true,
+  "answer": "Based on your past experiences, you should insist on a replacement pair of work clogs with a **wide toe box** and **real arch support**. These features were crucial for you after long shifts, and you prioritized them regardless of cost.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm booking a hotel for a nursing conference \u2014 anything I should request for the room?",
+  "spec": "away|quiet|end|far; elevator|elevators|ice",
+  "correct": true,
+  "answer": "Based on your past experiences, you should request a room at the end of the hall, away from the elevator and ice machine, and ideally on a lower floor to minimize noise. If possible, ask for a room that is scent-free or has not been recently sprayed with air fresheners, as perfumes can trigger your migraines.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I want to add one more exercise class to my week \u2014 what kind should I look for?",
+  "spec": "water|pool|swim|swimming|aqua|aquatic + knee|knees",
+  "correct": true,
+  "answer": "Given your preference for water aerobics because it doesn't leave your knees aching, and your recent switch to crochet due to arthritis flaring with fine needles, I'd suggest looking for a **chair yoga** or **tai chi** class. Both offer gentle, low-impact movements that can improve flexibility and balance without putting stress on your knees or hands, and they often have options for seated participation.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I'm bringing salsa to the unit potluck and want a jar for myself too \u2014 which heat level should I grab?",
+  "spec": "mild + medium|verde",
+  "correct": true,
+  "answer": "Grab a mild salsa. You found medium verde enchiladas too spicy, needing milk after two bites, and preferred your usual mild plate.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The big-box garden center has spring seedling flats for half what I paid last fall \u2014 where should I buy my starts?",
+  "spec": "hartley|hartleys|local|nursery|independent + price",
+  "correct": true,
+  "answer": "Go with Hartley's Nursery. You value quality and local relationships over the lowest price, especially for something that goes into your garden where the grandkids graze. Ed remembering your soil trouble and throwing in an extra six-pack shows the kind of personalized service you appreciate, which a big-box store won't offer.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "My book club's next pick just came out \u2014 which format should I get it in for my commute?",
+  "spec": "audiobook|audio|listen|listening|audible",
+  "correct": true,
+  "answer": "Given your preference for audiobooks on your commute, especially since you enjoy narrators who do different voices and will even sit in the driveway to finish a chapter, an **audiobook** is the best format for your new book club pick.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I need to get down to Portland next month to help Claire move \u2014 how should I travel?",
+  "spec": "train|amtrak|rail + drive|driving|fly|flying",
+  "correct": true,
+  "answer": "Take the train to Portland. You've taken it three times this year to see Claire, preferring it over driving I-5, and it accommodates your preference for aisle seats and avoids night driving.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "I'm finally signing up for a weekly pottery class \u2014 what time slot should I ask the studio for?",
+  "spec": "saturday|morning|daytime|afternoon|midday|noon|10|11 + night|evening|dark",
+  "correct": true,
+  "answer": "You should ask for a pottery class in the **late morning or early afternoon on a weekday**.\n\nYou've recently moved to day shifts and are sleeping better, so mornings are now viable. You avoid driving after dark due to headlight glare, ruling out evening classes. Weekends are often spent with grandkids, gardening, or other family activities, making a weekday slot less disruptive.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The grandkids are sleeping over Friday and I promised to bake cookies \u2014 anything I should steer clear of when I pick a recipe?",
+  "spec": "peanut|peanuts|nut|nuts + allergy|allergic|allergies|theo",
+  "correct": true,
+  "answer": "Given Theo's serious peanut allergy, you absolutely need a **peanut-free cookie recipe**.\n\nBeyond that, consider a classic like **chocolate chip cookies** or **oatmeal raisin cookies** (if the grandkids like raisins). You've mentioned making zucchini bread with them before, so they're likely open to baking and enjoying the process. Just ensure all ingredients are checked for peanut cross-contamination.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Aphids are all over my kale \u2014 recommend a treatment.",
+  "spec": "soap|neem|ladybug|ladybugs|organic|natural|insecticidal|beneficial + synthetic|chemical|chemicals|pesticide|pesticides",
+  "correct": true,
+  "answer": "Based on your preference for natural pest control and avoiding synthetic products where grandkids might graze, a **soap spray** is the best recommendation for aphids on your kale. You've already stated that \"Soap spray and ladybugs will have to earn their keep\" for your garden.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "My hands are wrecked from all the washing at work \u2014 recommend a hand cream for me.",
+  "spec": "unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+  "correct": true,
+  "answer": "Given your sensitivity to perfumed products that trigger migraines, and the scent-free policy at your ward, I recommend a fragrance-free, hypoallergenic hand cream. Look for something rich and emollient to combat the dryness from frequent washing. Vanicream Moisturizing Cream or CeraVe Therapeutic Hand Cream are excellent choices that fit these criteria.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Grabbing a drink at the coffee cart before my shift \u2014 what should I order?",
+  "spec": "decaf|decaffeinated|herbal + double|caffeine|caffeinated",
+  "correct": true,
+  "answer": "Given your past preference for a double-shot latte and the recent switch to decaf, I'd recommend a **decaf double-shot latte**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The scheduler posted extra shifts for next month and the graveyard ones pay a premium \u2014 which should I pick up?",
+  "spec": "day|days|daytime + night|nights|graveyard|differential",
+  "correct": true,
+  "answer": "Given your recent shift to day rotation and improved sleep, and your decision to stop driving after dark due to headlight glare, picking up graveyard shifts would likely undo the progress you've made. The premium might be tempting for the Disney fund, but your well-being and safety on the road are more important.\n\nI recommend you do not pick up any graveyard shifts. If you need extra hours, look for day shifts or other opportunities that don't involve driving at night or disrupting your new sleep schedule.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Where should I plant the spring lettuce this year?",
+  "spec": "raised|bed|beds|cedar + ground|rows",
+  "correct": true,
+  "answer": "Plant your spring lettuce in the new cedar raised beds. You mentioned your back \"forgave me by dinner\" after planting garlic in them, and you are \"never planting at ground level again.\" The old in-ground rows are becoming a clover patch for bees, so they're no longer an option for vegetables.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I want to make a blanket for Claire's new baby \u2014 which of my yarn crafts should I use?",
+  "spec": "crochet|crocheted|crocheting + knit|knitting|thumb|arthritis",
+  "correct": true,
+  "answer": "Based on your recent experiences, you should use **crochet** for Claire's baby blanket.\n\nYou found that knitting with fine needles caused your thumb to flare up due to arthritis, but switching to a fat crochet hook allowed you to do three granny squares \"without a twinge.\" This suggests crochet is a much more comfortable and sustainable option for you now.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Book me the return flight home from Ruth's \u2014 what seat should I pick, and roughly what time of day should it land?",
+  "spec": "aisle; morning|midday|afternoon|daylight|daytime|noon|sunset|dusk + night|dark|evening",
+  "correct": false,
+  "answer": "For your return flight from Albuquerque, book an **aisle seat**. Aim for a flight that lands during the day, avoiding red-eyes, so you don't lose a working day.",
+  "missed": [
+   "morning|midday|afternoon|daylight|daytime|noon|sunset|dusk"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Plan my overnight trip to Portland \u2014 how should I get there, and what should I ask for at the hotel?",
+  "spec": "train|amtrak|rail; quiet|away|elevator|ice|end + drive|driving",
+  "correct": true,
+  "answer": "For your overnight trip to Portland:\n\n**Travel:** Take the train. You prefer it over driving I-5, and it allows you to enjoy the scenery.\n\n**Hotel:**\n*   Request a room at the end of the hall, away from the elevator and ice machine.\n*   Ask for a scent-free room, as perfumes trigger your migraines.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "My sister wants gift ideas for me \u2014 what should she look for in work shoes and in a hand cream?",
+  "spec": "wide|arch|support|supportive; unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+  "correct": true,
+  "answer": "For work shoes, look for something with a **wide toe box and real arch support**, prioritizing comfort and foot health over cost. For hand cream, choose an **unscented** formula to avoid triggering migraines.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Plan Saturday breakfast with the grandkids \u2014 anything I need to watch for with the pancake mix, and what should go in my mug?",
+  "spec": "peanut|peanuts|nut|nuts|allergy|allergies|allergen|allergens; decaf|decaffeinated|herbal + caffeine|caffeinated",
+  "correct": true,
+  "answer": "For Saturday breakfast with the grandkids:\n\nFor the pancakes, use a **peanut-free mix** and consider adding **shredded zucchini** (from the garden, if possible) to the batter.\n\nFor your mug, it's **decaf coffee** from now on.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm booking my flight to Dublin for the poetry festival and the seat map just opened \u2014 which seat should I pick?",
+  "spec": "aisle|exit|legroom + window|knee|knees",
+  "correct": true,
+  "answer": "For your flight to Dublin, choose an **aisle seat**. You've consistently preferred them, especially for flights over two hours, to avoid knee cramp and allow you to work. Avoid red-eyes if possible.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The final proofread of a 200-page annual report is due Friday \u2014 should I do the pass on my tablet or some other way?",
+  "spec": "paper|print|printed|printout|printing|hardcopy|printer + screen|screens|tablet",
+  "correct": true,
+  "answer": "Print the 200-page annual report and do the final pass on paper. You've found you catch twice as many errors that way.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I need to get from Turin to Paris for a client workshop \u2014 roughly five and a half hours overland, or a short flight. Which should I book?",
+  "spec": "train|rail|railway|tgv + airport|flight|plane|flying",
+  "correct": true,
+  "answer": "Book the train. You've consistently chosen overland travel for comfort and productivity (Lyon trip, 2026-03-23), preferring a table and laptop over airport hassle. You also prioritize aisle seats for flights over four hours (Lisbon trip, 2026-07-20), and a short flight might not guarantee that, plus the overall airport experience would still eat into your day.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "At the Thai place tonight \u2014 which curry should I go for, and anything I should tell the kitchen when I order?",
+  "spec": "jungle|spicy|spicier|spiciest|hot|hotter|hottest + mild",
+  "correct": true,
+  "answer": "Go for the jungle curry, and tell them to make it properly hot.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I have a meeting across town tomorrow, about four kilometres away. What's the best way to get there?",
+  "spec": "bike|bicycle|cycle|cycling + tram",
+  "correct": true,
+  "answer": "Cycle. It's 4km, you prefer biking for similar distances, and you're comfortable with the exercise.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I need to block three hours of deep focus for the contract translation \u2014 what time of day should I schedule it?",
+  "spec": "evening|night|nights|late|midnight|pm + morning",
+  "correct": true,
+  "answer": "Schedule your deep focus block for the contract translation between **midnight and 3 AM**. This aligns with your most productive hours for complex prose, and you'll avoid distractions like caf\u00e9 noise, pop playlists, and milk steamers. Ensure you have decaf coffee on hand.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "My desk chair's gas lift is sagging to the floor. What should I do about it?",
+  "spec": "repair|repairing|fix|fixing|mend|mending|cartridge|cylinder|swap|swapping|diy + replace|replacement",
+  "correct": true,
+  "answer": "Your desk chair's gas lift is sagging. Given your preference for repairing over replacing, and your recent experience rebuilding a wheel yourself, I recommend you look into replacing the gas lift cylinder. They are often standard parts and can be swapped out with a few tools, much like rebuilding a wheel. This avoids buying a whole new chair, which aligns with your approach to maintenance.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Recommend a dessert for me to order at the Italian restaurant tonight.",
+  "spec": "sorbet|sorbetto|granita|fruit|dairy|lactose + gelato",
+  "correct": false,
+  "answer": "Given your preference for strong, bold flavors and your recent shift to decaf, I'd recommend a **Tiramisu**. It offers a rich, intense coffee flavor (which can be made with decaf espresso), a creamy texture, and a satisfying sweetness without being overly delicate or fruity.",
+  "missed": [
+   "sorbet|sorbetto|granita|fruit|dairy|lactose"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "An agency is offering me a steady stream of machine-translation post-editing at a fair hourly rate. Should I take it on?",
+  "spec": "decline|declining|refuse|refusing|turn|turning|pass|passing|avoid|skip|reject|walk + launder",
+  "correct": false,
+  "answer": "Do not take on the machine-translation post-editing work. You explicitly stated on 2026-03-09 that you \"translate, I don't launder algorithms,\" when offered a similar pipeline. Your preference is to translate, not post-edit machine output.",
+  "missed": [
+   "decline|declining|refuse|refusing|turn|turning|pass|passing|avoid|skip|reject|walk"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "A big agency offers me strong volume, but their standard payment terms run two months after invoice. Should I sign their vendor agreement?",
+  "spec": "decline|declining|refuse|refusing|negotiate|negotiating|renegotiate|counter|thirty|30|walk|turn|turning|pass + 60",
+  "correct": true,
+  "answer": "Do not sign the vendor agreement. You dropped the Milan agency for moving to 60-day payment terms, stating \"thirty days or I walk, and they know it.\" This is a clear, recent preference.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "It's nine in the evening and I'm settling in at the caf\u00e9 for a work session \u2014 what should I order to drink?",
+  "spec": "decaf|decaffeinated|herbal|chamomile|barley|orzo|tea|tisane + espresso",
+  "correct": true,
+  "answer": "Given it's 9 PM and you're settling in for a work session, I'd recommend a **decaf espresso**. You've made your peace with being the \"decaf guy\" at the caf\u00e9, and it'll keep you focused without the palpitations.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "A regular client just asked for a rush job delivered by Sunday evening, at a premium rate. Should I accept?",
+  "spec": "decline|declining|turn|turning|pass|passing|refuse|refusing|counter|monday|weekday + weekend",
+  "correct": true,
+  "answer": "Based on your history, you should **decline the rush job**.\n\nWhile you've taken rush jobs for premium rates in the past (e.g., [2026-01-12]), your most recent stance on weekend work is clear: \"after June's burnout scare, weekends are off the table for good, whatever the fee\" [2026-04-06]. This is a firm boundary you established, overriding previous instances.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Plan my Sunday ride \u2014 the fast road loop up to Superga, or something else?",
+  "spec": "gravel|mandria|trail|trails|unpaved|dirt|forest + tarmac",
+  "correct": true,
+  "answer": "Given your recent experience with \"two close passes from vans on the Superga descent,\" you've already settled it: **move your Sunday ride onto the gravel tracks through La Mandria.** You explicitly stated you're \"not going back\" to Superga for now.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Booking my accommodation for the Lisbon conference now \u2014 the sociable dorm bunks everyone from the translators' chat is taking, or a different option?",
+  "spec": "private|hotel|apartment|guesthouse|airbnb|pension|single|own + hostel",
+  "correct": true,
+  "answer": "Do not book the sociable dorm bunks. You explicitly stated on [2026-05-18] that you are \"done with hostel bunks for good\" after a bad experience, and you've already booked a small private room for this Lisbon conference.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Plan my trip to the Zurich localization meetup \u2014 it's a short hop by air or about four hours overland \u2014 including how I should get around the city during the three days there.",
+  "spec": "train|rail|railway; bike|bicycle|cycle|cycling|velo + airport|flight|plane",
+  "correct": false,
+  "answer": "For your Zurich localization meetup, I recommend the following:\n\n**Travel to Zurich:**\n*   **Overland by train:** Given your preference for working during travel and avoiding airports, a train journey of four hours is ideal. Book a seat with a table.\n\n**Accommodation:**\n*   **Private room:** After your experiences in Vienna and Lisbon, a private room is essential. Avoid hostels.\n\n**Getting Around Zurich (for three days):**\n*   **Public transport:** Zurich has an excellent public transport system. Purchase a multi-day pass (e.g., a 72-hour ZVV pass) for trams and buses, which will be efficient and allow you to work or read during commutes. This aligns with your preference for public transport over driving and your general efficiency.",
+  "missed": [
+   "bike|bicycle|cycle|cycling|velo"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I'm at the caf\u00e9 for a late editing session and fancy something warm and milky \u2014 what exactly should I order?",
+  "spec": "decaf|decaffeinated|barley|orzo|chamomile|herbal|tea|chocolate|cocoa; oat|soy|almond|coconut|plant|dairy|lactose|rice + espresso",
+  "correct": false,
+  "answer": "Given your past aversion to noisy milk steamers and your recent switch to decaf, I'd recommend a decaf latte or cappuccino, made with a quiet, well-steamed milk.",
+  "missed": [
+   "oat|soy|almond|coconut|plant|dairy|lactose|rice"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Recommend what kind of place I should book for a three-night retreat to finish the novel translation.",
+  "spec": "private|hotel|apartment|guesthouse|cottage|cabin|airbnb|agriturismo; quiet|quieter|silent|calm|peaceful|tranquil|secluded + hostel",
+  "correct": true,
+  "answer": "Book a small, private room in a quiet hotel or guesthouse, ideally with a desk and good natural light. Ensure it's not a hostel dorm. Look for a location that allows for cycling or walking to a silent reading room or library if you need a change of scenery, and avoid areas with loud cafes or pop music. Confirm the room has a kettle for decaf coffee/tea.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "My sock drawer is finally past saving and I'm ordering a fresh lot this week. What is the one thing I should be insisting on in the new pairs?",
+  "spec": "seamless|smooth|seamfree|flat; toe|toes|diabetic|diabetes|feet|foot + blister|blisters|ridge|ulcer",
+  "correct": true,
+  "answer": "Seamless socks, nothing with a ridge across the toe.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "Siobhan wants to take me out for a meal at a place in town and she's asked whether there's anything she ought to tell them when she books. What should she ask them for?",
+  "spec": "quiet|quieter|corner|away|booth|secluded; kitchen|speakers|speaker|music|noise|noisy|din + ear|hearing|deaf",
+  "correct": true,
+  "answer": "When Siobhan books, she should ask for a table well away from the kitchen doors and speakers, and mention your shellfish allergy.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm kitting out a second bench in the back room for the really fiddly jobs. What sort of magnifying gear should I put on it, and what must it have built on?",
+  "spec": "headband|visor|head|optivisor|binocular; light|lit|lamp|led|illuminated|illumination + loupe|eyeglass",
+  "correct": true,
+  "answer": "You should get a **headband visor with its own light**, similar to the one you ordered on 2026-03-23. This will keep both hands free for fiddly jobs like fitting a pallet, and avoid the headaches you experienced with an eyeglass loupe.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The kettle is on its last legs. Before I hand over any money for a replacement, what should I be checking on it?",
+  "spec": "screws|screwed|screw|screwdriver|apart|dismantle|dismantled|opened; repairable|serviceable|repair|repaired|fixable|fix|serviced + glued|sealed|clips|bin",
+  "correct": false,
+  "answer": "Based on your experience with the toaster, you'll want a kettle that can be taken apart with a screwdriver. Look for one with visible screws in the base or body, and avoid anything sealed shut with plastic clips. A secondhand one from a market stall might be a good bet.",
+  "missed": [
+   "repairable|serviceable|repair|repaired|fixable|fix|serviced"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "There's a clock museum in Vienna I've wanted to see for twenty years and I'm finally doing it this autumn. How should I make the journey out there?",
+  "spec": "train|trains|rail|sleeper|eurostar|ferry|boat|coach|sea|overland + fly|flying|flight|flights|plane|airport",
+  "correct": true,
+  "answer": "Given your recent decision to stop driving and your preference for train travel, especially for longer distances, I'd recommend taking the train to Vienna. You've enjoyed overnight ferries and seem to appreciate the journey itself, so a scenic train route would likely suit you.\n\nFor the journey within Vienna, remember your new rule: \"never barefoot, not in the house, not out to the loft, not on sand,\" so ensure you have comfortable slip-ons for walking around the museum and city.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The horological society has offered me a slot to demonstrate escapement cleaning at their open day and says I can pick any hour I like. Which should I take?",
+  "spec": "morning|mornings|dawn|breakfast|earliest|forenoon + afternoon|evening|late|night",
+  "correct": true,
+  "answer": "You should take a slot in the morning, ideally before 11 AM. Your hands are steadiest and the light is best then, and you've noted that by four in the afternoon you're \"fit for nothing but sweeping up and feeding the birds.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The nurse wants me keeping proper track of my blood pressure readings as well now. What should I be putting them down in?",
+  "spec": "notebook|logbook|ledger|diary|paper|pad|handwritten|written|pen|longhand + app|apps|phone|spreadsheet|digital",
+  "correct": true,
+  "answer": "You should get a dedicated, hard-backed notebook for your blood pressure readings. Keep it with your loft book and red cash book, and write the readings in it daily.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The wardrobe in the back bedroom has finally given up and I need another one in there. Where should I be looking for it?",
+  "spec": "secondhand|used|auction|auctions|salvage|reclamation|reclaimed|charity|antique|antiques|vintage|junk|market|clearance|preowned + new|showroom|flatpack",
+  "correct": true,
+  "answer": "Given your preference for items that can be taken apart with a screwdriver and put back together, and your appreciation for secondhand finds, I'd suggest looking for a solid wood wardrobe from a local antique or reclamation yard. You'll likely find something well-built that can be repaired if needed, and it will have a character that modern, sealed-unit furniture lacks. Check Fontwell, as you've been there before.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Siobhan is putting me in the spare room at hers over Christmas and asked whether I need anything left beside the bed. What should I tell her?",
+  "spec": "slippers|slipper|shoes|footwear|sandals|slipons|moccasins + barefoot|feet|foot|neuropathy|floor",
+  "correct": false,
+  "answer": "Seamless socks, a pair of slip-ons, and a soft drink.",
+  "missed": [
+   "slippers|slipper|shoes|footwear|sandals|slipons|moccasins"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "A neighbour's mantel clock has stood silent for twenty years and she wants it going again as cheaply as it can be done. What should end up inside that case when I hand it over?",
+  "spec": "mechanical|clockwork|original|wound|winding|windup|spring|pendulum|escapement + quartz|battery|electric|modern",
+  "correct": true,
+  "answer": "For your neighbour's mantel clock, I recommend fitting a new mechanical movement. You'll want to source a secondhand one, perhaps from a clock you've picked up at a house clearance or a horological fair, as you prefer to work with parts you can take apart and reassemble. This aligns with your strong preference against battery movements and your skill in stripping and cleaning escapements.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The pigeon club's annual supper is coming round and Tom needs to know what to put down against my name at the bar. What should I have him write?",
+  "spec": "alcohol|alcoholic|nonalcoholic|teetotal|sober|abstain|soft|water|tonic|squash + beer|wine|whisky|rum|pint|ale",
+  "correct": true,
+  "answer": "Something cold and soft.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The gutter along the back of the loft is packed solid with moss and the overflow is running down the wall. How should I get it cleared?",
+  "spec": "hire|hired|pay|paid|someone|somebody|professional|handyman|tradesman|contractor|firm|service|pole|ground + ladder|ladders|climb|climbing|rung",
+  "correct": true,
+  "answer": "You should pay a man to clear the gutter. After your fall from the loft ladder, you've made it clear you won't go up a ladder again.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Fergus is making the tea and has shouted through to ask how I take mine these days. What should he put in it?",
+  "spec": "sweetener|sweeteners|stevia|sucralose|drops|unsweetened|sugarfree|plain + sugar|sugars|two|heaped",
+  "correct": true,
+  "answer": "Two heaped sugars, but with a few drops of liquid sweetener instead of sugar.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Next season's race programme came through the door this morning and I've the entry form in front of me. Which events should I put the birds in for?",
+  "spec": "short|shorter|sprint|sprints|inland|local|nearby|100|150 + long|distance|national|hundred|500|marathon",
+  "correct": true,
+  "answer": "Based on your recent decision, you should enter the birds for **short club sprints only**. You scratched the long races off your card for good, preferring events where the birds are home the same day and you're not waiting on stragglers.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "There's a farm sale out at Fontwell on Saturday with a box of movements in the lots and I'd like to be there. How should I make the trip?",
+  "spec": "bus|buses|coach|train|taxi|cab|lift|walk|delivered|delivery|carrier + drive|driving|drove|van|car",
+  "correct": true,
+  "answer": "You'll need to take the bus to Fontwell. You've done it before, carrying home a cast-iron door, so a box of movements should be manageable. Just make sure you're wearing your seamless socks and proper slip-ons.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "A chap at the club has just had the same diagnosis and asked what I use day to day to keep an eye on my levels. What should I tell him I'm on now?",
+  "spec": "sensor|sensors|patch|continuous|cgm|scanner|scan|arm|libre + finger|fingers|fingertip|prick|pricks|lancet",
+  "correct": true,
+  "answer": "Tell him you're on a sensor that scans with your phone, and you've not pricked a finger in weeks.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Siobhan is booking Sunday lunch somewhere for the three of us and wants to get it right. Where should she have them sit us, and what should she order me to go with the meal?",
+  "spec": "quiet|quieter|corner|away|booth|secluded; alcohol|alcoholic|nonalcoholic|teetotal|water|soft|tonic|squash|juice + kitchen|speakers|wine|beer|pint",
+  "correct": true,
+  "answer": "Siobhan should ask for a table well away from the kitchen doors and any speakers. For your drink, something cold and soft, like a sparkling water or a soft drink.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Plan me a weekend up at Siobhan's next month. How should I get there, and roughly when should I set off?",
+  "spec": "train|rail|coach|bus|sleeper|ferry|sea; morning|mornings|dawn|breakfast|earliest|forenoon + fly|flight|plane|afternoon|evening",
+  "correct": true,
+  "answer": "You'll be taking the train to Siobhan's. Given your preference for not taking red-eyes and needing an aisle seat for comfort on longer journeys, aim for a mid-morning train. This will get you there in daylight and allow you to settle in without rushing.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "There's a bare patch on the hall wall and I fancy a clock hanging there. Where should I be hunting for one, and what should be ticking away in it?",
+  "spec": "secondhand|used|auction|auctions|salvage|reclamation|charity|antique|antiques|vintage|clearance|market|junk; mechanical|clockwork|wound|winding|windup|spring|pendulum|fusee|weight + quartz|battery|new",
+  "correct": true,
+  "answer": "You should be looking for a **Vienna regulator** at a **horological fair** or a **house clearance**. Make sure it's a mechanical movement, not a battery one, and ideally one you can take apart with a screwdriver.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Siobhan keeps badgering me for a Christmas list and I've said socks and one small thing for the kitchen. What should she be looking for in each?",
+  "spec": "seamless|smooth|seamfree|flat; repairable|serviceable|repair|apart|dismantle|dismantled|screws|screwed|screwdriver|spares|parts + glued|sealed|clips|ridge|blister",
+  "correct": true,
+  "answer": "For socks, Siobhan should look for **seamless socks**, specifically those without a ridge across the toe.\n\nFor the kitchen, she should look for a **small appliance that can be taken apart with a screwdriver and put back together**, avoiding anything sealed shut with plastic clips.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The league is running a skills clinic next month with three separate streams and I can only sign up for one. Which stream should I put my name down for?",
+  "spec": "blocker|blockers|blocking|wall|defence|defensive + jammer|jamming|star",
+  "correct": true,
+  "answer": "Based on your history, you are a dedicated blocker who actively avoids jamming. You've also recently acquired new indoor wheels for better performance on the leisure centre floor.\n\nYou should sign up for the **blocking stream**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I've taken the job at the Shawlands practice and it's about four miles from the flat. Recommend how I should be getting there and back each day.",
+  "spec": "bike|bicycle|cycle|cycling|riding|pedalling + car|drive|driving|bus|taxi|subway",
+  "correct": true,
+  "answer": "Given your strong preference for cycling (\"I won't take a job I can't get to on the bike, twenty minutes door to door is my limit\") and your regular roller derby practice, cycling is the clear choice. Four miles is well within your twenty-minute limit, and it aligns with your active lifestyle. You're already comfortable riding at night along the canal, so evening commutes won't be an issue.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "There's one funded CPD place at the practice this year and I have to name the area I want it in on the form. Which should I ask for?",
+  "spec": "exotic|exotics|reptile|reptiles|bird|birds|avian + canine|dog|dogs|equine|feline",
+  "correct": true,
+  "answer": "Based on your clear preference expressed in April for the \"exotics ticket\" and your desire to work with birds and reptiles over traditional dog boosters, you should ask for a funded CPD place in **Exotic Animal Medicine**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm making the window panels for the van's sleeping end this weekend and there's a whole wall of fabric options. What is the one property the material absolutely has to have?",
+  "spec": "blackout|opaque|lightproof|lighttight|lightblocking|light blocking + sheer|net|mesh|translucent|thin",
+  "correct": true,
+  "answer": "The material absolutely has to be **100% opaque / blackout**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "There's a fella two hours away selling a part-converted van and I want to ask him about the MOT history and the rust. What's the best way for me to make first contact with him?",
+  "spec": "message|messages|text|texting|email|whatsapp|writing + call|calling|phone|ring|voicemail",
+  "correct": true,
+  "answer": "Given your preference for clear, direct communication and avoiding unnecessary back-and-forth, the best approach is to send a concise, detailed message upfront.\n\nText or email the seller. State your interest in the van and immediately ask for the MOT history and details on any rust. Mention you're two hours away, so you want to ensure it's worth the trip. This respects your time and the seller's, and gets straight to the information you need without a phone call.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I need a circular saw, a set of clamps and a workbench for the van build and I've got about \u00a3120 for the lot. Where should I be sourcing them from?",
+  "spec": "used|secondhand|second hand|marketplace|gumtree|charity|auction|preloved + brand new|retail|screwfix",
+  "correct": true,
+  "answer": "Given your budget of \u00a3120 for a circular saw, clamps, and a workbench, and your consistent preference for second-hand, value-driven purchases, I'd recommend the following:\n\n1.  **Circular Saw:** Look for a used corded circular saw on **Marketplace** or **Gumtree**. Brands like Bosch, Makita, or DeWalt are good quality even second-hand. You should be able to find one for \u00a330-\u00a350.\n2.  **Clamps:** Search **Marketplace** or **Gumtree** for job lots of F-clamps or G-clamps. People often sell sets cheaply when clearing out workshops. Aim for \u00a320-\u00a330 for a decent selection.\n3.  **Workbench:** A portable folding workbench like a Workmate (Black & Decker) is ideal for a van build, as it's sturdy but can be stored away. These frequently appear on **Marketplace** or **Gumtree** for \u00a340-\u00a360.\n\nThis approach aligns with your past successful purchases of a socket set and jigsaw from Marketplace, and second-hand roller derby wheels from Gumtree, ensuring you get functional tools without paying new prices or interest.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I want to put in for two weeks off for a Highlands trip where I'd be sleeping outdoors and walking through fields most days. Which part of the year should I be asking for?",
+  "spec": "september|october|autumn|november|winter + may|june|july|summer|grass",
+  "correct": true,
+  "answer": "Based on your history, the best time for your Highlands trip would be **late September to early October**.\n\nThis avoids your severe hayfever season (May-June), the heatwaves you dislike (April), and the midges that would likely be out in force during summer. By late September, pollen counts are typically very low, and temperatures are cooler but still pleasant for outdoor activities.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "A six-week upholstery evening class runs one night a week and they'll take me on whichever weeknight I ask for. Which should I book?",
+  "spec": "monday|wednesday|friday + tuesday|thursday",
+  "correct": true,
+  "answer": "Book the upholstery class for **Wednesday** or **Friday** evening.\n\nTuesday and Thursday evenings are for roller derby practice. Sunday evenings are out due to the user's new policy of not taking Sunday shifts after Saturday bouts, indicating a need for rest. Monday evenings are not explicitly ruled out, but Wednesday and Friday are completely clear of known commitments.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The van I'm looking at will need a \u00a3900 gearbox job almost straight after I buy it, and I'll have about \u00a31,100 put by. Recommend how I should cover that bill.",
+  "spec": "cash|savings|saved|outright|upfront|debit + credit|finance|klarna|clearpay|loan|instalments",
+  "correct": true,
+  "answer": "You have \u00a31,100 saved for the van, and the gearbox job is \u00a3900. Your stated preference is to buy the van outright and not pay interest to anyone.\n\nGiven this, the recommendation is straightforward: **Pay for the gearbox repair directly from your \u00a31,100 savings.** This leaves you with \u00a3200, which aligns with your goal of avoiding interest and buying outright.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "I'm putting in a personal order for a box of gloves for work and a couple of resistance bands to keep in my locker. What should I be checking the material is on both?",
+  "spec": "nitrile|vinyl|synthetic|fabric|cloth|tpe|neoprene + latex|rubber",
+  "correct": true,
+  "answer": "For gloves, you should stick with **nitrile**. You previously bought your own box of nitrile gloves because the ones in the prep room caused welts on your hands.\n\nFor resistance bands, look for **latex-free** options. You've shown a strong sensitivity to allergens, particularly pollen, and avoid perfumed products, indicating a general preference for hypoallergenic materials.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Worst pollen day of the year tomorrow and I'm on a full surgical list from eight till six. Which kind of hay fever tablet should I ask the pharmacist for?",
+  "spec": "nondrowsy|non drowsy|nonsedating|cetirizine|loratadine|fexofenadine|acrivastine + piriton|chlorphenamine|sedating|promethazine|hydroxyzine",
+  "correct": true,
+  "answer": "Given your history of severe hay fever and your absolute refusal to take anything that \"may cause drowsiness\" while monitoring anaesthetics for eight hours, you should ask the pharmacist for a **non-drowsy antihistamine**.\n\nSpecifically, mention that you need something that will not impair your concentration or cause sedation, as you'll be on a full surgical list.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Ruaridh wants us to settle on one laundry liquid and one all-purpose spray for the whole flat instead of buying four each. What should I tell him to check for on the label?",
+  "spec": "unscented|scentless|fragrance free|fragrancefree|nonbio|hypoallergenic|sensitive + scented|perfumed|fragranced|floral|linen",
+  "correct": true,
+  "answer": "For laundry liquid and all-purpose spray, tell Ruaridh to check for labels that explicitly state \"unscented\" or \"fragrance-free.\" Avoid anything with added perfumes or essential oils.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Sunday batch cook, one big traybake that has to do me four dinners in the week. What should I build it around?",
+  "spec": "chickpeas|chickpea|beans|lentils|tofu|halloumi|paneer + chicken|thighs|mince|beef|bacon|sausage",
+  "correct": true,
+  "answer": "Based on your history, you've previously made a \"chicken thigh and rice traybake\" for four dinners, but more recently, you've gone six weeks without meat and are not going back, with your traybake now being \"chickpeas and roast veg.\"\n\nFor your Sunday batch cook, I recommend a **Chickpea and Root Vegetable Traybake with Rice**.\n\nRoast a mix of root vegetables like carrots, parsnips, and sweet potatoes (all good for batch cooking and hold up well), alongside chickpeas, seasoned with herbs like rosemary or thyme, and a good amount of olive oil. Serve it over a base of rice, which you can cook separately or bake alongside the vegetables if you have a large enough tray. This aligns with your current vegetarian preference, your established traybake method, and provides a hearty, cost-effective meal for four dinners.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The league is putting a bulk order in with the skate shop this week and I have to tell them what wheels I want for the season. Which should I ask for?",
+  "spec": "hard|harder|indoor|88a|90a|92a|95a + soft|softer|outdoor|78a|85a",
+  "correct": true,
+  "answer": "You should ask for **hard indoor wheels**.\n\nYour current soft 78a outdoor wheels are \"hopeless\" on the leisure centre floor, causing you to slide out on plough stops. You explicitly stated you \"need proper hard indoor ones before the first home bout.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I want two extra paid shifts a month to speed the van fund up and the agency has both kinds going. Which kind should I be putting myself down for?",
+  "spec": "day|days|daytime|morning|afternoon|weekday + night|nights|overnight|nightshift",
+  "correct": true,
+  "answer": "Based on your history, you should prioritize the **night shifts at the emergency place**.\n\nYou've explicitly stated that these night shifts are \"honestly the only reason the van fund is moving at all,\" indicating they are effective for your savings goal. While you previously found nights \"wrecking,\" your new day rota started in September, suggesting you're no longer doing three overnights in a row, which was the primary issue. You also value the ability to cycle to work, and night shifts often have less traffic, making the \"twenty minutes door to door\" limit more achievable.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Time to commit to how the van's heating and its hob are powered before I order anything. What should each of them run on?",
+  "spec": "diesel|electric|12v|nightheater; induction|electric|battery|12v + gas|propane|lpg|butane|bottle",
+  "correct": true,
+  "answer": "Based on your preferences:\n\n*   **Heating:** A diesel heater off the main tank.\n*   **Hob:** An induction ring off the leisure battery.\n\nYou've explicitly stated \"no gas in anything I sleep in\" and mentioned a diesel heater and induction ring as alternatives.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "On the weeks I can't get to the track I want to do 20 minutes of strength in the living room after work. What style of session should I build, and what should I check the resistance bands are made of before I order a set?",
+  "spec": "bodyweight|isometric|quiet|controlled|static|lowimpact|low impact; fabric|cloth|tpe|neoprene|cotton|synthetic + plyometric|burpees",
+  "correct": false,
+  "answer": "For your 20-minute living room strength sessions, focus on compound movements that mimic the demands of blocking and skating, using your body weight and resistance bands. Aim for a full-body circuit with minimal rest between exercises to keep the intensity up.\n\n**Workout Style:**\nA circuit of 4-5 exercises, performed for 45 seconds each with 15 seconds rest, repeated 2-3 times. This will keep you moving and hit multiple muscle groups efficiently within your 20-minute window.\n\n*   **Lower Body:** Banded squats, lunges (forward/reverse), glute bridges (with band around knees). These will build power for pushes and stability for skating.\n*   **Upper Body/Core:** Banded rows (anchored to a door or furniture), push-ups (on knees or toes), planks (front and side). Essential for maintaining position and absorbing hits.\n*   **Dynamic/Plyometric (if space allows and neighbours aren't an issue):** Step-ups onto a sturdy chair/bench (if you have one), or high knees/butt kicks in place. Given your past note about noise, be mindful of jumping.\n\n**Resistance Bands:**\nGiven your skin sensitivity (welts from gloves, allergies), prioritize **latex-free** resistance bands. Many brands offer TPE (Thermoplastic Elastomer) or fabric bands as alternatives, which are generally hypoallergenic and durable. Check the product description carefully for \"latex-free\" before ordering.",
+  "missed": [
+   "bodyweight|isometric|quiet|controlled|static|lowimpact|low impact"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Home bout on the Saturday and the end-of-season night out is straight after it. What should I be drinking at the party, and what should I put in the diary for the day after?",
+  "spec": "soft|alcoholfree|alcohol free|nonalcoholic|zero|lime|soda; rest|resting|recovery|recover|nothing|lying|off + beer|wine|pint|cider|prosecco|shift|overtime",
+  "correct": true,
+  "answer": "At the party, stick to lime and soda. For the day after, plan for a day of lying still.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I've got a week of annual leave to throw at the van \u2014 cutting the roof for the vent, insulating, all of it done out on the street. When in the year should I book it, and where should I be getting the vent and the ply from?",
+  "spec": "september|october|autumn|november|winter; used|secondhand|second hand|marketplace|gumtree|reclaimed|salvage + june|july|may|summer|brand new|screwfix",
+  "correct": true,
+  "answer": "Book your annual leave for the van conversion in **late September or early October**. This avoids your severe hay fever season (May-August) and the heatwave conditions you've experienced, while still offering reasonable weather for outdoor work before winter sets in.\n\nFor the vent and plywood, source them from **Marketplace or Gumtree**. You've successfully found good deals on tools and skate wheels there, aligning with your preference for buying outright and avoiding new costs where possible.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "The new locum starts next week and wants a proper handover with me over a coffee some evening, and she's flexible on when. Which evening should I offer, and how should I set it up with her?",
+  "spec": "monday|wednesday|friday; message|text|email|whatsapp|writing + tuesday|thursday|call|phone|ring",
+  "correct": false,
+  "answer": "Offer to meet on a **Monday or Wednesday evening**.\n\nSuggest a coffee shop near your work or home that's easily accessible by bike, and propose a specific time that allows you to get there directly after work without rushing. Emphasize that you're happy to keep it brief, as you prefer not to linger after work.",
+  "missed": [
+   "message|text|email|whatsapp|writing"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm renting a bit of space near the bakery for recipe development and the paperwork \u2014 what's the one thing I should insist on before I sign?",
+  "spec": "door|doors|separate|private|enclosed|closed|soundproof|soundproofed|quiet|silent|walls + open-plan coworking",
+  "correct": true,
+  "answer": "Insist on a room with a door that shuts.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The cracked side cover on the CB has to be dealt with before the summer runs \u2014 what kind of replacement should I be looking for?",
+  "spec": "original|originals|genuine|oem|period|nos|salvage|scrapyard|breaker|donor|secondhand|second-hand|authentic|factory + reproduction repro aftermarket",
+  "correct": true,
+  "answer": "You've been clear about preferring genuine period parts over shiny new plastic reproductions for your 1976 CB. Wait for a genuine period left side cover, even if it takes six months.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The CB is due an oil change before the good weather \u2014 what should I be pouring into it?",
+  "spec": "mineral|monograde|straight|20w50|20w 50|non-synthetic|nonsynthetic|conventional + synthetic",
+  "correct": true,
+  "answer": "For your 1976 CB, stick with **straight mineral 20W50**, as the manual specifies. Modern synthetics aren't designed for its tolerances.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm costing the cr\u00e8me p\u00e2tissi\u00e8re for the new \u00e9clair line \u2014 in what form should I be buying the vanilla for it?",
+  "spec": "pod|pods|whole|vanilla beans + essence extract",
+  "correct": true,
+  "answer": "You should be buying whole vanilla pods for your cr\u00e8me p\u00e2tissi\u00e8re.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The sourdough line needs a steady weekly supply of flour \u2014 where should I be getting it from?",
+  "spec": "mill|mills|miller|moinho|market|mercado|stall|local|independent|producer|producers|regional|artisan|artisanal + distributor wholesaler catalogue",
+  "correct": true,
+  "answer": "You should source your flour directly from the mill at Alcanh\u00f5es. You've already visited, appreciate their stone-ground flour, and prefer it over cheaper distributor options, even bringing sacks home yourself. This aligns with your preference for direct, quality sourcing over convenience or cost-cutting from large suppliers.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I want to keep proper track of my mileage and paces this season \u2014 what should I use to keep the record in?",
+  "spec": "paper|notebook|notebooks|logbook|pen|pencil|printed|printout|print|diary|journal|handwritten|by hand + app phone spreadsheet strava",
+  "correct": true,
+  "answer": "Based on your clear preference for physical, tangible records over digital ones, and your aversion to apps and screens for important data:\n\nA dedicated running logbook or a simple notebook with a pen. You've shown a strong preference for physical manuals and plans, and you track shop numbers in a notebook. This allows you to record details without relying on a phone or app, and avoids the issues you've had with digital tools.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I'm putting a hot chocolate on the menu for the cold months \u2014 what kind of chocolate should I build it on?",
+  "spec": "dark|bitter|bittersweet|70|75|80|85|semisweet|semi-sweet|intense|noir + milk white",
+  "correct": true,
+  "answer": "Based on your preference for 80% chocolate over milk chocolate, and your general inclination towards less sweetness (e.g., pulling sugar from \u00e9clair cream, no honey in fig bars), I recommend building your hot chocolate on an **80% dark chocolate**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I've got three free days with In\u00eas in August and want to book us somewhere \u2014 what kind of place should I look for?",
+  "spec": "beach|beaches|sea|seaside|coast|coastal|ocean|shore|sand|surf|waves|caparica|sesimbra|comporta|arr\u00e1bida|arrabida + inland museum",
+  "correct": true,
+  "answer": "Look for a quiet, coastal place with good walking paths and access to fresh, local food, especially grilled fish. Somewhere with a calm beach where In\u00eas can go into the sea, and ideally, a local market for you to explore. Avoid places that are overly crowded or require extensive driving on motorways.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "In\u00eas wants a crunchy layer running through the middle of her birthday cake \u2014 what should I make that crunch from?",
+  "spec": "seed|seeds|sesame|sunflower|pumpkin|oat|oats|puffed|rice|cereal|cornflake|cornflakes|nib|nibs|coconut|wafer|nut-free|nutfree|without nuts|no nuts|avoid nuts|allergy|allergies|allergen|allergens + praline nougatine almond hazelnut",
+  "correct": true,
+  "answer": "Given In\u00eas's nut allergies, you'll need a nut-free crunch.\n\nMake a **feuilletine crunch** using crushed, store-bought cr\u00eapes dentelles (check for nut-free certification) mixed with melted chocolate (the 80% you prefer, or a milk chocolate if In\u00eas prefers it, ensuring it's nut-free). Press it into a thin layer and chill.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "I want to ride the CB down to a classic meet in \u00c9vora, about 130 km each way \u2014 what sort of route should I plan?",
+  "spec": "backroad|backroads|back roads|country|secondary|national|minor|scenic|smaller|quieter|inland + motorway a2 autoestrada toll",
+  "correct": true,
+  "answer": "Given your 1976 CB with drum brakes and forty-year-old geometry, avoid motorways entirely. Plan a route that sticks to national roads (N-roads) and smaller regional roads, even if it adds a little time. Focus on scenic routes through the hills, similar to your ride to Colares, to enjoy the journey and keep speeds moderate.\n\nSince you're now on a first-light running schedule, consider an early start to enjoy the quiet roads before traffic picks up. Pack your own fig bars for fuel, and bring a basic repair kit for electrical issues, as you've shown you're capable of roadside fixes.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "A catering agency wants me on a regular Wednesday evening dessert service starting next month, and the money is good. What should I tell them?",
+  "spec": "decline|declining|refuse|refusing|turn it down|turn them down|turn down|turning it down|turning them down|turning down|say no|no thanks|pass on it|pass on this|passing on|reschedule|rescheduling|another night|different night|another evening|different evening|tuesday|thursday|monday + wednesdays in\u00eas",
+  "correct": false,
+  "answer": "Tell them no. Wednesday evenings belong to In\u00eas, and you've explicitly stated that nothing gets booked into them. The money might be good, but your commitment to her schedule is a non-negotiable.",
+  "missed": [
+   "decline|declining|refuse|refusing|turn it down|turn them down|turn down|turning it down|turning them down|turning down|say no|no thanks|pass on it|pass on this|passing on|reschedule|rescheduling|another night|different night|another evening|different evening|tuesday|thursday|monday"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The dough sheeter I want is six thousand and the dealer has offered it over twenty-four months at zero interest. How should I go about buying it?",
+  "spec": "outright|upfront|up front|in full|full amount|lump|one payment|single payment|one go|all at once|pay cash|in cash + instalments installments financing credit",
+  "correct": true,
+  "answer": "You've already made your decision on this one: \"I told them I'd wait until I can pay it outright, because I've never owed anyone money and I'm not starting at forty-one.\"\n\nStick to that. Save up the six thousand and buy it outright when you have the cash. You value financial independence and avoiding debt, and that's a principle worth upholding, even for a zero-interest offer.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I want to add a third run to the week \u2014 what time of day should I put it?",
+  "spec": "morning|mornings|dawn|daybreak|first light|sunrise|sunup|before the shop|before work + night nine evening",
+  "correct": true,
+  "answer": "Add your third run to the early afternoon, around 14:00. You're already accustomed to early starts, and this avoids the late-night run you've moved away from, as well as the early morning slot you now use for your primary runs. It also fits your preference for quiet times, as the city will be less active than during peak hours.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The club's term fees are due and I can only renew one thing for In\u00eas \u2014 which should I pay for?",
+  "spec": "judo|dojo|martial|belt|grading + swimming pool",
+  "correct": true,
+  "answer": "Based on the excerpts, In\u00eas \"still hauls herself out at the end like someone released from custody\" from swimming lessons, and later \"asked to stop swimming and start judo.\" She found her \"people\" in judo after two trial classes.\n\nRenew judo.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The autumn half is six weeks out \u2014 what should I be carrying to eat during the race itself?",
+  "spec": "fig|figs|rice|homemade|home-made|squares|real food|whole food|own bars|homemade bars + gel gels sachet",
+  "correct": true,
+  "answer": "For the autumn half, stick with your homemade bars made from dried figs from Dona F\u00e1tima's stall, cooked rice, and a pinch of salt. They've proven effective for 20km runs without stomach issues, and you've already binned the gels.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The CB's charging circuit is dead again and the battery won't hold anything. How should I get it sorted?",
+  "spec": "z\u00e9|ze|shop|specialist|professional|auto-electrician|electrician|mechanic|expert|workshop|pro|take it in + yourself myself soldering diy",
+  "correct": true,
+  "answer": "Take it to Z\u00e9. He's now responsible for anything electrical on the bike, and you'd rather pay him to fix it properly than try to do it yourself with a temporary fix. He'll know where to source genuine period parts if needed, and you'll pay him outright when the work is done.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I need to block out a full day to write next season's menu and redo the costings \u2014 where should I do it, and what should I be writing in?",
+  "spec": "quiet|quieter|private|door|enclosed|closed|empty|alone|silent|undisturbed; paper|notebook|pen|pencil|printed|printout|handwritten|by hand + open-plan coworking app",
+  "correct": false,
+  "answer": "You should block out a full day to work at the back table of your shop, after everyone has gone home. Write in a physical notebook, like the one where you keep the shop's numbers, or the greasy photocopy manual for your CB.",
+  "missed": [
+   "quiet|quieter|private|door|enclosed|closed|empty|alone|silent|undisturbed"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I'm riding the CB up to \u00d3bidos for a wedding, eighty kilometres, and she hasn't been serviced since the spring. What route should I take, and what should go in the engine beforehand?",
+  "spec": "backroad|backroads|back roads|country|secondary|national|minor|scenic|smaller|quieter|inland; mineral|monograde|straight|20w50|20w 50|non-synthetic|conventional + motorway a2 synthetic",
+  "correct": true,
+  "answer": "For the ride to \u00d3bidos, take the scenic route through the hills, avoiding motorways, as the CB is best suited for that kind of journey.\n\nBefore you go, top up the engine with straight mineral 20W50 oil, as per the manual. Don't use modern synthetics.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I'm building a chocolate tart for the autumn menu \u2014 what kind of chocolate should it be made with, and where should I get it?",
+  "spec": "dark|bitter|bittersweet|70|75|80|85|semisweet|semi-sweet|intense; small|local|independent|importer|producer|artisan|artisanal|market|mercado|specialist|craft|single-origin|maker + milk supermarket distributor",
+  "correct": false,
+  "answer": "For your chocolate tart, use an **80% dark couverture chocolate**.\n\nYou should source it from **Tiago**, as he brings back samples from the salon, indicating a professional and high-quality supply. This aligns with your preference for intense chocolate flavour over sweetness, and your general approach to sourcing quality ingredients directly.",
+  "missed": [
+   "small|local|independent|importer|producer|artisan|artisanal|market|mercado|specialist|craft|single-origin|maker"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "A complete exhaust system for the CB is coming up at a swap meet and the seller will split it over three months. What kind of system should I be after, and how should I settle up?",
+  "spec": "original|originals|genuine|oem|period|nos|authentic|factory|salvage|donor|secondhand|second-hand; outright|upfront|up front|in full|full amount|lump|one payment|single payment|one go|all at once|pay cash|in cash + reproduction repro instalments",
+  "correct": true,
+  "answer": "You're after a genuine period exhaust system for the CB, not a reproduction, even if it means waiting. Pay for it outright when you have the cash, don't take the three-month payment plan.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The band is bunking at a friend's place in Sackville again on the fall run and there is space for me if I don't mind the living room. Where should I plan to sleep?",
+  "spec": "hotel|motel|airbnb|bnb|hostel|guesthouse + couch floors",
+  "correct": true,
+  "answer": "Book your own motel. You are thirty-three and done sleeping on other people's floors.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "A promoter I have never worked with in Owen Sound wants me for a two-night booking in October. What should I nail down in writing before I say yes to the dates?",
+  "spec": "deposit|deposits|upfront|up front|retainer|prepayment|advance + 50 half",
+  "correct": true,
+  "answer": "Before saying yes to the Owen Sound booking, nail down these points in writing:\n\n1.  **Payment Terms:** 50% up front, balance on the night.\n2.  **Day Rate:** $400 per day.\n3.  **Travel:** Train travel to Kingston was preferred for productivity and wrist comfort; consider if Owen Sound is accessible by train or if driving is unavoidable, ensure travel time is accounted for.\n4.  **Accommodation:** Your own motel room, paid for by you, but ensure the schedule allows for it and doesn't expect shared accommodation.\n5.  **Load-in/Load-out:** A paid local hand for load-in and load-out must be part of the deal.\n6.  **Schedule:** Nothing before noon on any job.\n7.  **Ear Protection:** Ensure you have your custom moulded plugs.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The shop on Dundas is holding a pair of tank-bred clowns for me and I collect them Saturday. Walk me through what should happen the moment I get them home.",
+  "spec": "quarantine|quarantined|quarantining|hospital|isolation|isolate + thirty 30 ich",
+  "correct": true,
+  "answer": "When you get those tank-bred clowns home on Saturday, here's the plan:\n\n1.  **Straight to the hospital tank:** Do not put them directly into your display tank. Your hospital tank in the closet is exactly for this.\n2.  **Quarantine for 30 days:** No exceptions. This is crucial to prevent any disease, especially ich, from entering your main system.\n3.  **No tap water, ever:** Only use RO/DI water for any top-offs or water changes in the hospital tank.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I have been offered a two-week residency in Montreal in the spring. What do I need to line up at home before I commit to it?",
+  "spec": "sitter|sitters|sitting|caretaker|feeder|minder|devi + tank third",
+  "correct": true,
+  "answer": "Based on your history, here's what you need to line up before committing to a two-week residency in Montreal:\n\n1.  **Aquarium Care:** Arrange for Devi to cover the full two weeks for your softies and LPS tank, ensuring she has the key and is paid properly.\n2.  **Work Schedule:** Block out your calendar to ensure no early morning commitments (nothing before noon) and plan for train travel for any gigs before or after the residency to avoid driving fatigue.\n3.  **Financials:** Ensure your $400/day rate is confirmed for any work related to the residency, and consider the cost of a motel for any necessary overnight stays if the residency involves shared accommodation.\n4.  **Physical Comfort:** Pack your custom moulded earplugs for any performances, and ensure you have acetaminophen and an ice pack for wrist pain. Avoid NSAIDs.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I am micing up a fiddle player for a live-off-the-floor session next month. What kind of microphone should I reach for?",
+  "spec": "ribbon|ribbons + condenser dynamic",
+  "correct": true,
+  "answer": "You've had good success with a ribbon microphone on Nell's fiddle, noting it \"sat in the mix without me fighting it.\" Given your preference for quality gear (custom earplugs, better road case, higher rates) and the specific mention of a ribbon mic working well for you in a live context, I'd recommend reaching for a **ribbon microphone**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "My headphone amp finally died and I need another one before the fall run, without spending much. How should I go about buying the replacement?",
+  "spec": "used|secondhand|second hand|preowned|refurbished|kijiji|marketplace + new",
+  "correct": true,
+  "answer": "Given your preference for durable, cost-effective gear and your recent positive experience with second-hand equipment, I recommend looking for a used headphone amp on Kijiji. Prioritize models known for being \"built like a brick\" \u2013 you've had good luck with that approach for your DI box. This aligns with your pattern of finding value in pre-owned, robust items without overspending.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I want to add a couple of new corals this spring. Where should I be getting them from?",
+  "spec": "swap|swaps|club|hobbyist|hobbyists|local|locally + online shipped",
+  "correct": true,
+  "answer": "You should look for softies and LPS corals, specifically zoas, leathers, and hammer corals. Your best bet for acquisition is the reef club swap in Scarborough, where you've found good deals and frags in the past.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "Robin is ordering pizza for the green room tonight and asked what she should put on mine. What should I tell her?",
+  "spec": "vegetarian|veggie|vegan|meatless|mushroom|mushrooms|margherita|plant + meat pepperoni",
+  "correct": true,
+  "answer": "You're allergic to shellfish, so definitely no seafood. You've enjoyed squash and chickpea roti, and eggplant sandwiches, suggesting a preference for vegetarian options. Ask for a vegetarian pizza, perhaps with eggplant or roasted vegetables.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The Peterborough room wants me back and load-in is a flight of stairs up from the alley with no house staff at all. What should I sort out before I confirm the date?",
+  "spec": "hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader + lifting carrying wrist",
+  "correct": false,
+  "answer": "You need to confirm that the Peterborough room will pay for a local crew member for both load-in and load-out, and that 50% of your fee will be paid upfront, with the balance on the night. Your day rate is now $400.",
+  "missed": [
+   "hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The reef has dropped a couple of litres in this heat wave. What should I be topping it back up with?",
+  "spec": "ro di|rodi|reverse|osmosis|distilled|deionized|deionised + tap",
+  "correct": true,
+  "answer": "Top it up with RO/DI water. You learned the hard way that nothing else goes into that tank.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The physio has a standing weekly slot open for the rest of the season and I need to claim one. What time of day should I ask them for?",
+  "spec": "afternoon|afternoons|evening|evenings|midday|noon|later|pm + morning early",
+  "correct": true,
+  "answer": "You should ask for a physio slot in the **afternoon**, ideally **after 3 PM**.\n\nYou consistently avoid anything before noon due to late nights from shows, and you've recently started taking the train for out-of-town gigs, which allows you to work during travel, making early mornings less critical for focused work.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "Wrist is throbbing after a four-hour load-out and I have nothing in the bag for it. What painkiller should I pick up at the drugstore on the way home?",
+  "spec": "acetaminophen|tylenol|paracetamol + ibuprofen advil naproxen",
+  "correct": true,
+  "answer": "Based on your history, your doctor explicitly advised \"no more NSAIDs, not for the wrist, not for anything\" due to stomach issues. You now reach for \"Acetaminophen and an ice pack.\"\n\nPick up **acetaminophen** at the drugstore.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I have a Friday show in Kingston and I need to be back in the city by Saturday afternoon. How should I get myself there and back?",
+  "spec": "train|trains|rail|railway + drive driving car",
+  "correct": true,
+  "answer": "Take the train to Kingston on Friday. For your return, either take the train back on Saturday or drive your own car if you need the flexibility, but be mindful of your wrist.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I am at the desk for a brass-heavy bill at the Horseshoe on Friday and that room is low and hard. What should I have in my ears for it?",
+  "spec": "custom|moulded|molded|filtered|filters|filter|musicians + foam drugstore",
+  "correct": true,
+  "answer": "You should use the custom moulded plugs with 15 dB filters that you picked up on College. They pull the level down without eating the top end, which is crucial for mixing, especially with brass. The drugstore foam plugs you used previously in that room made everything above 4 kHz vanish, which you want to avoid.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "A festival is asking what I charge per day for a two-day contract. What number should I give them?",
+  "spec": "400|800|four hundred|eight hundred + 250",
+  "correct": true,
+  "answer": "Based on your recent pricing adjustments, you should quote the festival **$400 per day**.\n\nAdditionally, ensure the contract includes:\n*   **50% up front** before you start work, with the balance paid on the night.\n*   A **paid local hand** for load-in and load-out.\n*   No work scheduled **before noon**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The shop got a shipment in and I have one open spot on the rock. What kind of coral should I be looking at?",
+  "spec": "softie|softies|soft|lps|zoa|zoas|mushroom|mushrooms|leather|leathers|euphyllia|hammer + sps acropora acros",
+  "correct": true,
+  "answer": "Based on your recent shift, you should be looking for **LPS corals** or **zoanthids**. You sold off your acros and are now focusing on a \"softies and LPS tank,\" specifically mentioning zoas, leathers, and one hammer coral.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Two-day booking in Ottawa in November, and the venue says load-in is one flight up with nothing in the way of house staff. How should I travel, and what do I need in the deal before I confirm?",
+  "spec": "train|trains|rail|railway; hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader + drive lifting",
+  "correct": false,
+  "answer": "For the Ottawa booking:\n\n**Travel:** Take the train. It allows you to work, avoids the 401, and prevents wrist issues from long drives. Book an aisle seat.\n\n**Deal Requirements:**\n1.  **Payment:** 50% up front, balance on the night.\n2.  **Load-in/out:** A paid local hand for load-in and load-out is non-negotiable.\n3.  **Accommodation:** Book your own motel room; do not rely on band arrangements.\n4.  **Rate:** Quote your new $400/day rate.",
+  "missed": [
+   "hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Three-week Maritimes run in February and the band is staying with friends the whole way. What do I need to arrange at home, and what should I do about where I sleep?",
+  "spec": "sitter|sitters|sitting|caretaker|feeder|minder|devi; hotel|motel|airbnb|bnb|hostel|guesthouse + couch floors",
+  "correct": true,
+  "answer": "For your three-week Maritimes run in February:\n\n**At Home:**\n*   Arrange for Devi to care for your softies and LPS tank, ensuring she has the key and is paid properly.\n*   Ensure your car is ready for the trip, as you prefer driving yourself for flexibility.\n\n**Sleeping Arrangements:**\n*   Book your own motel rooms for the entire run. You are done sleeping on other people's floors, even if it means eating the cost yourself.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "A new promoter in Guelph wants a planning call to lock down a two-nighter. What should I settle in writing before I agree to the dates, and when in the day should I ask for the call?",
+  "spec": "deposit|deposits|upfront|up front|retainer|prepayment|advance; afternoon|afternoons|evening|evenings|midday|noon|later|pm + morning 50",
+  "correct": true,
+  "answer": "For the planning call, ask for it **after noon**. You've consistently stated you're never in bed before three after a show and won't take anything before noon ([2026-02-23]).\n\nBefore agreeing to dates, settle the following in writing:\n\n1.  **Payment Terms:** 50% up front before you put a hand on a cable, balance on the night ([2026-01-26]).\n2.  **Day Rate:** Your current rate is $400 a day ([2026-05-11]).\n3.  **Load-in/Load-out Crew:** A paid local hand for load-in and load-out must be included in the deal ([2026-03-23]).\n4.  **Accommodation:** Your own motel room, not shared accommodation ([2026-04-20]).",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I need another microphone for the fiddle-and-banjo act before the fall run and I am watching every dollar. What should I be looking for, and how should I buy it?",
+  "spec": "ribbon|ribbons; used|secondhand|second hand|preowned|refurbished|kijiji|marketplace + new",
+  "correct": true,
+  "answer": "You've mentioned using a ribbon mic on Nell's fiddle multiple times, and that it \"sat in the mix without me fighting it\" and \"sat right where I put them.\" This suggests you're happy with the sound profile of a ribbon for fiddle.\n\nGiven you're watching every dollar, look for a used passive ribbon microphone. A good option would be a **Cascade Fat Head II** or a **Nady RSM-4**. These are robust, well-regarded entry-level ribbons that can often be found used for a good price.\n\nCheck Kijiji (you've used it before for the DI box) or local music gear forums. You're comfortable with second-hand gear and know how to spot a good deal (like the road case). Ensure it's passive, as you're already using a DI box and likely have preamps that can handle it.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The old telly in the lounge has finally died and I am replacing it this week. What feature should I insist on in the new one?",
+  "spec": "subtitle|subtitles|caption|captions|dialogue|speech|soundbar|headphones",
+  "correct": true,
+  "answer": "Given your preference for physical media over e-readers, and your reliance on captions for watching anything now, you should insist on a new telly with **excellent, easily accessible closed captioning features**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The geography teachers' association is running a study tour of the Flinders Ranges and lets you set your own dates. How many nights should I book?",
+  "spec": "three|3|shortest|minimum|briefest + week|fortnight|seven|ten|five",
+  "correct": true,
+  "answer": "Based on your history, particularly your need to maintain routine for your mother, your preference for shorter trips away, and your physical limitations (knee, back, thumbs), I recommend booking **three nights** for the Flinders Ranges study tour. This aligns with your stated maximum for being away from your mother without disrupting her routine, and allows for a focused study tour without overextending yourself physically.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "My old garden shears have finally given up. What two things should I be checking when I pick a replacement pair up in the shop?",
+  "spec": "light|lighter|lightweight|weight; grip|grips|handle|handles|ratchet|cushioned|padded",
+  "correct": true,
+  "answer": "Based on your history, here are two things to check when picking out new garden shears:\n\n1.  **Weight and Grip:** Look for shears that are explicitly lightweight and have an ergonomic grip that doesn't require you to \"grip hard.\" Your physio was clear about arthritis in your thumbs, so anything heavy or requiring a strong grip is out.\n2.  **Leverage/Mechanism:** Consider shears with a ratcheting or geared mechanism. This will reduce the force needed to cut, accommodating your thumbs and ensuring you don't have to \"grip hard\" or \"carry heavy.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The Field Naturalists want me to lead a half-day ramble in February and have left it to me which day of the weekend it runs on. Which day should I give them, and what is the reason?",
+  "spec": "sunday|sundays; pennant|bowls|club|fixture|match|competition + saturday|saturdays",
+  "correct": true,
+  "answer": "You should schedule the ramble for **Sunday**.\n\nSaturdays are consistently booked for pennant bowls from September through March, as noted in your February 2nd entry. Sundays, however, appear to be more flexible, with your only recorded Sunday activity being a nature documentary with your mum, which could be adjusted.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I am on the roster for the club's all-day carnival in February and I get to claim a spot to set my chair up. Which part of the green should I go for, and what should I take with me?",
+  "spec": "shade|shaded|shady|umbrella|awning|marquee|tree|trees|pines",
+  "correct": true,
+  "answer": "For the club's all-day carnival in February, set your chair up on the far rink under the pines. Bring your paperbacks (not an e-reader), a thermos of peppermint tea, and wear your walking boots.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I have a ticket to a two-hour author talk at the Town Hall and they let you choose your own seat when you book. Which seat should I go for?",
+  "spec": "aisle|end|edge|walkway|corridor|outer + middle|centre|center",
+  "correct": true,
+  "answer": "Go for an aisle seat, towards the back or side of the hall, away from direct light sources, and ensure you have a clear view of any screens or captions.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The community college has asked me to run a six-week map-reading course in the January break and left the timetable completely up to me. What time of day should I schedule the sessions for?",
+  "spec": "morning|mornings|early|earlier|dawn|daytime|breakfast + evening|evenings|night|nights",
+  "correct": true,
+  "answer": "Based on your habits and preferences, I recommend scheduling the map-reading course for **early mornings, specifically starting around 7:00 AM or 7:30 AM**.\n\nThis aligns with your established routine of being up and productive before 6 AM, and avoids the glare and heat you experience later in the day, which affects your vision and comfort. It also leaves your afternoons free for other commitments or personal time.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I am going in to the Art Gallery on North Terrace for the map exhibition on a Sunday. How should I get in from Mitcham?",
+  "spec": "tram|train|bus|buses|public|transport|walk|walking + drive|driving|park|parking|car",
+  "correct": true,
+  "answer": "Take the tram from Mitcham to the city. You can leave the car at Mitcham and avoid paying to sit in traffic on Grote Street.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The faculty dinner in October asks everyone to nominate their main course a fortnight ahead off a fixed menu. What should I put down?",
+  "spec": "vegetarian|vegan|veggie|vegetables|mushroom|halloumi|gnocchi|eggplant|lentil|risotto + chicken|beef|lamb|steak|fish|salmon|prawn|pork|duck",
+  "correct": true,
+  "answer": "Based on your history, you should put down a **vegetarian or vegan option**. You've been meat-free for four decades, and while you've had garden salad and chips at a steakhouse, a dedicated vegetarian dish would be preferable. Given your shellfish allergy, ensure it's not a seafood-based vegetarian option.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The principal wants me to nominate one fixed day each week to run the Year 10 fieldwork tutorial for the rest of the year. Which day should I put my hand up for?",
+  "spec": "monday|tuesday|thursday|friday + wednesday|wednesdays",
+  "correct": true,
+  "answer": "Based on your commitments, **Tuesday** is the best day for the Year 10 fieldwork tutorial.\n\nThis avoids:\n*   **Wednesdays:** Dedicated to Mum's appointments.\n*   **Saturdays:** Booked for pennant bowls from September to March.\n*   **Mondays/Fridays:** Likely pool mornings, and you prefer to avoid long highway runs, which fieldwork might entail.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "At the presentation night next month somebody will inevitably shout me a drink at the bar. What should I ask for?",
+  "spec": "soda|lime|lemonade|water|juice|ginger|tonic|mocktail|cordial + beer|wine|shiraz|champagne|bubbly|spirits|whisky",
+  "correct": true,
+  "answer": "You should ask for a soda and lime.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "My wallet has finally fallen apart after fifteen years. What should I ask for the replacement to be made of?",
+  "spec": "canvas|cotton|nylon|synthetic|vegan|polyester|waxed|cork|recycled + leather|suede|hide|calfskin",
+  "correct": true,
+  "answer": "Given your wallet lasted fifteen years, you clearly value durability. You've also consistently avoided leather for ethical reasons for decades, most recently with your walking boots.\n\nI recommend a **durable, non-leather material** like a high-quality canvas, recycled polyester, or a synthetic vegan leather.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I get to the staffroom at half seven with twenty minutes before the first bell. What should I bring in from the cafe next door to see me through first period?",
+  "spec": "herbal|peppermint|chamomile|decaf|decaffeinated|rooibos|ginger + coffee|espresso|latte|caffeine|cappuccino",
+  "correct": true,
+  "answer": "Peppermint tea. You've been off caffeine completely since Easter, and you keep your own pot in the staffroom.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The geography teachers' conference is in Melbourne in October and I am definitely going. How should I get myself over there?",
+  "spec": "train|rail|overland|fly|flight|flying|plane|air + drive|driving|car|highway|road",
+  "correct": true,
+  "answer": "You should take The Overland train to Melbourne. You've already booked it once for the Melbourne conference, noting that you \"cannot do the long highway runs any more\" and that taking the bus to Keswick and the train is \"the only civilised way to start a trip.\" Ensure you book an aisle seat on the corridor side of the carriage so you can walk around.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I want to get my fitness back up before the season starts. What sort of training should I be doing three mornings a week?",
+  "spec": "swim|swimming|swims|pool|aqua|cycling|cycle|bike|elliptical|rowing + run|running|jog|jogging|runs",
+  "correct": true,
+  "answer": "Based on your history, you should continue with **swimming at Unley pool three mornings a week**, taking the six o'clock lane. This aligns with your current routine, respects your knee surgeon's advice against running, and avoids sun glare. You can listen to audiobooks while you swim, as you're already enjoying them.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "There is a long trip coming up and I want to take the new Bill Bryson with me. What format should I get it in?",
+  "spec": "audiobook|audiobooks|audio|listen|listening|narrated|audible|spoken + paperback|print|hardback|paper",
+  "correct": true,
+  "answer": "You should get the Bill Bryson book as an **audiobook**.\n\nWhile you previously preferred paperbacks, your latest entry on May 25th indicates you've \"gone across to audiobooks entirely since the optometrist's news about the other eye,\" and you \"get through far more listening than I ever did reading.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I have been landed with booking the end-of-term staff dinner for twelve people. What should I be looking for when I choose the place?",
+  "spec": "vegetarian|vegan|veggie|vegetables|plant|meatless; quiet|quieter|noise|noisy|loud|music|acoustics|acoustic + steakhouse|barbecue|grill",
+  "correct": true,
+  "answer": "Based on your preferences, I recommend a vegetarian-friendly restaurant with a quiet atmosphere, ideally with options for outdoor seating or a well-lit, glare-free indoor space. Look for a place that offers clear menu descriptions, as you prefer to avoid surprises and have specific dietary needs (no meat, no shellfish).\n\nConsider a venue that allows for easy movement, perhaps with tables that aren't too tightly packed, given your need to stretch your back. A place that doesn't rely heavily on loud background music would be ideal for your hearing.\n\nGiven your recent shift to audiobooks and preference for paperbacks over e-readers, a place that encourages conversation over loud entertainment would be a good fit.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I need a new satchel for school, since the one I have is falling apart. What should I specify when I order one?",
+  "spec": "light|lighter|lightweight|weight; canvas|cotton|nylon|synthetic|vegan|polyester|waxed|cork + leather|suede|hide",
+  "correct": false,
+  "answer": "Given your physio's advice regarding arthritis in your thumbs and carrying heavy items, and your preference for walking and public transport, I recommend a lightweight satchel with a comfortable, wide shoulder strap. It should be made of a non-leather material, as you avoid leather products. Ensure it has a secure, easy-to-open closure that doesn't require a hard grip, and consider one with multiple compartments for organisation, reducing the need to rummage.",
+  "missed": [
+   "canvas|cotton|nylon|synthetic|vegan|polyester|waxed|cork"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I want to put on a social roll-up at the club for my birthday in February and they will let me pick the day and which rink we use. What should I ask for?",
+  "spec": "sunday|sundays|midweek|monday|tuesday|thursday|friday; shade|shaded|shady|pines|umbrella|awning|trees + saturday|saturdays",
+  "correct": false,
+  "answer": "For your birthday roll-up in February, ask for a **Saturday afternoon** slot on the **far rink under the pines**.",
+  "missed": [
+   "sunday|sundays|midweek|monday|tuesday|thursday|friday"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I am doing the long haul across to Perth for my sister's 60th in the school holidays. What should I sort out before I go, both where to sit on the plane and what to take to fill the hours?",
+  "spec": "aisle|end|edge|walkway|corridor|outer; audiobook|audiobooks|audio|listen|listening|narrated|audible + window|middle|paperback|print",
+  "correct": true,
+  "answer": "For the flight, book an **aisle seat** so you can get up and stretch regularly. To fill the hours, load up your device with **audiobooks** \u2013 you're three novels deep already and find you get through far more listening than reading.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "A friend from the institute wants to start a monthly quiz evening with me and has left it to me to name the kick-off time. What should I tell her?",
+  "spec": "six|seven|6pm|7pm|1800|1830|1900|18 00|18 30|19 00|early|earlier + nine finish end",
+  "correct": true,
+  "answer": "Based on your clear preferences for early evenings and protecting your sleep, I recommend you tell your friend to start the monthly quiz evening at **7:00 PM**. This allows for a good session without pushing past your 9:00 PM cutoff for winding down.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "The base layer I change into after swimming has finally given up. Which fabric should I ask for when I replace it?",
+  "spec": "wool|woollen|woolen|merino|ull|lambswool + warm dry",
+  "correct": true,
+  "answer": "Based on your clear preference, you should ask for a **wool** base layer. You binned your synthetic ones because \"they hold the cold, they stink after one wear, and it's wool next to my skin or nothing at all from here on.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I've got a rare late one coming up, a colleague's leaving do that will run past midnight. What time should I be up the next day, and should the night before change that?",
+  "spec": "half six|six thirty|0630|630|6 30|06 30 + alarm regardless anyway",
+  "correct": true,
+  "answer": "Given your strong preference for a consistent wake-up time and your experience with late nights impacting sleep, you should still aim to be up at **half six (6:30 AM)** the next day.\n\nThe night before, ensure your phone is charging in the hall and use your wind-up clock. Do not bring screens into the bedroom. This will help you maintain your established routine and minimize the impact of the late night.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I want to add a second kind of exercise alongside the swimming for the season ahead. What sort should I take up, and where should it happen?",
+  "spec": "outdoor|outdoors|outside|trail|forest|woods|hill|hills|mountain|skiing + torch dark hiking",
+  "correct": true,
+  "answer": "Based on your history, you thrive on outdoor activity, especially in nature, and prefer independent or small-group pursuits over large, noisy settings. You've embraced early mornings and value activities that make you feel \"handled\" for the day.\n\nI recommend **trail running or hiking**.\n\n**Why it fits:**\n*   **Outdoor & Nature:** You love being outside, whether cycling in the rain, swimming in the sea, or walking up Floyen. Trail running or hiking would leverage the natural landscapes around you (Floyen, Skomakerdiket).\n*   **Early Morning:** You've successfully shifted your swims to first light, and trail running/hiking fits perfectly into this routine, offering a similar \"handled\" feeling for the day.\n*   **Independent/Small Group:** It can be done solo, or with a friend like Jonas or Ase, aligning with your preference for smaller, more focused interactions (e.g., poster sessions, teaching Azul).\n*   **Low Barrier to Entry:** You're resourceful (shoe goo, wind-up clock) and prefer not to pay for things you can do for free (cancelled gym membership). Trail running requires minimal gear beyond good shoes, and the \"gym\" is free.\n*   **Complements Swimming:** It's a different physical challenge, engaging different muscle groups, and offers a change of scenery from the water.\n\n**Where it should happen:**\n*   **Floyen:** You've already walked up to Skomakerdiket and appreciate the free access. Floyen offers a network of trails suitable for various intensities.\n*   **Around Nordnes/Marineholmen:** While these are coastal, there are often paths and green spaces nearby that could be explored for shorter runs or walks.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "The game group has moved to a place about five kilometres across town on Thursdays, and it will be dark and wet by then. How should I get there and back?",
+  "spec": "bike|biking|bicycle|cycle|cycling|sykkel|on foot|walk it|walking + lights reflective waterproof",
+  "correct": true,
+  "answer": "Cycle. You've consistently chosen cycling over the bus, even in sideways rain, and you're comfortable with head torches for dark returns. Borrow Cascadia off Ase rather than buy it, and cycled it home in rain that found every hole in the bag.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I keep losing track of tank measurements between the lab bench and the boat. What should I be recording them in?",
+  "spec": "paper|notebook|notebooks|pencil|notepad|logbook|pen + waterproof pocket",
+  "correct": true,
+  "answer": "You should record your tank measurements in a **waterproof notebook with a pencil**.\n\nThis aligns with your established habit of using a waterproof notebook and pencil for swim data, which you've maintained since March, and your preference for paper lists over digital apps. It's durable, works in wet environments, and doesn't require charging or connectivity, making it suitable for both lab and boat.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "There's a gap in the weather on Sunday and I want a dip at Helleneset before the front comes in. What is the one condition I should insist on before I get in the water?",
+  "spec": "buddy|partner|someone|friend|company|together|accompanied|alone|solo|spotter|Jonas + shore watching tide",
+  "correct": false,
+  "answer": "Insist on swimming at **first light**.",
+  "missed": [
+   "buddy|partner|someone|friend|company|together|accompanied|alone|solo|spotter|Jonas"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "My swim robe has worn through at the seams and I need something for after the morning dips. How should I go about getting a replacement?",
+  "spec": "second-hand|secondhand|used|repair|repaired|mend|mended|patch|patched|swap|swapped|borrow|borrowed|Fretex|charity|thrift|preloved + kroner cheap sew",
+  "correct": true,
+  "answer": "Given your strong preference for natural fibers (\"wool next to my skin or nothing at all\") and your habit of repairing rather than replacing (swim boots), I recommend looking for a **wool-lined swim robe**.\n\nCheck local second-hand shops like Fretex first, as you've found good items there before (wind-up clock). If you can't find one, consider a new one, but prioritize quality and natural materials over synthetic options.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "There's a three o'clock seminar on Thursdays with a drinks trolley and I always end up holding something. What should I take from it?",
+  "spec": "decaf|decaffeinated|herbal|rooibos|peppermint|mint|chamomile|water|juice|squash|cocoa + coffee espresso americano caffeine",
+  "correct": true,
+  "answer": "Based on your history, you should take a **rooibos tea** from the drinks trolley.\n\nYou've explicitly stated \"nothing with caffeine after twelve from now on - decaf or rooibos, no exceptions\" (2026-01-19), and a 3 PM seminar falls well after that cutoff. You also prefer to avoid holding things that might keep you buzzing late into the night (2026-03-16).",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The department dinner for the visiting examiner is at a harbourside place and they want my main course choice by tomorrow. What should I put down?",
+  "spec": "vegetarian|vegan|mushroom|mushrooms|lentil|lentils|chickpea|chickpeas|halloumi|tofu|gnocchi|chicken|lamb|beef|pork|steak|duck + fish seafood cod salmon prawns",
+  "correct": true,
+  "answer": "Given the harbourside location, it's likely to be heavy on seafood. However, you've explicitly stated that \"cod chapter has ruined restaurants for me\" and you \"can't put anything that came out of the sea on a plate.\"\n\nTherefore, you should choose a **non-shellfish, non-fish option**, such as a **meat or vegetarian dish**.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "I'm restless in the hours between dinner and lights-out, and going to bed early only makes it worse. What should I actually do with that time?",
+  "spec": "read|reading|book|novel|paper|print|knit|knitting|journal|crossword|jigsaw|cards|bath|puzzle|walk + phone screen laptop tv scroll",
+  "correct": true,
+  "answer": "You're looking for something to fill the gap between dinner and lights-out that won't leave you buzzing. Given your recent shifts towards early morning swims, paper lists, and screen-free evenings, I'd suggest **reading a physical book or journal by lamplight, perhaps with a cup of rooibos tea.**\n\nThis aligns with your preference for paper over screens, avoids caffeine, and provides a quiet, contained activity that won't overstimulate you before bed. It's a low-key way to engage your mind without the \"buzz\" of screens or the physical exertion of a late-night swim.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The Copenhagen meeting is in March and I need to book the journey there and back. How should I travel?",
+  "spec": "train|trains|rail|Dovre|ferry|ferries|boat|bus|coach|overland|sleeper + fly flight flying plane",
+  "correct": true,
+  "answer": "For your Copenhagen meeting in March, you should travel by train. Book an eight-hour journey with a table and your own thermos, similar to your Trondheim trip. This aligns with your preference for train travel over flying, especially since you haven't flown since 2019. Ensure you book an aisle seat if any part of the journey is over four hours, and avoid red-eye options.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "There's room for a third swim in the week now the fieldwork block is done. What time of day should I put it, and why that one?",
+  "spec": "morning|mornings|dawn|sunrise|daybreak|breakfast|first light + evening dark night dusk",
+  "correct": true,
+  "answer": "Schedule your third swim for **first light**.\n\nYou found that evening dips left you buzzing until two, while dawn swims make the whole day feel handled ([2026-03-16]). This aligns with your broader pattern of optimizing for sleep, like cutting caffeine after noon ([2026-01-19]) and ending game nights early ([2026-01-12], [2026-04-13]).",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The group has asked me to choose the anchor game for a Thursday meetup. How long should the one I pick take to play?",
+  "spec": "ninety|90|60|sixty|short|shorter|quick|brief|under|hour and a half + heavy epic marathon 180",
+  "correct": true,
+  "answer": "Based on your preferences, the anchor game should take **no more than 90 minutes** to play. You've explicitly stated you're \"out for anything over ninety minutes on a weeknight\" to ensure you can sleep afterwards.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "There's a second meeting in Kiel in September with two submission formats open and I can only prepare one. Which should I put in for?",
+  "spec": "talk|talks|oral|presentation|speaking|speak|podium + poster board",
+  "correct": true,
+  "answer": "Based on your history, you should put in for the **talk slot**.\n\nYou explicitly stated, \"I want to stand up and say the thing myself\" for the Trondheim symposium, a clear shift from your previous preference for posters. You've also shown a willingness to push past comfort zones (e.g., moving swims to first light, hosting game night).",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "We need to settle where the group meets for the rest of the autumn, and everyone has asked what I would prefer. Where should I suggest?",
+  "spec": "home|flat|mine|yours|apartment|kitchen|host|hosting + cafe pub bar venue",
+  "correct": true,
+  "answer": "You should suggest hosting the group at your place. You've found that in your own kitchen, you can start clearing plates to signal the end of the evening, which helps you stick to your schedule.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I'm having four people from the group over for supper before we play. What should I cook, and what time should I tell them to arrive?",
+  "spec": "vegetarian|vegan|mushroom|mushrooms|lentil|lentils|chickpea|chickpeas|bean|beans|halloumi|tofu|chicken|lamb|beef; six|seven|6pm|7pm|1800|1830|1900|18 00|18 30|19 00|early|earlier + nine wrap finish",
+  "correct": false,
+  "answer": "You should make a vegetarian lasagna or a hearty lentil stew. Tell them to arrive at 6:30 PM.",
+  "missed": [
+   "six|seven|6pm|7pm|1800|1830|1900|18 00|18 30|19 00|early|earlier"
+  ],
+  "evidence_present": [
+   true
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I want to bring a game to the group that none of us has played. What mechanic should I make sure the box doesn't have, and how should I go about getting hold of it?",
+  "spec": "elimination|eliminate|eliminated|knockout|knocked; second-hand|secondhand|used|swap|swapped|borrow|borrowed|repair|repaired|Fretex|charity|thrift|preloved + ninety 90 short",
+  "correct": true,
+  "answer": "Based on your history, you enjoy longer, heavier games like Brass, but have recently set a hard limit of 90 minutes for weeknight games and dislike being eliminated early. You prefer games where you can clear plates to end the night, suggesting a preference for clear endings or host control. You also borrowed Cascadia, indicating an openness to new, potentially lighter, but still engaging games.\n\n**Mechanic to Avoid:** Games with player elimination, especially early on, or games that frequently run over 90 minutes.\n\n**Recommendation:** Look for a **tile-laying or engine-building game with a clear end condition and no player elimination**, designed for 2-4 players to keep the playtime manageable. Something like **Wingspan** or **Terraforming Mars: Ares Expedition** might fit, offering strategic depth without excessive length or elimination.\n\n**How to get it:** Borrow it from Ase first, as you did with Cascadia, to see if it's a hit before committing to a purchase. If Ase doesn't have it, check the board-game cafe in Nostet to see if they have a copy you can try there.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I want to start keeping a two-line sleep log at night. What should I write it in, and where should the phone be while I do it?",
+  "spec": "paper|notebook|notepad|pencil|pen|journal|logbook; hall|hallway|corridor|kitchen|another room|other room|living room|out of the bedroom|outside the bedroom + clock charging",
+  "correct": true,
+  "answer": "Based on your preferences:\n\nWrite your two-line sleep log in a **waterproof notebook** (like the one you use for swim temperatures) kept on your **desk**. Your phone should be **charging in the hall**, as screens are out for the last two hours before bed.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Saturday is forecast at minus two and I want my longest dip of the winter. What should I have on next to my skin beforehand, and what time should I get in?",
+  "spec": "wool|woollen|woolen|merino|ull|lambswool; morning|mornings|dawn|sunrise|daybreak|first light|breakfast + hat beanie thermos gloves",
+  "correct": true,
+  "answer": "For your longest dip of the winter, with the forecast at minus two, you should have **wool next to your skin**. Get in at **first light**, around 06:15, and ideally arrange for Jonas or Ase to meet you there.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm restringing the guitar before the winter recital. What should I have the shop put on it?",
+  "spec": "nylon|classical + steel fingertips",
+  "correct": true,
+  "answer": "Based on your history, you explicitly stated on [2026-01-12] that \"steel is finished for me, this one takes nylon or nothing.\"\n\nFor your winter recital, have the shop put **nylon strings** on your guitar.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "My yard boots have cracked through again and I need a new pair before January. What should I specify when I order them?",
+  "spec": "composite|nonmetallic|non metallic|carbon|fiberglass + steel cold",
+  "correct": true,
+  "answer": "You need new yard boots. Specify composite toe.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "I'm looking at places again for next year's lease. What is the one requirement I should give the agent before we start touring?",
+  "spec": "two|second|2|extra; bedroom|bedrooms|room|rooms + twins door",
+  "correct": true,
+  "answer": "\"At least two bedrooms.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "explicit",
+  "question": "Rachel wants to renegotiate the spring break handoff. How should I run that back and forth with her?",
+  "spec": "writing|written|text|texts|email|app + phone call",
+  "correct": true,
+  "answer": "Based on your past experience, specifically the \"sideways\" call about winter break, you should insist on handling this renegotiation *only* in writing. Use texts or the custody app, as you previously established, to ensure there's a clear, rereadable record of what is agreed upon. Do not discuss it over the phone.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "Sofia is reshuffling her weekly lesson slots and asked which one I want. What time of day should I claim, and why?",
+  "spec": "morning|mornings|early|earlier|dawn|daybreak + evening night",
+  "correct": true,
+  "answer": "You should claim a lesson slot in the **late afternoon or early evening**, ideally **Monday through Wednesday**.\n\nThis avoids your early morning routine with the twins and work, and keeps your evenings free for family time, especially Thursday handoffs. It also leaves your weekends open for longer runs (or swims now), guitar society meetings, and family activities.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I need a small amp for the church gig in March and money is tight. How should I go about getting one?",
+  "spec": "used|secondhand|second hand|preowned|marketplace|reverb + new retail",
+  "correct": true,
+  "answer": "Given your preference for not financing anything and your recent success with secondhand gear, I recommend looking for a used **Fender Mustang Micro** or a similar compact, digital modeling headphone amp.\n\nYou can likely find one for under $100 on **Reverb.com** or local **Marketplace listings**. This will allow you to practice silently with headphones, and for the church gig, you can run its line out directly into the sound system, providing a range of tones without needing a traditional amp. This aligns with your \"secondhand tuner on Reverb for eleven dollars\" approach and your need for something small and practical.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I've got a carrier dinner in the Loop on a Friday night. How should I get down there?",
+  "spec": "train|metra|cta|transit|rail|blue line + driving parking",
+  "correct": true,
+  "answer": "Take the Blue Line down to the Loop. You've done it before for carrier lunches to avoid traffic and parking, and you've recently started taking the Metra for guitar society meetings downtown on Saturdays to avoid parking then too.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "implicit",
+  "question": "I'm restocking the pantry at my place. What heat level should I get on the jar of giardiniera?",
+  "spec": "hot|spicy|fiery|ghost|habanero|hottest + mild medium",
+  "correct": true,
+  "answer": "Get the \"extra hot\" giardiniera. You've ordered it that way before with your Italian beef.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "My cousin's wedding is in May and I'm standing up in it. What should I have in my hand for the toast?",
+  "spec": "mocktail|seltzer|soda|cider|tonic|alcoholic + champagne wine",
+  "correct": false,
+  "answer": "For your cousin's wedding toast, I recommend a **sparkling water with a lime wedge**. It's celebratory, fits your commitment to sobriety, and is a simple, refreshing choice.",
+  "missed": [
+   "mocktail|seltzer|soda|cider|tonic|alcoholic"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "The twins want to bake something for Owen's class party at my place. What do I have to rule out when I pick a recipe?",
+  "spec": "gluten|celiac|coeliac + wheat josie",
+  "correct": true,
+  "answer": "Given Josie's celiac diagnosis, you absolutely need to pick a **gluten-free** recipe. Since Owen has also \"concluded that he too is a person with complex dietary needs,\" it's safest to assume he'll follow Josie's lead.\n\nLook for a recipe for gluten-free cookies or brownies. You'll want to ensure all ingredients, like flour, oats, or chocolate chips, are certified gluten-free.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "My sister keeps asking for the recital pictures of the twins. How should I get them to her?",
+  "spec": "text|texts|email|airdrop|privately|directly + facebook instagram post",
+  "correct": true,
+  "answer": "Do not put them on social media. Send them directly to your sister via text or email.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "negative",
+  "question": "There's a much better classical hanging in the shop for eleven hundred dollars and I want it badly. How should I pay for it?",
+  "spec": "save|saving|savings|wait|outright|full + finance credit interest",
+  "correct": true,
+  "answer": "Based on your stated preference from May 4th, 2026, you should save for the guitar and pay for it outright. You've made it clear you \"don't finance anything anymore.\"",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "I've got forty minutes to myself before the twins wake up. What kind of cardio should I do?",
+  "spec": "swim|swimming|pool|laps|bike|cycling + running pavement",
+  "correct": true,
+  "answer": "Given your recent knee issues and the ortho's advice, \"the pavement running is over, find water or find a bike,\" the best option for your 40 minutes is **swimming**.\n\nYou've already started at the park district pool, doing 40 laps before work, and noted that \"the knee already likes me better for it.\" This fits perfectly into your available time and respects your body's current needs.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "The last of the boxes from the old house are stacked at my parents' place and they want them gone. What should I do with all of it?",
+  "spec": "sell|selling|donate|donating|rid|goodwill + storage unit",
+  "correct": true,
+  "answer": "You've already cleared out your Cicero storage unit and cancelled the contract because you're \"not paying rent on things I have not opened in a year.\" You also sold a patio set and gave eleven boxes to a church resale shop.\n\nGiven this, your best bet is to **donate anything usable to a church resale shop and sell anything valuable on a marketplace listing.** Don't pay for storage; if you haven't needed it by now, you likely won't.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "Sofia asked me to bring in a piece I want to work up for the spring recital. What repertoire should I be looking at?",
+  "spec": "bach|renaissance|lute|baroque|dowland|prelude + flamenco spanish",
+  "correct": true,
+  "answer": "Based on your recent shift away from flamenco and towards Bach and Renaissance lute transcriptions, and your preference for nylon strings, I recommend exploring **Fernando Sor's Studies for Guitar**. They are foundational classical guitar pieces, often used in recitals, and align well with a focus on technique and historical repertoire.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "updated",
+  "question": "New quarter, new budget. What's my move on lunch during the yard weeks?",
+  "spec": "pack|packing|packed|bring|leftovers|from home + taqueria buying",
+  "correct": true,
+  "answer": "Pack leftovers from home. You've been doing it since May, and it saves you the fourteen dollars a day you used to spend at the taqueria.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I'm hosting the guitar society potluck at my apartment next month. What should I tell people to bring, and what should I have in the fridge for myself?",
+  "spec": "gluten|celiac|coeliac; mocktail|seltzer|soda|cider|tonic|alcoholic + wine beer",
+  "correct": false,
+  "answer": "For the potluck, tell people to bring their favorite dish, but specify **no gluten** for Josie's celiac needs. You can also suggest they bring their own drinks, as you don't keep alcohol.\n\nFor your fridge, make sure you have:\n*   Ingredients for **tacos with chili oil** (and ghost pepper sauce for your leftovers).\n*   **Gluten-free pretzels** (the good kind, not hidden).\n*   **Leftovers** from your packed lunches.\n*   **Hot giardiniera** for Italian beef (though you're not cooking much, it's a strong preference).",
+  "missed": [
+   "mocktail|seltzer|soda|cider|tonic|alcoholic"
+  ],
+  "evidence_present": [
+   false
+  ],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I want to upgrade the instrument by the fall without blowing up my budget. How should I shop for it, and how should I handle the payment?",
+  "spec": "used|secondhand|second hand|preowned|marketplace|reverb; save|saving|savings|wait|outright|full + finance credit",
+  "correct": true,
+  "answer": "Based on your history, here's a recommendation for upgrading your instrument:\n\n**How to Shop:**\n*   **Focus on used:** You've successfully bought used items (guitar, footstool, tuner, furniture) and appreciate avoiding depreciation. Look for a used classical guitar from a private seller or a reputable used instrument shop.\n*   **Prioritize playability:** You're serious about your lessons and specific repertoire (Bach, Renaissance lute transcriptions). Play any instrument you consider to ensure it feels right for those pieces.\n*   **Consider the \"shop\" experience:** While you avoid financing, you did note a \"nicer classical hanging on the wall\" at a shop. Visiting shops for comparison and trying instruments is valuable, even if you don't buy new.\n\n**How to Handle Payment:**\n*   **Save and pay outright:** This is your firm rule now: \"I don't finance anything anymore... I will save for it and pay outright or I will not have it.\" Start setting aside money specifically for the guitar.\n*   **Budget for accessories:** Remember your success finding a used footstool and tuner for $11. Factor in a small budget for any necessary accessories you might need to buy used.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "I have to be downtown for an all day inventory audit with the carrier next week. How should I get there, and what start time should I push for?",
+  "spec": "train|metra|cta|transit|rail|blue line; morning|mornings|early|earlier|dawn|daybreak + parking afternoon",
+  "correct": true,
+  "answer": "For your downtown inventory audit next week:\n\n**Transportation:** Take the train (Metra or Blue Line) to avoid traffic and parking costs. You've consistently preferred this for downtown trips.\n\n**Start Time:** Push for a start time that allows you to be home for the Thursday handoff, if applicable, or generally avoid red-eye-like early starts if possible. Given your usual early mornings (5 AM for twins' lunches, 6 AM for swimming), an early start is likely fine, but ensure it doesn't conflict with family commitments.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ },
+ {
+  "kind": "composed",
+  "question": "Plan out my lunches for the next yard rotation. How should I be getting lunch, and how do I keep it from being boring by Wednesday?",
+  "spec": "pack|packing|packed|bring|leftovers|from home; hot|spicy|fiery|ghost|habanero|hottest + taqueria mild",
+  "correct": true,
+  "answer": "You've been buying lunch out every workday, often from the taqueria by the yard, but you've also started packing leftovers from home to save money. Given your preference for variety and avoiding cooking twice a day, here's a plan:\n\n**Monday & Tuesday:** Pack leftovers from Sunday dinner and Monday dinner. You've been enjoying ghost pepper sauce on your leftovers, so keep that up for flavor.\n**Wednesday:** Treat yourself to the taqueria by the yard. It's a known favorite and breaks up the routine.\n**Thursday & Friday:** Pack leftovers from Wednesday dinner and Thursday dinner.\n\nThis balances your desire to save money by packing lunches with the need for variety, ensuring you don't get bored by Wednesday and still get a favorite meal in.",
+  "missed": [],
+  "evidence_present": [],
+  "n_memories": 23
+ }
+]

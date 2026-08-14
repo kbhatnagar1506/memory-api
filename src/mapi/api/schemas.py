@@ -434,7 +434,28 @@ class SearchRequestBody(Request):
     #: Still exposed, because MMR is the right tool for a corpus that genuinely
     #: accumulates restatements. Opt in per request.
     use_mmr: bool = False
-    use_rerank: bool = True
+    #: OFF, for the same reason and on stronger evidence than MMR's.
+    #:
+    #: The reranker was the shipped default and is the WORST of the five
+    #: configs in this repo's own ablation, measured over 500 corpora and 500
+    #: questions (bench/results/lme-v24-base2):
+    #:
+    #:     config           full_recall@k   MRR     hit@k
+    #:     vector_only          0.968       0.938   0.994
+    #:     hybrid_rrf           0.952       0.945   0.996   <- this, with it off
+    #:     hybrid_rerank        0.890       0.864   0.976   <- this, with it on
+    #:
+    #: It is not a trade: turning it off improves full recall by 6.2 points,
+    #: MRR by 8.1 and hit@k by 2.0 at the same time. On 500 questions that is
+    #: roughly 31 answers whose evidence was complete and got reordered out of
+    #: the window. `full_recall@k` is the metric that matters here because it
+    #: is CONJUNCTIVE -- 1.0 only when every evidence item survives -- and a
+    #: reranker that promotes one good hit while dropping its partner scores
+    #: well on hit@k and answers the question wrong.
+    #:
+    #: Still exposed, because a lexical reranker is the right tool when a query
+    #: carries rare exact tokens. Opt in per request.
+    use_rerank: bool = False
     use_decay: bool = True
     half_life_days: float = Field(default=180.0, gt=0, le=36500)
     #: Minimum COSINE similarity, not minimum fused score.

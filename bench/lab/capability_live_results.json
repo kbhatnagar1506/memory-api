@@ -16,10 +16,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 2,
+  "cited": 1,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "Halden Foods was the first client signed, on 20 January 2026 [2]. The next was Vireo Health, signed on 2 June 2026 [5]."
+  "reply": "The first contract signed was with Halden Foods on 20 January 2026 [4]."
  },
  {
   "capability": "count",
@@ -30,7 +30,7 @@
   "cited": 4,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Four client projects were shipped in 2026:\n\n*   The Halden Foods packaging refresh [9].\n*   The Bramwell Cycles light housing [8].\n*   The Okonjo Studio retail fixture [1].\n*   The Vireo Health enclosure [5]."
+  "reply": "Four client projects were shipped in 2026 [4, 6, 7, 8].\n\n*   Vireo Health enclosure, shipped on 23 June 2026 [4].\n*   Okonjo Studio retail fixture, shipped on 28 April 2026 [6].\n*   Bramwell Cycles light housing, shipped on 24 March 2026 [7].\n*   Halden Foods packaging refresh, shipped on 17 February 2026 [8]."
  },
  {
   "capability": "order",
@@ -41,7 +41,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The most recent client signed was Vireo Health, on 2 June 2026 [3]. The first contract of the year was signed with Halden Foods on 20 January 2026 [5]."
+  "reply": "Vireo Health was the most recently signed client, on 2 June 2026 [3]. The only other client signing recorded was Halden Foods on 20 January 2026 [4]."
  },
  {
   "capability": "order",
@@ -52,7 +52,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The first thing bought for the workshop was a Prusa MK4 printer on 03 Feb 2026 [1]."
+  "reply": "The first thing bought for the workshop was a Prusa MK4 printer on 3 February 2026 [3]."
  },
  {
   "capability": "date_arith",
@@ -60,10 +60,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 2,
+  "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Bramwell Cycles project started on 04 Mar 2026 [1] and shipped on 24 Mar 2026 [2]. This is a span of 20 days."
+  "reply": "20 days passed between starting and shipping the Bramwell Cycles light housing [5, 10]. The project was started on 4 March 2026 and shipped on 24 March 2026 [5, 10]."
  },
  {
   "capability": "compare",
@@ -85,7 +85,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Bambu printer cost more [1, 4]. It cost 1299 pounds [1, 6], while the Prusa MK4 cost 899 pounds [4]."
+  "reply": "The Bambu X1C printer cost more than the Prusa MK4 printer [3, 6]. The Bambu cost 1299 pounds [3, 4], while the Prusa cost 899 pounds [6]."
  },
  {
   "capability": "list_all",
@@ -96,7 +96,7 @@
   "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "This year, you have worked with the following clients:\n\n*   **Halden Foods** [37, 17, 29]\n*   **Bramwell Cycles** [38, 34, 40]\n*   **Okonjo Studio** [8, 20, 26]\n*   **Vireo Health** [7, 17, 27]"
+  "reply": "Based on projects signed, worked on, or invoiced in 2026, you have worked with the following clients:\n\n*   **Halden Foods** [37, 17, 29]\n*   **Bramwell Cycles** [38, 24, 34]\n*   **Okonjo Studio** [7, 20, 26]\n*   **Vireo Health** [4, 17, 27]"
  },
  {
   "capability": "temporal",
@@ -118,7 +118,7 @@
   "cited": 4,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "You spent a total of 2198 pounds on 3D printers [4, 5]. This was for a Bambu X1C at 1299 pounds [4] and a Prusa MK4 at 899 pounds [5]. A resin printer was also acquired [3] but later returned [1]."
+  "reply": "You spent a total of 2198 pounds on 3D printers [3, 5].\n\n*   **Bambu X1C printer:** 1299 pounds [3]\n*   **Prusa MK4 printer:** 899 pounds [5]\n\nA resin printer was also acquired [2], but later returned [1]. The memories do not state its purchase price or the refund amount."
  },
  {
   "capability": "supersede",
@@ -129,7 +129,7 @@
   "cited": 2,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "My day rate is 700 pounds [1]. I set it at 500 pounds on 12 January 2026 [2] and raised it to 700 pounds on 6 May 2026 [1]."
+  "reply": "My freelance day rate was set at 500 pounds on 12 January 2026 [5]. On 06 May 2026, it was raised to 700 pounds [2]."
  },
  {
   "capability": "supersede",
@@ -137,10 +137,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "1. PREFERENCES:\n*   \"Raised my day rate from 500 to 700 pounds. Nobody pushed back.\" [7]\n\n2. CHECK:\n*   The recommendation must be for a day rate of 700 pounds.\n\n3. RECOMMENDATION:\nBased on your last rate change, you should quote the new client 700 pounds for a day's work."
+  "reply": "1. PREFERENCES:\n*   \"Raised my day rate from 500 to 700 pounds. Nobody pushed back.\" [5]\n*   \"I set my freelance day rate at 500 pounds when I went independent.\" [9]\n\n2. CHECK:\n*   The new day rate is 700 pounds.\n*   The previous rate of 500 pounds is outdated.\n\n3. RECOMMENDATION:\nQuote the new client 700 pounds for a day's work. This is your current rate, which you raised from 500 pounds and found clients accepted without issue."
  },
  {
   "capability": "contradict",
@@ -151,7 +151,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": true,
-  "reply": "There are two conflicting figures for Bramwell's annual tooling budget.\n\n*   The finance director stated it was 52,000 pounds for the year [2].\n*   An unverified report from Sarah at Bramwell put it at around 40,000 pounds [1]."
+  "reply": "There are two conflicting figures for Bramwell's annual tooling budget.\n\n*   Sarah at Bramwell stated it is around 40,000 pounds [1]. This is unverified [1].\n*   Bramwell's finance director stated it is 52,000 pounds for the year [2]."
  },
  {
   "capability": "unverified",
@@ -162,7 +162,7 @@
   "cited": 3,
   "cited_right": null,
   "used_unverified": true,
-  "reply": "Sarah at Bramwell said their annual tooling budget is around 40000 pounds [1]. This is an unverified memory, which matters because Bramwell's finance director later gave a different figure [2]. Sarah had also left Bramwell in June [3], a month before this conversation."
+  "reply": "Sarah at Bramwell said their annual tooling budget is around 40000 pounds [1]. This is an unverified memory, which matters because Bramwell's finance director later stated the budget was 52000 pounds [2]. Sarah had also left Bramwell in June [3]."
  },
  {
   "capability": "abstain",
@@ -214,10 +214,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 3,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "1. PREFERENCES:\n* \"I work in metric only. An imperial drawing gets sent back, no exceptions.\" [1]\n* \"I don't take tobacco or vape work, ever.\" [15]\n* \"I do my best work before ten.\" [3]\n\n2. CHECK:\n* The drawing package must use metric units.\n* The project must not be related to tobacco or vaping.\n* The client should be amenable to early morning meetings.\n\n3. RECOMMENDATION:\nInsist that all drawings are supplied in metric units. Also, confirm the nature of the project to ensure it is not for the tobacco or vape industry. Finally, inform them that you prefer to schedule key meetings early in the morning, as this is when you are most productive."
+  "reply": "**PREFERENCES**\n*   \"I work in metric only. An imperial drawing gets sent back, no exceptions.\" [2]\n*   \"Turned down a vape packaging job. I don't take tobacco or vape work, ever.\" [15]\n\n**CHECK**\n*   The drawing package must use metric units.\n*   The project must not be related to tobacco or vaping.\n\n**RECOMMENDATION**\nInsist that the drawing package be supplied in metric units. If it arrives in imperial, state that you will have to send it back for revision before you can begin work. Also, confirm that the project is not for the tobacco or vape industry, as you do not take on that type of work."
  },
  {
   "capability": "pref_implicit",
@@ -228,7 +228,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Here is my advice based on your memories:\n\n**1. PREFERENCES**\n*   \"I do my best work before ten.\" [5]\n*   \"Every Tuesday I do a full workshop clean-down.\" [20]\n\n**2. CHECK**\n*   The recurring slot should be scheduled before 10 a.m.\n*   The slot should not be on a Tuesday, as that day is for cleaning.\n\n**3. RECOMMENDATION**\nBook a recurring slot for deep design work from 8 a.m. to 10 a.m. every Monday, Wednesday, Thursday, and Friday. This uses your most productive morning hours and avoids your Tuesday workshop cleaning day."
+  "reply": "1.  **PREFERENCES**:\n    *   \"I do my best work before ten.\" [2]\n    *   \"Every Tuesday I do a full workshop clean-down.\" [20]\n\n2.  **CHECK**:\n    *   The recurring slot should be scheduled before 10 a.m.\n    *   The recurring slot should not be on a Tuesday, as that day is for cleaning.\n\n3.  **RECOMMENDATION**:\n    Book your recurring deep design work slot for 8 a.m. on Mondays, Wednesdays, Thursdays, or Fridays. This places it in your most productive time of day while avoiding your scheduled Tuesday workshop clean-down."
  },
  {
   "capability": "pref_negative",
@@ -236,10 +236,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 2,
+  "cited": 6,
   "cited_right": null,
-  "used_unverified": false,
-  "reply": "Here is my advice based on your memories:\n\n**1. PREFERENCES**\n*   \"I don't take tobacco or vape work, ever.\" [1]\n*   \"Raised my day rate from 500 to 700 pounds.\" [6]\n\n**2. CHECK**\n*   The recommendation must avoid work related to tobacco or vaping.\n*   The recommendation should acknowledge the high rate offered, which is double the current rate of \u00a3700/day.\n\n**3. RECOMMENDATION**\nBased on your explicit principle of never taking tobacco or vape work, you should turn this job down. While the \u00a31400 day rate is exceptionally high, the client is a nicotine pouch brand, which falls squarely into the category of work you have committed to avoiding."
+  "used_unverified": true,
+  "reply": "1. PREFERENCES:\n*   \"I don't take tobacco or vape work, ever.\" [2]\n*   \"Raised my day rate from 500 to 700 pounds.\" [1]\n*   \"I work in metric only.\" [12]\n*   \"I do my best work before ten.\" [15]\n\n2. CHECK:\n*   The recommendation must avoid tobacco and vape work.\n*   The recommendation must respect the user's current day rate of \u00a3700.\n*   The recommendation must ensure any technical work is in metric.\n*   The recommendation should ideally leverage the user's productive morning hours.\n\n3. RECOMMENDATION:\nBased on your principles, you should turn this job down. You have a clear rule: \"I don't take tobacco or vape work, ever\" [2]. Nicotine pouches fall squarely into this category. While double your rate is tempting, it conflicts directly with a stated ethical boundary.\n\nInstead, I suggest you proactively approach Bramwell. You have two separate pieces of information on their tooling budget: an unverified \u00a340,000 [10] and a more solid \u00a352,000 [20]. This indicates they have significant funds for the kind of work you do. Proposing a project to them would allow you to set your own terms, including your \u00a3700 day rate and preferred morning meeting times."
  },
  {
   "capability": "pref_updated",
@@ -247,10 +247,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "My day rate is 700 pounds [8]. A four-day job would be 2800 pounds."
+  "reply": "My day rate is 700 pounds [5]. A four-day job would therefore be quoted at 2800 pounds. This rate has been in effect since 06 May 2026 [5], an increase from the previous rate of 500 pounds [10]."
  },
  {
   "capability": "pref_composed",
@@ -261,7 +261,7 @@
   "cited": 3,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "1.  PREFERENCES:\n*   \"I don't take tobacco or vape work, ever.\" [6]\n*   \"I work in metric only. An imperial drawing gets sent back, no exceptions.\" [10]\n*   \"Third client meeting I've done at eight in the morning. I do my best work before ten.\" [4]\n\n2.  CHECK:\n*   The recommendation must avoid tobacco-related work.\n*   The recommendation must insist on metric drawings.\n*   The recommendation can accept the 8am meeting time.\n\n3.  RECOMMENDATION:\nYou should push back on the client's industry and the drawing format. The 8am meeting time is fine.\n\nSpecifically, you should decline the project entirely because it is \"tobacco-adjacent\" and you have a strict policy against such work. If you were to consider it, you would also have to insist on receiving drawings in metric, not inches."
+  "reply": "1. PREFERENCES:\n*   \"I do my best work before ten\" [1].\n*   \"I work in metric only. An imperial drawing gets sent back, no exceptions\" [5].\n*   \"I don't take tobacco or vape work, ever\" [9].\n\n2. CHECK:\n*   The recommendation must respect the user's preferred working hours.\n*   The recommendation must reject the use of imperial measurements.\n*   The recommendation must decline work related to tobacco.\n\n3. RECOMMENDATION:\nBased on your preferences, you should push back on all three parts of this request. The most critical is that you \"don't take tobacco or vape work, ever\" [9], so you should decline the project entirely. If you were to engage, you would also need to reject the 8am meeting time as it's before your most productive hours [1] and insist on metric drawings instead of inches [5]."
  },
  {
   "capability": "pref_composed",
@@ -269,10 +269,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 4,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "1. PREFERENCES:\n*   Prefers taking the train over flying for work trips [2, 4].\n*   Does not own a car and uses trains or couriers for all movement [17].\n\n2. CHECK:\n*   The recommendation must be a train journey.\n*   The recommendation must not involve driving a car.\n\n3. RECOMMENDATION:\nTake the sleeper train to Edinburgh. This allows you to travel overnight, arriving in the city for your review without losing a working day to travel, and it satisfies your preference for train travel over flying."
+  "reply": "Here is a plan for your client review in Edinburgh:\n\n**1. PREFERENCES**\n*   You prefer taking the train over flying for client trips: \"Took the sleeper train to Glasgow for the Vireo review rather than fly.\" [1] and \"Second time this year I've taken the train instead of flying to a client.\" [2]\n*   You do not own a car and use trains or couriers for transport: \"I do not own a car and never have. Everything moves by train or by courier.\" [17]\n*   You do your best work in the morning: \"I do my best work before ten.\" [3]\n\n**2. CHECK**\n*   The recommendation must be a train journey.\n*   The recommendation must not involve driving.\n*   The recommendation should allow you to arrive fresh and ready for an early start.\n\n**3. RECOMMENDATION**\nTake the Caledonian Sleeper train to Edinburgh. This satisfies your preference for rail travel over flying for business trips to Scotland. It allows you to travel overnight, arriving in the city centre rested and ready to do your best work in the morning, without needing a car."
  },
  {
   "capability": "reversal",
@@ -283,7 +283,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "You are using the Bambu printer for everything [3].\n\nYou had moved to a resin printer for fine detail work on medical parts on 1 August 2026 [1], but returned it on 9 August 2026 because it could not hold tolerance on the Vireo parts [3]."
+  "reply": "You are using the Bambu printer for everything, including detail work [2].\n\nYou had moved to a resin printer for fine detail work on August 1, 2026 [1]. However, you returned it on August 9, 2026, because it could not hold tolerance on the Vireo parts, and went back to using the Bambu for everything [2]."
  },
  {
   "capability": "reversal",
@@ -294,7 +294,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "No, the resin printer was returned on 9 August 2026 [1]. It was acquired on 1 August 2026 for fine detail work on medical parts [2], but it could not hold tolerance on the Vireo parts [1]."
+  "reply": "No, you returned the resin printer on 09 Aug 2026 [1]. You had moved to it on 01 Aug 2026 for fine detail work [2], but it could not hold tolerance on the Vireo parts [1]."
  },
  {
   "capability": "retraction",
@@ -305,7 +305,7 @@
   "cited": 2,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "I invoiced Okonjo Studio 3200 pounds [2]. An earlier memory stated the amount was 2300 pounds [3], but this was later corrected as it had missed a tooling line item [2]."
+  "reply": "I invoiced Okonjo Studio 3200 pounds [3]. An earlier memory stated the amount was 2300 pounds [2], but this was later corrected [3]."
  },
  {
   "capability": "refinement",
@@ -316,7 +316,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The final total for the Milan trip was 847.20 [2]. An earlier estimate put the cost at around 800 [1]."
+  "reply": "The final total for the Milan trip was 847.20 [1]. An earlier estimate put the cost at around 800 [2]."
  },
  {
   "capability": "partial_update",
@@ -327,7 +327,7 @@
   "cited": 2,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "The Vireo enclosure was initially going to be made of ABS [3], but was switched to polycarbonate to pass a drop test [1]."
+  "reply": "The Vireo enclosure was initially made of ABS [4] but was switched to polycarbonate on July 2nd, 2026 [2]."
  },
  {
   "capability": "partial_update",
@@ -335,10 +335,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "No, switching the Vireo enclosure material from ABS to polycarbonate did not change anything else about the job [1]. The switch was made to pass the drop test [1]."
+  "reply": "No, switching the Vireo enclosure from ABS to polycarbonate did not change anything else about the job [2]. The original material was specified as ABS [5]."
  },
  {
   "capability": "negation",
@@ -360,18 +360,18 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Marcus reckons that aluminium prices will double by next spring [1]."
+  "reply": "Marcus reckons aluminium prices will double by next spring [2]."
  },
  {
   "capability": "conditional",
   "question": "Do I need a second supplier for Vireo?",
-  "correct": true,
+  "correct": false,
   "declined": true,
   "leaked": false,
-  "cited": 1,
+  "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "I don't have that in memory. I know that a second supplier will be needed if Vireo goes above 5000 units [1], but I do not have a memory stating the number of units for the Vireo project."
+  "reply": "I don't have that in memory."
  },
  {
   "capability": "planned",
@@ -404,7 +404,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "As of 3 January 2026, I have been renting the Peckham unit since March 2025 [1]."
+  "reply": "I have been renting the Peckham unit since March 2025 [3]."
  },
  {
   "capability": "sum",
@@ -426,7 +426,7 @@
   "cited": 5,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Vireo Health project invoiced the most, at 6800 pounds [2].\n\nInvoices issued:\n*   Vireo Health: 6800 pounds [2]\n*   Bramwell Cycles: 5100 pounds [6]\n*   Halden Foods: 4200 pounds [7]\n*   Okonjo Studio: 3200 pounds [11]. An earlier memory stated 2300 pounds [4], but this was corrected [11]."
+  "reply": "The Vireo Health project invoiced the most, at 6800 pounds [1].\n\nInvoices issued:\n*   Vireo Health: 6800 pounds [1]\n*   Bramwell Cycles: 5100 pounds [5]\n*   Halden Foods: 4200 pounds [6]\n*   Okonjo Studio: 3200 pounds [11]. An earlier memory stated 2300 pounds [3], but this was corrected [11]."
  },
  {
   "capability": "min",
@@ -437,7 +437,7 @@
   "cited": 5,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The smallest invoice was for 3200 pounds to Okonjo Studio [2, 8].\n\nInvoices on record are:\n*   Vireo Health: 6800 pounds [4]\n*   Bramwell Cycles: 5100 pounds [14]\n*   Halden Foods: 4200 pounds [20]\n*   Okonjo Studio: 3200 pounds [2]. An earlier memory stated 2300 pounds [8], but this was corrected [2]."
+  "reply": "The smallest invoice was for 3200 pounds to Okonjo Studio [2, 8].\n\nThe other invoices were:\n*   4200 pounds to Halden Foods [20].\n*   5100 pounds to Bramwell Cycles [14].\n*   6800 pounds to Vireo Health [4].\n\nOne memory gives the Okonjo invoice as 2300 pounds [8], but a later correction states it was 3200 pounds [2]."
  },
  {
   "capability": "average",
@@ -456,10 +456,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 3,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Three projects were shipped in the second quarter of 2026:\n\n*   The Okonjo Studio retail fixture [1].\n*   The Vireo Health enclosure [5].\n*   The Bramwell Cycles light housing [8].\n\nOne of these, the Bramwell Cycles project, was shipped in the first quarter, on 24 March 2026 [8].\n\nTherefore, two projects were shipped in the second quarter:\n\n*   The Okonjo Studio retail fixture, shipped on 28 April 2026 [1].\n*   The Vireo Health enclosure, shipped on 23 June 2026 [5]."
+  "reply": "Two projects were shipped in the second quarter of 2026 [3, 6].\n\n*   The Okonjo Studio retail fixture shipped on 28 April 2026 [6].\n*   The Vireo Health enclosure shipped on 23 June 2026 [3]."
  },
  {
   "capability": "set_difference",
@@ -475,13 +475,13 @@
  {
   "capability": "negative_existence",
   "question": "Have I ever worked with an automotive client?",
-  "correct": false,
-  "declined": false,
+  "correct": true,
+  "declined": true,
   "leaked": false,
-  "cited": 1,
+  "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "I have worked on a project for Bramwell Cycles [16]."
+  "reply": "I don't have that in memory."
  },
  {
   "capability": "distractor",
@@ -503,7 +503,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "No, nothing came of the call with Haldern Design about a rebrand [1]."
+  "reply": "No, nothing came of the rebrand call with Haldern Design [2]."
  },
  {
   "capability": "paraphrase",
@@ -525,7 +525,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Sarah Okoye moved to Vireo Health in June [4]. She was previously my contact at Bramwell Cycles [4, 5]."
+  "reply": "Sarah Okoye is the contact at Vireo Health [8]. She moved there from Bramwell Cycles in June [8, 11]."
  },
  {
   "capability": "numeric",
@@ -536,7 +536,7 @@
   "cited": 1,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "The Okonjo fixture is 180cm tall [1]."
+  "reply": "The Okonjo fixture is 180cm tall [2]."
  },
  {
   "capability": "numeric",
@@ -547,18 +547,18 @@
   "cited": 1,
   "cited_right": true,
   "used_unverified": false,
-  "reply": "The shelf pitch on the Okonjo fixture is 18cm [1]."
+  "reply": "The shelf pitch on the Okonjo fixture is 18cm [2]."
  },
  {
   "capability": "as_of",
   "question": "In April, what did I think my day rate was?",
-  "correct": false,
-  "declined": true,
+  "correct": true,
+  "declined": false,
   "leaked": false,
-  "cited": 0,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "I don't have that in memory."
+  "reply": "In April, your day rate was 500 pounds [6]. You raised it to 700 pounds on May 6th [1]."
  },
  {
   "capability": "as_of",
@@ -566,10 +566,10 @@
   "correct": false,
   "declined": false,
   "leaked": false,
-  "cited": 2,
+  "cited": 3,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Yes. The Bramwell Cycles light housing was shipped on 24 March 2026 [1]. The Bambu X1C printer was bought on 15 April 2026 [2]."
+  "reply": "Yes. The Bambu X1C printer was bought on 15 April 2026 [7] and paid for on 16 April 2026 [8]. The Bramwell Cycles light housing was shipped on 24 March 2026 [9]."
  },
  {
   "capability": "relative_date",
@@ -580,7 +580,7 @@
   "cited": 4,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "In July 2026, you:\n*   Took the sleeper train to Glasgow for the Vireo review [7]. This was the second time this year you had taken a train instead of flying to a client [5].\n*   Switched the Vireo enclosure material from ABS to polycarbonate [10].\n*   Had a client meeting at 8 a.m., the third such meeting [8]."
+  "reply": "Based on your memories from July 2026:\n\nYou took two train journeys instead of flying [5]. One was a sleeper train to Glasgow for the Vireo review [7]. This was the second time this year you had chosen the train over a plane [5]. You also had your third 8 a.m. client meeting of the year [8].\n\nFor the Vireo Health project, you switched the enclosure material from ABS to polycarbonate to pass a drop test [10, 18]. Later, you moved from the Bambu printer to a resin printer for fine detail work on medical parts [9]."
  },
  {
   "capability": "duration",
@@ -591,18 +591,18 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Vireo Health project was signed on 2 June 2026 [3] and shipped on 23 June 2026 [4]. This is a duration of 21 days."
+  "reply": "The Vireo Health job was signed on 2 June 2026 [8] and shipped on 23 June 2026 [3]. This is a duration of 21 days."
  },
  {
   "capability": "ongoing",
   "question": "Am I still renting the Peckham unit?",
   "correct": true,
-  "declined": true,
+  "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Yes, you have been renting the Peckham unit since March 2025 [1]. There is no memory of this rental ending."
+  "reply": "Yes, you have been renting the Peckham unit since March 2025 [3]. On 19 May 2026, you were quoted prices for two studios, A and B, at the Peckham space [1]."
  },
  {
   "capability": "same_day",
@@ -610,10 +610,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 0,
+  "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "You invoiced Vireo Health on the same afternoon you shipped the enclosure [1, 2]."
+  "reply": "You invoiced Vireo Health on the same afternoon that you shipped the enclosure [1]."
  },
  {
   "capability": "causal",
@@ -635,7 +635,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "You returned the resin printer because it could not hold tolerance on the Vireo parts [1]. You went back to using the Bambu printer for everything [1]."
+  "reply": "You returned the resin printer because it could not hold tolerance on the Vireo parts [1]. You switched back to the Bambu printer for everything [1]."
  },
  {
   "capability": "counterfactual",
@@ -646,7 +646,7 @@
   "cited": 1,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "A four-day job would bill at 2000 pounds [2]."
+  "reply": "A four-day job would bill at 2000 pounds [6]."
  },
  {
   "capability": "delta",
@@ -654,21 +654,21 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 2,
+  "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Your day rate increased by 200 pounds, from 500 to 700 pounds [1, 2]. The initial rate was set at 500 pounds on 12 January 2026 [2], and it was raised to 700 pounds on 06 May 2026 [1]."
+  "reply": "Your day rate has gone up by 200 pounds this year [3, 10]. It was set at 500 pounds in January and raised to 700 pounds in May [10, 3]."
  },
  {
   "capability": "ratio",
   "question": "What proportion of my clients paid late?",
-  "correct": true,
+  "correct": false,
   "declined": false,
   "leaked": false,
   "cited": 4,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "Based on invoices mentioned in the memories, 1 out of 4 clients paid late.\n\n*   **Late:** Bramwell paid 40 days after the invoice and had to be chased twice [6].\n*   **On time/Early:**\n    *   Vireo paid inside a fortnight [3].\n    *   Okonjo paid on the day the invoice landed [4].\n    *   Halden Foods paid within a week [7]."
+  "reply": "Two out of four clients paid late [5, 6].\n\n*   **Late:** Bramwell paid 40 days after the invoice [5].\n*   **On time:**\n    *   Okonjo paid on the day the invoice landed [4].\n    *   Halden Foods paid within a week [6].\n    *   Vireo paid inside a fortnight [3]."
  },
  {
   "capability": "unit",
@@ -676,10 +676,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 1,
+  "cited": 0,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Okonjo fixture is 1.8 metres tall [1]."
+  "reply": "The Okonjo fixture is 1.8 metres tall [2, 10]."
  },
  {
   "capability": "near_duplicate",
@@ -690,7 +690,7 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The Bambu X1C printer cost 1299 pounds [5]. Another memory also states the cost was 1299 [4]."
+  "reply": "The Bambu X1C printer cost 1299 pounds [4]. The payment was made on 16 April 2026 [3]."
  },
  {
   "capability": "coreference",
@@ -698,10 +698,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 4,
+  "cited": 2,
   "cited_right": null,
   "used_unverified": true,
-  "reply": "Bramwell's finance director stated the tooling budget was 52000 pounds [1].\n\nAn unverified memory states that Sarah at Bramwell said the annual tooling budget was around 40000 pounds [2]. This Sarah was identified as Sarah Okoye [9], who left Bramwell in June [5]."
+  "reply": "Bramwell's finance director stated the tooling budget was 52,000 pounds [1]. Sarah at Bramwell also provided a figure, stating it was around 40,000 pounds; however, this memory is unverified [2]."
  },
  {
   "capability": "role_change",
@@ -709,10 +709,10 @@
   "correct": true,
   "declined": false,
   "leaked": false,
-  "cited": 0,
-  "cited_right": false,
+  "cited": 1,
+  "cited_right": true,
   "used_unverified": false,
-  "reply": "Sarah Okoye moved from Bramwell Cycles to Vireo Health in June 2026 [1, 2]."
+  "reply": "Sarah Okoye moved to Vireo Health in June 2026 [1]. She was previously at Bramwell Cycles [1, 7]."
  },
  {
   "capability": "partial",
@@ -734,6 +734,6 @@
   "cited": 2,
   "cited_right": null,
   "used_unverified": false,
-  "reply": "The invoice for the Okonjo fixture was initially 2300 pounds [1], but this was corrected to 3200 pounds after a missing tooling line was added [6]."
+  "reply": "The invoice for the Okonjo Studio retail fixture was for 3200 pounds [5]. An earlier memory stated the invoice was for 2300 pounds [3], but this was later corrected [5]."
  }
 ]

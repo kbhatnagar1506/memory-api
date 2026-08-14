@@ -137,7 +137,14 @@ class SearchRequest:
     mmr_lambda: float = 0.7
     half_life_days: float = 180.0
     use_decay: bool = True
-    use_rerank: bool = True
+    #: Default OFF on measured evidence, like `use_mmr` below and for a bigger
+    #: margin. Over 500 corpora and 500 questions the reranked config is the
+    #: worst of five on every retrieval metric at once -- full_recall@k 0.890
+    #: against 0.952 with it off, MRR 0.864 against 0.945, hit@k 0.976 against
+    #: 0.996. A reranker that promotes one good hit while pushing its partner
+    #: out of the window still looks fine on hit@k and answers a multi-evidence
+    #: question wrong, which is exactly what the conjunctive metric is for.
+    use_rerank: bool = False
     #: Default OFF on measured evidence. MMR suppresses near-duplicates, but
     #: measured twice on conversational corpora it changed no retrieval metric
     #: while costing 2.5x latency (61ms -> 110ms on LoCoMo). It is still the

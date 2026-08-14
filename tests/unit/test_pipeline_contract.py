@@ -216,8 +216,16 @@ async def test_an_impossible_floor_still_empties_the_set(
 async def test_timings_report_every_stage_that_ran(
     service: MemoryService, org: Organization, space: Space, wide: None
 ) -> None:
+    """`use_rerank` is passed explicitly because it is no longer the default.
+
+    This test is about the timings contract, not about which stages run by
+    default, and leaning on the default made it silently a different test the
+    day that default changed.
+    """
     response = await service.search(
-        SearchRequest(query="service-3", org_id=org.id, space_id=space.id, limit=5)
+        SearchRequest(
+            query="service-3", org_id=org.id, space_id=space.id, limit=5, use_rerank=True
+        )
     )
     for key in ("embed_ms", "candidates_ms", "fusion_ms", "hydrate_ms", "rerank_ms"):
         assert key in response.timings_ms, f"{key} missing from timings"

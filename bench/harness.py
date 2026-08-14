@@ -675,6 +675,22 @@ contain what was asked.
 #: This is not benchmark shaping. A memory system that answers "suggest a
 #: hotel" with NO_ANSWER while holding the user's stated love of rooftop pools
 #: is failing at the only thing memory is for.
+#:
+#: THE ENUMERATE-AND-CHECK STEPS came from `bench/lab/synthesis.py`, measured on
+#: 177 authored preference questions with retrieval switched off entirely, and
+#: are ported here so this benchmark exercises the same instruction the product
+#: ships in `synthesis/chat.ADVICE_CHAT_PROMPT`. Without them this file measured
+#: the OLD prompt while production ran the new one, which is worse than not
+#: measuring: it reports a number for a system nobody is using.
+#:
+#: The order matters for honesty. The mechanism was established somewhere else,
+#: on a corpus this benchmark did not see, and is ported once and run once. It
+#: would become shaping the moment it were tuned against these results.
+#:
+#: The largest single gap it closes: this prompt said "likes, owns, does and
+#: cares about" and never once said AVOIDS. A standing prohibition is not a
+#: taste, and the lab measured the negative kind at 30/35 -> 34/35 on exactly
+#: that wording change.
 ADVICE_PROMPT = """\
 You are advising a user, drawing on excerpts from your history of \
 conversations with them. Each excerpt is prefixed with the date it happened.
@@ -687,11 +703,15 @@ Excerpts:
 Request: {question}
 
 The excerpts will NOT contain a ready-made answer — they contain what this \
-user likes, owns, does and cares about. Your job is to make a recommendation \
-that visibly reflects those preferences.
+user likes, avoids, owns, does and cares about. Your job is to make a \
+recommendation that visibly reflects those preferences.
 
-- Mine the excerpts for the user's tastes, constraints, brands, skills and \
-past choices relevant to this request.
+- List EVERY preference in the excerpts that bears on this request, however \
+many there are — what the user AVOIDS counts as much as what they like. If a \
+preference CHANGED over time, use only the latest.
+- Check your recommendation against each one, and give a recommendation that \
+satisfies ALL of them at once. If two genuinely conflict, say which you traded \
+off.
 - Give concrete suggestions, and make the connection to their preferences \
 explicit ("Sony-compatible, since you shoot Sony").
 - Never reply NO_ANSWER. A recommendation is always possible from stated \
@@ -700,7 +720,8 @@ preferences; refusing is the failure mode here.
 
 Reply with a single JSON object and nothing else:
 
-{{"facts": "<the user preferences you are drawing on>",
+{{"facts": "<every preference you are drawing on, including any the \
+recommendation must not violate>",
  "answer": "<your recommendation, two to four sentences>"}}"""
 
 #: The official judge asks for "yes or no only", and the reflex is to cap output

@@ -99,12 +99,28 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
             #    suggest", "could you please recommend", "would you maybe
             #    propose".
             r"\b(?:can|could|would|will)\s+you\s+(?:\w+\s+){0,2}"
-            r"(?:suggest|recommend|propose|advise|help)\b"
+            r"(?:suggest|recommend|propose|advise|help|plan|pick|choose)\b"
             # 2. BARE IMPERATIVE. Same verbs with the modal dropped, which is
             #    how the request is usually typed: "suggest a few", "recommend
             #    me something", "advise on a route".
             r"|\b(?:suggest|recommend|advise|propose)\s+(?:me\s+)?"
             r"(?:some|a|an|any|the|something|anything|\d)\b"
+            # 2b. THE SAME IMPERATIVE, for verbs that are also common nouns.
+            #     Measured, not anticipated: "Plan how I should get to the
+            #     Edinburgh review" classified DIRECT, took the fact-lookup
+            #     contract, and answered "I don't have that in memory" -- a
+            #     refusal on a request that always has an answer, which is the
+            #     exact failure ADVICE exists to prevent.
+            #
+            #     These cannot join frame 2, because there the verb is
+            #     identified by the determiner after it and "plan" takes the
+            #     same shape as a NOUN doing so: "the plan the architect gave
+            #     me" would match "plan"+"the" and route a recall question to
+            #     advice. Anchoring to the start of the string identifies the
+            #     imperative by POSITION instead -- a sentence-initial verb is
+            #     not a noun phrase, and "what was the plan for March" keeps
+            #     its DIRECT routing because `plan` is not where a verb goes.
+            r"|^\s*(?:please\s+)?(?:plan|pick|choose)\b"
             # 3. FIRST-PERSON DELIBERATION about a future action. The asker is
             #    weighing a choice, so no stored answer exists -- and this is
             #    the frame, not a list of verbs, so it covers any verb after

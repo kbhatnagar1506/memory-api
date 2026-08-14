@@ -1,0 +1,252 @@
+[
+ {
+  "capability": "direct",
+  "question": "What printer did I buy in February?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "A Prusa MK4 printer was bought for 899 pounds in February 2026 [2]."
+ },
+ {
+  "capability": "direct",
+  "question": "Which client did I sign first?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "Halden Foods was the first client signed [2]."
+ },
+ {
+  "capability": "count",
+  "question": "How many client projects did I ship in 2026?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 4,
+  "used_unverified": false,
+  "reply": "Four projects were shipped in 2026 [1, 5, 7, 8]. These were the Okonjo Studio retail fixture [1], the Vireo Health enclosure [5], the Bramwell Cycles light housing [7], and the Halden Foods packaging refresh [8]."
+ },
+ {
+  "capability": "order",
+  "question": "Which client did I sign most recently?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "Vireo Health was the most recently signed client, on June 2, 2026 [3]."
+ },
+ {
+  "capability": "order",
+  "question": "What was the first thing I bought for the workshop?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "A Prusa MK4 printer was bought for the workshop on 03 Feb 2026 for 899 pounds [1]."
+ },
+ {
+  "capability": "date_arith",
+  "question": "How many days passed between starting and shipping the Bramwell light housing?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": false,
+  "reply": "The Bramwell Cycles project started on March 4, 2026 [1]. The light housing shipped on March 24, 2026 [2]. This was a span of 20 days."
+ },
+ {
+  "capability": "compare",
+  "question": "Of the two Peckham studios I quoted, which was cheaper and by how much?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "Studio B was cheaper by 250 a month [1]."
+ },
+ {
+  "capability": "compare",
+  "question": "Which printer cost me more, the Prusa or the Bambu?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": false,
+  "reply": "The Bambu X1C printer cost 1299 pounds [1]. The Prusa MK4 printer cost 899 pounds [3]. The Bambu printer cost more [1, 3]."
+ },
+ {
+  "capability": "list_all",
+  "question": "List every client I have worked with this year.",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "You have worked with Halden Foods [19, 16], Bramwell Cycles [18, 17], Okonjo Studio [7], and Vireo Health [6, 11]."
+ },
+ {
+  "capability": "temporal",
+  "question": "What did I do in March?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 3,
+  "used_unverified": false,
+  "reply": "In March, you flew to Milan for a design fair and got three leads [4]. You also started the Bramwell Cycles project, which was for an aluminum rear light housing [7]. Later that month, you shipped the Bramwell Cycles light housing after the tooling was signed off on the first pass [6]."
+ },
+ {
+  "capability": "multi",
+  "question": "How much did I spend on 3D printers in total?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": false,
+  "reply": "You spent 2198 pounds on 3D printers [2, 3]. This includes 1299 pounds for a Bambu X1C printer [2] and 899 pounds for a Prusa MK4 printer [3]."
+ },
+ {
+  "capability": "supersede",
+  "question": "What is my current day rate?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "My day rate is 85 pounds an hour [1]. I raised it from 60 pounds an hour on May 6, 2026 [1, 2]."
+ },
+ {
+  "capability": "supersede",
+  "question": "What should I quote a new client for a day's work?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": false,
+  "reply": "Here is my advice based on your memories:\n\n**1. PREFERENCES**\n*   \"Raised my day rate from 60 to 85 pounds an hour. Nobody pushed back.\" [5]\n*   \"I do my best work before ten.\" [1]\n\n**2. CHECK**\n*   The quote should be based on the most recent, successful hourly rate.\n*   The quote should reflect a full day's work, which for you starts early.\n\n**3. RECOMMENDATION**\nBased on a standard 8-hour day, you should quote the new client **\u00a3680**. This is calculated from your most recent successful rate of \u00a385 per hour [5]."
+ },
+ {
+  "capability": "contradict",
+  "question": "What is Bramwell's annual tooling budget?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": true,
+  "reply": "There are two conflicting accounts of Bramwell's annual tooling budget. The finance director stated it was 52000 pounds [2]. An unverified memory from Sarah at Bramwell puts it at around 40000 pounds [1]."
+ },
+ {
+  "capability": "unverified",
+  "question": "What did Sarah tell me about Bramwell's budget?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 2,
+  "used_unverified": true,
+  "reply": "Sarah at Bramwell said their annual tooling budget is around 40000 pounds [1]. This is an unverified memory [1]. Bramwell's finance director stated the tooling budget was 52000 pounds for the year [2]."
+ },
+ {
+  "capability": "abstain",
+  "question": "What is my accountant's name?",
+  "correct": true,
+  "declined": true,
+  "leaked": false,
+  "cited": 0,
+  "used_unverified": false,
+  "reply": "I don't have that in memory."
+ },
+ {
+  "capability": "abstain",
+  "question": "Which university did I study at?",
+  "correct": true,
+  "declined": true,
+  "leaked": false,
+  "cited": 0,
+  "used_unverified": false,
+  "reply": "I don't have that in memory."
+ },
+ {
+  "capability": "abstain",
+  "question": "What did the Caldwell Motors retainer come to?",
+  "correct": true,
+  "declined": true,
+  "leaked": false,
+  "cited": 0,
+  "used_unverified": false,
+  "reply": "I don't have that in memory."
+ },
+ {
+  "capability": "tenancy",
+  "question": "What is Caldwell's brand colour?",
+  "correct": true,
+  "declined": true,
+  "leaked": false,
+  "cited": 0,
+  "used_unverified": false,
+  "reply": "I don't have that in memory."
+ },
+ {
+  "capability": "pref_explicit",
+  "question": "A drawing package is coming in from a new client. What should I insist on?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "1.  **PREFERENCES**:\n    *   \"I work in metric only. An imperial drawing gets sent back, no exceptions.\" [1]\n\n2.  **CHECK**:\n    *   The drawing package must use the metric system for all measurements.\n\n3.  **RECOMMENDATION**:\n    Insist that the client provides all drawings and specifications exclusively in metric units."
+ },
+ {
+  "capability": "pref_implicit",
+  "question": "I need to book a recurring slot for deep design work. When should I put it?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "1.  **PREFERENCES**:\n    *   \"Third client meeting I've done at eight in the morning. I do my best work before ten.\" [4]\n\n2.  **CHECK**:\n    *   The recurring slot must be scheduled before 10 a.m. to align with your peak productivity time.\n\n3.  **RECOMMENDATION**:\n    Book a recurring daily slot from 8 a.m. to 10 a.m. for your deep design work. This capitalizes on the time you do your best work and protects it from being taken by early client meetings."
+ },
+ {
+  "capability": "pref_negative",
+  "question": "A nicotine pouch brand wants a packaging refresh at double my rate. Should I take it?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 4,
+  "used_unverified": false,
+  "reply": "Here is my advice based on your memories:\n\n**1. PREFERENCES**\n*   \"I don't take tobacco or vape work, ever.\" [1]\n*   Your day rate is 85 pounds an hour. [4]\n*   You do your best work before ten in the morning. [7]\n*   You work in metric only. [10]\n\n**2. CHECK**\n*   The recommendation must avoid tobacco and vape work.\n*   The recommendation should consider the high offered rate against your standard rate.\n*   The recommendation should ideally involve early morning work.\n*   The recommendation must ensure the client works in metric.\n\n**3. RECOMMENDATION**\nBased on your memories, you should turn this project down.\n\nYour principle of \"I don't take tobacco or vape work, ever\" [1] is a clear and absolute rule. While nicotine pouches are not technically tobacco or vapes, they are a closely related nicotine delivery product. Taking this job would compromise a firm professional boundary you've set. The high pay rate, while attractive, does not override this core principle."
+ },
+ {
+  "capability": "pref_updated",
+  "question": "Quote me for a four-day job for a returning client.",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "My day rate is 85 pounds an hour [5]."
+ },
+ {
+  "capability": "pref_composed",
+  "question": "A tobacco-adjacent startup wants a device enclosure, drawings in inches, meeting at 8am. Which parts of that should I push back on?",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 3,
+  "used_unverified": false,
+  "reply": "Here is my advice based on your memories:\n\n1.  **PREFERENCES**\n*   You do not take tobacco or vape work [6].\n*   You work in metric only and send back imperial drawings [7].\n*   You do your best work before ten in the morning [4].\n\n2.  **CHECK**\n*   The recommendation must reject the project because it is tobacco-adjacent.\n*   The recommendation must reject the use of imperial measurements.\n*   The recommendation should accept the 8am meeting time.\n\n3.  **RECOMMENDATION**\nYou should push back on the project itself and the request for drawings in inches.\n\nBased on your firm stance against tobacco and vape work, I would advise declining this project entirely. The client being \"tobacco-adjacent\" falls squarely into the category of work you've stated you \"don't take... ever\" [6].\n\nIf you were to consider it, you would still need to reject their request for drawings in inches, as you have a strict \"metric only\" policy [7]. The 8am meeting time, however, aligns perfectly with your most productive hours [4]."
+ },
+ {
+  "capability": "pref_composed",
+  "question": "Plan how I should get to a client review in Edinburgh next month.",
+  "correct": true,
+  "declined": false,
+  "leaked": false,
+  "cited": 1,
+  "used_unverified": false,
+  "reply": "1. PREFERENCES:\n*   Prefers taking the train over flying [2, 4].\n*   Does their best work before 10 a.m. [5].\n\n2. CHECK:\n*   The recommendation must involve train travel.\n*   The recommendation should facilitate an early start to the day.\n\n3. RECOMMENDATION:\nTake the Caledonian Sleeper train to Edinburgh. This allows you to travel overnight, arriving in the city early in the morning, which aligns with your preference for doing your best work before 10 a.m. and your established habit of taking the train instead of flying."
+ }
+]

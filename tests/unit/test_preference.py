@@ -72,12 +72,32 @@ EVALUATE_A_PROPOSAL = [
     "Is it a good idea to bring the dog?",
 ]
 
+#: Imperatives whose verb is also a common noun, which is why they need their
+#: own frame anchored to the start of the string rather than to a following
+#: determiner. Found by `bench/lab/capability_live.py` against a live model:
+#: "Plan how I should get to a client review in Edinburgh" classified DIRECT,
+#: took the fact-lookup contract, and replied "I don't have that in memory" --
+#: refusing a request that always has an answer. The preference lab could not
+#: see it, because it applied the advice prompt to every question directly and
+#: so never exercised the classifier at all.
+PLAN_IMPERATIVE = [
+    "Plan how I should get to a client review in Edinburgh next month.",
+    "Plan me a weekend at my daughter's next month.",
+    "Plan my lunches for the next rotation.",
+    "Plan out the autumn menu.",
+    "Pick a restaurant for Friday.",
+    "Choose a printer for me.",
+    "Can you plan my week?",
+    "Please plan the trip.",
+]
+
 ADVICE_QUESTIONS = [
     *DIRECTIVE_TO_ASSISTANT,
     *BARE_IMPERATIVE,
     *FIRST_PERSON_DELIBERATION,
     *ADVICE_NOUN,
     *EVALUATE_A_PROPOSAL,
+    *PLAN_IMPERATIVE,
 ]
 
 
@@ -115,6 +135,16 @@ FACTUAL_QUESTIONS = [
     "What is our entire infrastructure?",
     "Which invoice was dated earliest?",
     "How long after the review did the migration happen?",
+    # `plan`, `pick` and `choose` as NOUNS or as past-tense recall. These are
+    # what stopped frame 2b joining frame 2: identified by a following
+    # determiner, "the plan the architect gave me" is a recall question wearing
+    # an imperative's shape. Anchoring to the start of the string is what keeps
+    # these DIRECT.
+    "What was the plan for March?",
+    "Which plan did I pick last year?",
+    "What plan am I on with the gym?",
+    "Who chose the venue for the launch?",
+    "What did I pick for dessert in June?",
 ]
 
 

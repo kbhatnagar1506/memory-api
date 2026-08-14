@@ -174,6 +174,19 @@ def format_memories(hits: Sequence[ScoredMemory]) -> str:
     The date is EVENT time, not write time. "Krishna joined Reakon" dated May
     2026 tells the model when the fact became true; the date it was typed in
     tells it nothing it can reason with.
+
+    TO THE DAY, and it was month precision until a live capability run caught
+    what that costs. Two memories dated 4 March and 24 March both rendered
+    "(Mar 2026)", and asked how long the project took the model answered "I
+    don't have that in memory" -- correctly, because with the day truncated
+    away the answer genuinely was not in its context. The failure looked like a
+    missing date-arithmetic capability and was actually a formatting decision
+    three layers below it.
+
+    Everything scoped tighter than a month was unanswerable the same way: which
+    of two same-month events came first, what happened on the 12th, how many
+    days between anything. The extra three characters are the cheapest fix in
+    this file.
     """
     lines = []
     for i, hit in enumerate(hits, start=1):
@@ -181,7 +194,7 @@ def format_memories(hits: Sequence[ScoredMemory]) -> str:
         text = (memory.content or "").strip()[:MAX_MEMORY_CHARS]
         stamp = ""
         if isinstance(memory.occurred_at, datetime):
-            stamp = f" ({memory.occurred_at:%b %Y})"
+            stamp = f" ({memory.occurred_at:%d %b %Y})"
         flag = " [UNVERIFIED]" if _is_unverified(memory.metadata) else ""
         lines.append(f"{i}.{stamp}{flag} {text}")
     return "\n".join(lines)

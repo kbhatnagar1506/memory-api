@@ -18,6 +18,8 @@ argument for pinning both.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from tests.support.factories import EPOCH
 from tests.support.factories import memory as build_memory
@@ -78,7 +80,22 @@ def test_the_date_shown_is_event_time_not_write_time() -> None:
     """ "Joined in May 2026" tells the model when the fact became true. The date
     it was typed in tells it nothing it can reason with."""
     rendered = format_memories([_hit("a dated fact", occurred_at=EPOCH)])
-    assert "(Jan 2026)" in rendered
+    assert "Jan 2026" in rendered
+
+
+def test_the_date_carries_the_day_not_just_the_month() -> None:
+    """Month precision made every sub-month question unanswerable.
+
+    Found live: two memories dated 4 and 24 March both rendered "(Mar 2026)",
+    and "how many days did the project take" got "I don't have that in memory"
+    -- a correct answer to the context it was actually given. Same-month
+    ordering and "what happened on the 12th" failed the same way.
+    """
+    a = _hit("started", occurred_at=datetime(2026, 3, 4, tzinfo=UTC))
+    b = _hit("shipped", occurred_at=datetime(2026, 3, 24, tzinfo=UTC))
+    rendered = format_memories([a, b])
+    assert "04 Mar 2026" in rendered
+    assert "24 Mar 2026" in rendered
 
 
 def test_a_long_memory_is_clipped() -> None:

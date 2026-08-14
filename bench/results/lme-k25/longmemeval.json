@@ -1,0 +1,450 @@
+{
+  "benchmark": "longmemeval",
+  "end_to_end": null,
+  "evidence_granularity": "session",
+  "corpora": 500,
+  "documents": 23867,
+  "questions": 500,
+  "k": 25,
+  "embedder": {
+    "name": "gemini",
+    "model": "text-embedding-004"
+  },
+  "configs": [
+    {
+      "config": {
+        "vector_weight": 1.0,
+        "lexical_weight": 0.0,
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 25,
+      "n_scored": 500,
+      "n_failed": 0,
+      "full_recall@k": 0.998,
+      "recall@k": 0.999,
+      "hit@k": 1.0,
+      "mrr": 0.9387,
+      "ndcg@k": 0.9415,
+      "latency_ms_mean": 1582.6793,
+      "by_category": {
+        "knowledge-update": {
+          "n": 78,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9531,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9808
+        },
+        "multi-session": {
+          "n": 133,
+          "avg_evidence": 2.59,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9719,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9649
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9358,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 30,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.8865,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8898
+        },
+        "single-session-user": {
+          "n": 70,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.948,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.922
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "avg_evidence": 2.2,
+          "full_recall@k": 0.9925,
+          "full_recall_ci": [
+            0.9586,
+            0.9987
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8819
+        }
+      },
+      "errors": [],
+      "name": "vector_only"
+    },
+    {
+      "config": {
+        "vector_weight": 0.0,
+        "lexical_weight": 1.0,
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 25,
+      "n_scored": 500,
+      "n_failed": 0,
+      "full_recall@k": 0.97,
+      "recall@k": 0.9854,
+      "hit@k": 0.998,
+      "mrr": 0.9099,
+      "ndcg@k": 0.9075,
+      "latency_ms_mean": 1748.2037,
+      "by_category": {
+        "knowledge-update": {
+          "n": 78,
+          "avg_evidence": 2.0,
+          "full_recall@k": 0.9872,
+          "full_recall_ci": [
+            0.9309,
+            0.9977
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9936
+        },
+        "multi-session": {
+          "n": 133,
+          "avg_evidence": 2.59,
+          "full_recall@k": 0.9398,
+          "full_recall_ci": [
+            0.8858,
+            0.9692
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9275
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9358,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9911
+        },
+        "single-session-preference": {
+          "n": 30,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.8865,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.5819
+        },
+        "single-session-user": {
+          "n": 70,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.948,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9251
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "avg_evidence": 2.2,
+          "full_recall@k": 0.9549,
+          "full_recall_ci": [
+            0.9051,
+            0.9792
+          ],
+          "hit@k": 0.9925,
+          "mrr": 0.8751
+        }
+      },
+      "errors": [],
+      "name": "lexical_only"
+    },
+    {
+      "config": {
+        "use_rerank": false,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 25,
+      "n_scored": 500,
+      "n_failed": 0,
+      "full_recall@k": 0.992,
+      "recall@k": 0.9963,
+      "hit@k": 1.0,
+      "mrr": 0.9448,
+      "ndcg@k": 0.9449,
+      "latency_ms_mean": 1610.6725,
+      "by_category": {
+        "knowledge-update": {
+          "n": 78,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9531,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9872
+        },
+        "multi-session": {
+          "n": 133,
+          "avg_evidence": 2.59,
+          "full_recall@k": 0.9925,
+          "full_recall_ci": [
+            0.9586,
+            0.9987
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9504
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9358,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 1.0
+        },
+        "single-session-preference": {
+          "n": 30,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.8865,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8219
+        },
+        "single-session-user": {
+          "n": 70,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.948,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9726
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "avg_evidence": 2.2,
+          "full_recall@k": 0.9774,
+          "full_recall_ci": [
+            0.9358,
+            0.9923
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9042
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rrf"
+    },
+    {
+      "config": {
+        "use_rerank": true,
+        "use_mmr": false,
+        "use_decay": false
+      },
+      "k": 25,
+      "n_scored": 500,
+      "n_failed": 0,
+      "full_recall@k": 0.992,
+      "recall@k": 0.9963,
+      "hit@k": 1.0,
+      "mrr": 0.8648,
+      "ndcg@k": 0.8686,
+      "latency_ms_mean": 1591.1658,
+      "by_category": {
+        "knowledge-update": {
+          "n": 78,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9531,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9936
+        },
+        "multi-session": {
+          "n": 133,
+          "avg_evidence": 2.59,
+          "full_recall@k": 0.9925,
+          "full_recall_ci": [
+            0.9586,
+            0.9987
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8577
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9358,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9702
+        },
+        "single-session-preference": {
+          "n": 30,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.8865,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.4561
+        },
+        "single-session-user": {
+          "n": 70,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.948,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8534
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "avg_evidence": 2.2,
+          "full_recall@k": 0.9774,
+          "full_recall_ci": [
+            0.9358,
+            0.9923
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8503
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rerank"
+    },
+    {
+      "config": {
+        "use_rerank": true,
+        "use_mmr": false,
+        "use_decay": false,
+        "use_entity_expansion": true
+      },
+      "k": 25,
+      "n_scored": 500,
+      "n_failed": 0,
+      "full_recall@k": 0.992,
+      "recall@k": 0.9963,
+      "hit@k": 1.0,
+      "mrr": 0.8648,
+      "ndcg@k": 0.8686,
+      "latency_ms_mean": 4263.5683,
+      "by_category": {
+        "knowledge-update": {
+          "n": 78,
+          "avg_evidence": 2.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9531,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9936
+        },
+        "multi-session": {
+          "n": 133,
+          "avg_evidence": 2.59,
+          "full_recall@k": 0.9925,
+          "full_recall_ci": [
+            0.9586,
+            0.9987
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8577
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.9358,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.9702
+        },
+        "single-session-preference": {
+          "n": 30,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.8865,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.4561
+        },
+        "single-session-user": {
+          "n": 70,
+          "avg_evidence": 1.0,
+          "full_recall@k": 1.0,
+          "full_recall_ci": [
+            0.948,
+            1.0
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8534
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "avg_evidence": 2.2,
+          "full_recall@k": 0.9774,
+          "full_recall_ci": [
+            0.9358,
+            0.9923
+          ],
+          "hit@k": 1.0,
+          "mrr": 0.8503
+        }
+      },
+      "errors": [],
+      "name": "hybrid_rerank_entity"
+    }
+  ]
+}

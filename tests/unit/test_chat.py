@@ -24,6 +24,7 @@ from tests.support.factories import memory as build_memory
 
 from mapi.domain.models import ScoredMemory
 from mapi.domain.synthesis.chat import (
+    ADVICE_CHAT_PROMPT,
     CHAT_PROMPT,
     MAX_HISTORY_TURNS,
     MAX_MEMORY_CHARS,
@@ -219,6 +220,53 @@ async def test_the_prompt_carries_the_rules_the_memories_and_the_question() -> N
     assert "what database?" in prompt
     assert "I don't have that in memory" in prompt, "the decline instruction must survive"
     assert "1." in prompt
+
+
+#: The routing added for advice is the change in this module most able to break
+#: something it was not aimed at. `ADVICE_CHAT_PROMPT` deliberately DROPS rule 1
+#: -- decline when the memories do not contain the answer -- because an advice
+#: request has no stored answer by construction. That is correct for advice and
+#: would be a licence to invent on a fact question, so the branch is pinned from
+#: both sides: the advice frame must reach the advice contract, and everything
+#: else must still carry the decline instruction.
+ADVICE_SHAPED = [
+    "Can you suggest a restaurant for Friday?",
+    "What laptop should I buy?",
+    "Recommend me a book for the flight.",
+    "Should we move the standup?",
+]
+FACT_SHAPED = [
+    "What database do we run?",
+    "When did I join Reakon?",
+    "What was the advice the lawyer gave me in March?",
+    "How many invoices went out in May?",
+]
+
+
+@pytest.mark.parametrize("question", ADVICE_SHAPED)
+async def test_an_advice_request_gets_the_advice_contract(question: str) -> None:
+    seen: dict[str, str] = {}
+    await answer(question, [_hit("They dislike loud rooms")], _capturing(seen))
+    assert "no stored preference applies here" in seen["prompt"]
+    assert "I don't have that in memory" not in seen["prompt"]
+
+
+@pytest.mark.parametrize("question", FACT_SHAPED)
+async def test_every_other_question_keeps_the_decline_contract(question: str) -> None:
+    """The baseline this change must not touch. A fact question that lost rule 1
+    would answer from the model's priors in the product's voice."""
+    seen: dict[str, str] = {}
+    await answer(question, [_hit("Postgres 16 on Cloud SQL")], _capturing(seen))
+    assert "I don't have that in memory" in seen["prompt"]
+    assert "no stored preference applies here" not in seen["prompt"]
+
+
+def test_the_two_contracts_are_not_accidentally_the_same() -> None:
+    """A copy-paste that left both templates identical would make every test
+    above pass while the routing did nothing."""
+    assert ADVICE_CHAT_PROMPT != CHAT_PROMPT
+    assert "Answer ONLY from the memories" in CHAT_PROMPT
+    assert "Answer ONLY from the memories" not in ADVICE_CHAT_PROMPT
 
 
 async def test_history_reaches_the_prompt() -> None:

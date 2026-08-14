@@ -1,0 +1,1732 @@
+{
+ "packs": [
+  {
+   "persona": "Colleen, 56, a med-surg nurse at St. Luke's hospital. Married to Marcus; daughter Claire lives in Portland; sister Ruth in Albuquerque; grandkids Theo and Ivy visit most weekends. Keeps a vegetable garden, sings in a choir, knits (until her thumb objects), and will not drive after dark.",
+   "sessions": [
+    {
+     "id": "a01",
+     "week": 0,
+     "text": "Third night shift in a row and I'm running on fumes, but that night differential is fattening the Disney-with-the-grandkids fund, so I keep signing up for them. Grabbed my usual double-shot latte at Rosie's cart on the way in \u2014 still broad daylight at seven, the one mercy of a summer night shift \u2014 and the girl there starts pulling it when she sees my car. Census was brutal; two admits after midnight."
+    },
+    {
+     "id": "a02",
+     "week": 1,
+     "text": "Spent most of Sunday on my knees in the in-ground tomato rows pulling bindweed, and stood up like a rusty gate. Started knitting mittens for Theo in that green he likes \u2014 should have them done before the cold snap if the yarn holds out. Marcus grilled corn and we ate on the porch."
+    },
+    {
+     "id": "a03",
+     "week": 3,
+     "text": "Booked my flight to see Ruth in Albuquerque for October. Paid the extra nine dollars for the aisle \u2014 this knee is not climbing over two strangers to reach the bathroom, not ever again. Also emailed the hotel to ask for a room at the end of the hall, away from the elevator and the ice machine; last conference I heard doors slamming until two in the morning."
+    },
+    {
+     "id": "a04",
+     "week": 4,
+     "text": "Theo's allergy panel came back and it's peanuts, a serious one, so I cleared every jar and granola bar out of my pantry \u2014 this house is a peanut-free zone now and staying that way. At lunch Dana talked me into the medium verde enchiladas and I was gulping milk after two bites; the waitress kindly swapped it for my usual mild plate. Dana is never letting me live it down."
+    },
+    {
+     "id": "a05",
+     "week": 5,
+     "text": "Choir moved rehearsal to 8 pm across town and I told them I'm out \u2014 I don't drive after dark anymore, the oncoming headlights halo so badly I can't see the lane lines. Signed up for Tuesday water aerobics instead; the pool is the only exercise that doesn't leave my knees aching for two days. Fair trade, I think."
+    },
+    {
+     "id": "a06",
+     "week": 7,
+     "text": "Twelve-hour shift and my feet were screaming by hour nine, so I finally replaced my worn-out clogs \u2014 nothing but a wide toe box and real arch support goes on these feet from now on, whatever it costs. Finished another audiobook on the drive home this morning; the narrator does a different voice for every sister and I sat in the driveway just to hear the chapter end."
+    },
+    {
+     "id": "a07",
+     "week": 8,
+     "text": "The grandkids stayed over Saturday and we made zucchini bread with the monsters taking over the garden \u2014 flour everywhere, worth it. Ivy lost her first tooth right at the breakfast table and Theo demanded equal payment for wiggling his. Rain all Sunday, so we did puzzles."
+    },
+    {
+     "id": "a08",
+     "week": 10,
+     "text": "Took the train down to Portland to see Claire \u2014 third trip this year, and I watch the river the whole way instead of white-knuckling I-5. She'd bought me a fancy lotion gift set for my birthday and I had to return it; anything perfumed sets off my migraines within the hour, and the ward's scent-free anyway. We laughed about it over pie."
+    },
+    {
+     "id": "a09",
+     "week": 12,
+     "text": "Made it official \u2014 I'm off nights and on the day shift rotation starting next month, and after one trial week of days I'm sleeping like an actual person for the first time in years. Also marched the weed-and-feed right back to the register; nothing synthetic goes on beds where the grandkids graze cherry tomatoes like candy. Soap spray and ladybugs will have to earn their keep."
+    },
+    {
+     "id": "a10",
+     "week": 14,
+     "text": "Cardiology follow-up went fine, but with the blood pressure numbers Dr. Osei said the caffeine has to go, so it's decaf for me from here on out \u2014 and honestly, I don't miss the 3 pm jitters. Stopped by Hartley's Nursery for fall lettuce starts even though the big-box flat was half the price; Ed remembered my soil trouble and threw in an extra six-pack."
+    },
+    {
+     "id": "a11",
+     "week": 16,
+     "text": "Marcus finished the two cedar raised beds and I planted the garlic standing nearly upright \u2014 my back forgave me by dinner, and I am never planting at ground level again. The old in-ground rows are becoming a clover patch for the bees."
+    },
+    {
+     "id": "a12",
+     "week": 18,
+     "text": "Tried to start a winter hat and my thumb flared so badly I had to quit knitting twenty minutes in \u2014 the fine needles just aren't happening with this arthritis. Switched to a fat crochet hook on Dana's advice and did three granny squares without a twinge, so crochet it is from now on. Theo says the squares look like waffles."
+    },
+    {
+     "id": "a13",
+     "week": 20,
+     "text": "Twenty-nine years at St. Luke's this week and the unit surprised me with a card and a lemon cake. Brought home a basket of the last tomatoes and made sauce while the grandkids raced snails on the patio. A good, ordinary week."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm booking my October flight to Albuquerque \u2014 which seat should I pick?",
+     "spec": "aisle + knee|knees",
+     "evidence_quote": "this knee is not climbing over two strangers"
+    },
+    {
+     "kind": "explicit",
+     "question": "My work clogs are shot again. What features should I insist on in the replacement pair?",
+     "spec": "wide|roomy; arch|support|supportive + toe|feet",
+     "evidence_quote": "a wide toe box and real arch support"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm booking a hotel for a nursing conference \u2014 anything I should request for the room?",
+     "spec": "away|quiet|end|far; elevator|elevators|ice",
+     "evidence_quote": "away from the elevator and the ice machine"
+    },
+    {
+     "kind": "explicit",
+     "question": "I want to add one more exercise class to my week \u2014 what kind should I look for?",
+     "spec": "water|pool|swim|swimming|aqua|aquatic + knee|knees",
+     "evidence_quote": "the only exercise that doesn't leave my knees aching"
+    },
+    {
+     "kind": "implicit",
+     "question": "I'm bringing salsa to the unit potluck and want a jar for myself too \u2014 which heat level should I grab?",
+     "spec": "mild + medium|verde",
+     "evidence_quote": "swapped it for my usual mild plate"
+    },
+    {
+     "kind": "implicit",
+     "question": "The big-box garden center has spring seedling flats for half what I paid last fall \u2014 where should I buy my starts?",
+     "spec": "hartley|hartleys|local|nursery|independent + price",
+     "evidence_quote": "even though the big-box flat was half the price"
+    },
+    {
+     "kind": "implicit",
+     "question": "My book club's next pick just came out \u2014 which format should I get it in for my commute?",
+     "spec": "audiobook|audio|listen|listening|audible",
+     "evidence_quote": "another audiobook on the drive home this morning"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need to get down to Portland next month to help Claire move \u2014 how should I travel?",
+     "spec": "train|amtrak|rail + drive|driving|fly|flying",
+     "evidence_quote": "third trip this year, and I watch the river"
+    },
+    {
+     "kind": "negative",
+     "question": "I'm finally signing up for a weekly pottery class \u2014 what time slot should I ask the studio for?",
+     "spec": "saturday|morning|daytime|afternoon|midday|noon|10|11 + night|evening|dark",
+     "evidence_quote": "I don't drive after dark anymore"
+    },
+    {
+     "kind": "negative",
+     "question": "The grandkids are sleeping over Friday and I promised to bake cookies \u2014 anything I should steer clear of when I pick a recipe?",
+     "spec": "peanut|peanuts|nut|nuts + allergy|allergic|allergies|theo",
+     "evidence_quote": "this house is a peanut-free zone now"
+    },
+    {
+     "kind": "negative",
+     "question": "Aphids are all over my kale \u2014 recommend a treatment.",
+     "spec": "soap|neem|ladybug|ladybugs|organic|natural|insecticidal|beneficial + synthetic|chemical|chemicals|pesticide|pesticides",
+     "evidence_quote": "nothing synthetic goes on beds where the grandkids graze"
+    },
+    {
+     "kind": "negative",
+     "question": "My hands are wrecked from all the washing at work \u2014 recommend a hand cream for me.",
+     "spec": "unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+     "evidence_quote": "anything perfumed sets off my migraines within the hour"
+    },
+    {
+     "kind": "updated",
+     "question": "Grabbing a drink at the coffee cart before my shift \u2014 what should I order?",
+     "spec": "decaf|decaffeinated|herbal + double|caffeine|caffeinated",
+     "evidence_quote": "it's decaf for me from here on out"
+    },
+    {
+     "kind": "updated",
+     "question": "The scheduler posted extra shifts for next month and the graveyard ones pay a premium \u2014 which should I pick up?",
+     "spec": "day|days|daytime + night|nights|graveyard|differential",
+     "evidence_quote": "off nights and on the day shift rotation"
+    },
+    {
+     "kind": "updated",
+     "question": "Where should I plant the spring lettuce this year?",
+     "spec": "raised|bed|beds|cedar + ground|rows",
+     "evidence_quote": "I am never planting at ground level again"
+    },
+    {
+     "kind": "updated",
+     "question": "I want to make a blanket for Claire's new baby \u2014 which of my yarn crafts should I use?",
+     "spec": "crochet|crocheted|crocheting + knit|knitting|thumb|arthritis",
+     "evidence_quote": "so crochet it is from now on"
+    },
+    {
+     "kind": "composed",
+     "question": "Book me the return flight home from Ruth's \u2014 what seat should I pick, and roughly what time of day should it land?",
+     "spec": "aisle; morning|midday|afternoon|daylight|daytime|noon|sunset|dusk + night|dark|evening",
+     "evidence_quote": "Paid the extra nine dollars for the aisle"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan my overnight trip to Portland \u2014 how should I get there, and what should I ask for at the hotel?",
+     "spec": "train|amtrak|rail; quiet|away|elevator|ice|end + drive|driving",
+     "evidence_quote": "the whole way instead of white-knuckling I-5"
+    },
+    {
+     "kind": "composed",
+     "question": "My sister wants gift ideas for me \u2014 what should she look for in work shoes and in a hand cream?",
+     "spec": "wide|arch|support|supportive; unscented|fragrance|scent|hypoallergenic + perfumed|perfume|migraine|migraines",
+     "evidence_quote": "my feet were screaming by hour nine"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan Saturday breakfast with the grandkids \u2014 anything I need to watch for with the pancake mix, and what should go in my mug?",
+     "spec": "peanut|peanuts|nut|nuts|allergy|allergies|allergen|allergens; decaf|decaffeinated|herbal + caffeine|caffeinated",
+     "evidence_quote": "cleared every jar and granola bar out of my pantry"
+    }
+   ]
+  },
+  {
+   "persona": "B",
+   "sessions": [
+    {
+     "id": "b01",
+     "week": 0,
+     "text": "Finished the appliance-manual job at half past one, the flat finally quiet. Rode the signed contract over to the client's office myself \u2014 twenty minutes by bike beats forty in a tram, and I got a hill in. Turin is showing off this week."
+    },
+    {
+     "id": "b02",
+     "week": 1,
+     "text": "Took the rush job on the medical brochure, so the whole weekend is gone, but the 1.5x fee will cover the new wheelset. Third double espresso of the night and the translation memory is finally behaving. Sent the draft at 3 a.m. and slept like a stone."
+    },
+    {
+     "id": "b03",
+     "week": 3,
+     "text": "Frankfurt Book Fair week. Swapped my window seat at the gate for an aisle \u2014 two hours of knee cramp otherwise, these legs were not built for economy. Booked a bunk in the same hostel dorm as last year; half my current clients started out as bunkmates there."
+    },
+    {
+     "id": "b04",
+     "week": 4,
+     "text": "Sunday loop on the fresh tarmac up to Superga, the 28mm slicks humming the whole climb. Rewarded myself with jungle curry at the Thai place and told them to make it properly hot \u2014 mild curries put me to sleep. Back at the desk by ten for the software strings."
+    },
+    {
+     "id": "b05",
+     "week": 6,
+     "text": "Client lunch went sideways: the risotto arrived under a gorgonzola sauce nobody had mentioned \u2014 one splash of cream and my afternoon is ruined \u2014 so I ate bread and renegotiated the deadline. Tried the new caf\u00e9 on Via Po for the afternoon edit, but the milk steamer and the pop playlist chased me out within the hour."
+    },
+    {
+     "id": "b06",
+     "week": 8,
+     "text": "My sister's wedding down in Bari. I danced badly, translated nothing for four days, and fielded the aunts' questions about when I will get a real job. Worth every minute."
+    },
+    {
+     "id": "b07",
+     "week": 9,
+     "text": "An agency wrote offering a steady pipeline of post-editing machine output; I told them what I always tell them \u2014 I translate, I don't launder algorithms. Passed the Italian-to-English website contract along to Sarah as well: I only work into Italian, because my English reads like a train timetable."
+    },
+    {
+     "id": "b08",
+     "week": 11,
+     "text": "Took the train to Lyon for the client workshop \u2014 five hours with a table and my laptop beats an airport eating the whole day. My favourite merino jersey tore at the pocket, so I spent the evening darning it instead of ordering a new one. The client signed for another year, which softened the ride home."
+    },
+    {
+     "id": "b09",
+     "week": 13,
+     "text": "Turned down a Saturday delivery for the first time in my career \u2014 after June's burnout scare, weekends are off the table for good, whatever the fee. Found a silent reading room at the Biblioteca Civica and got four uninterrupted hours, more than the whole caf\u00e9 week combined."
+    },
+    {
+     "id": "b10",
+     "week": 15,
+     "text": "Two close passes from vans on the Superga descent settled it: I've moved the Sunday ride onto the gravel tracks through La Mandria, and I'm not going back. Printed all 300 pages of the manuscript for the final pass \u2014 I catch twice as many errors on paper as I ever do on a screen."
+    },
+    {
+     "id": "b11",
+     "week": 17,
+     "text": "The cardiologist was polite about the palpitations, but the evening espressos are finished \u2014 the caf\u00e9 now knows me as the decaf guy and I've made my peace with it. Cycled the twelve kilometres to the appointment and back; the receptionist thought I was joking about the helmet hair."
+    },
+    {
+     "id": "b12",
+     "week": 19,
+     "text": "Booked a small private room for the Lisbon conference \u2014 after the snoring symphony in the Vienna dorm last spring, I'm done with hostel bunks for good. Also dropped the Milan agency after they moved everyone to 60-day payment terms \u2014 thirty days or I walk, and they know it."
+    },
+    {
+     "id": "b13",
+     "week": 20,
+     "text": "Rebuilt the rear wheel at the kitchen table with new spokes rather than buying the replacement the shop kept pushing. Deadline week for the novel, and my best paragraphs still arrive between midnight and two, so I've stopped pretending to be a morning person. The wheel is true and so, mostly, is the prose."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm booking my flight to Dublin for the poetry festival and the seat map just opened \u2014 which seat should I pick?",
+     "spec": "aisle|exit|legroom + window|knee|knees",
+     "evidence_quote": "my window seat at the gate for an aisle"
+    },
+    {
+     "kind": "explicit",
+     "question": "The final proofread of a 200-page annual report is due Friday \u2014 should I do the pass on my tablet or some other way?",
+     "spec": "paper|print|printed|printout|printing|hardcopy|printer + screen|screens|tablet",
+     "evidence_quote": "I catch twice as many errors on paper"
+    },
+    {
+     "kind": "explicit",
+     "question": "I need to get from Turin to Paris for a client workshop \u2014 roughly five and a half hours overland, or a short flight. Which should I book?",
+     "spec": "train|rail|railway|tgv + airport|flight|plane|flying",
+     "evidence_quote": "five hours with a table and my laptop"
+    },
+    {
+     "kind": "explicit",
+     "question": "At the Thai place tonight \u2014 which curry should I go for, and anything I should tell the kitchen when I order?",
+     "spec": "jungle|spicy|spicier|spiciest|hot|hotter|hottest + mild",
+     "evidence_quote": "mild curries put me to sleep"
+    },
+    {
+     "kind": "implicit",
+     "question": "I have a meeting across town tomorrow, about four kilometres away. What's the best way to get there?",
+     "spec": "bike|bicycle|cycle|cycling + tram",
+     "evidence_quote": "twenty minutes by bike beats forty in a tram"
+    },
+    {
+     "kind": "implicit",
+     "question": "Two coworking spaces near me offer day passes: an open loft with a caf\u00e9 bar and nonstop playlists, or a bare floor above it where nobody talks. Which should I take for my editing sprint?",
+     "spec": "silent|quiet|quieter|upstairs|second|latter|above|bare + lively|loft",
+     "evidence_quote": "four uninterrupted hours, more than the whole caf\u00e9 week"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need to block three hours of deep focus for the contract translation \u2014 what time of day should I schedule it?",
+     "spec": "evening|night|nights|late|midnight|pm + morning",
+     "evidence_quote": "my best paragraphs still arrive between midnight and two"
+    },
+    {
+     "kind": "implicit",
+     "question": "My desk chair's gas lift is sagging to the floor. What should I do about it?",
+     "spec": "repair|repairing|fix|fixing|mend|mending|cartridge|cylinder|swap|swapping|diy + replace|replacement",
+     "evidence_quote": "spent the evening darning it instead of ordering a new one"
+    },
+    {
+     "kind": "negative",
+     "question": "Recommend a dessert for me to order at the Italian restaurant tonight.",
+     "spec": "sorbet|sorbetto|granita|fruit|dairy|lactose + gelato",
+     "evidence_quote": "one splash of cream and my afternoon is ruined"
+    },
+    {
+     "kind": "negative",
+     "question": "An agency is offering me a steady stream of machine-translation post-editing at a fair hourly rate. Should I take it on?",
+     "spec": "decline|declining|refuse|refusing|turn|turning|pass|passing|avoid|skip|reject|walk + launder",
+     "evidence_quote": "I translate, I don't launder algorithms"
+    },
+    {
+     "kind": "negative",
+     "question": "A startup wants their app localized from Italian into English and reached out to me directly. Should I take the job or hand it off?",
+     "spec": "refer|referral|referring|hand|handing|colleague|native|decline|declining|pass|passing|outsource|sarah + timetable",
+     "evidence_quote": "my English reads like a train timetable"
+    },
+    {
+     "kind": "negative",
+     "question": "A big agency offers me strong volume, but their standard payment terms run two months after invoice. Should I sign their vendor agreement?",
+     "spec": "decline|declining|refuse|refusing|negotiate|negotiating|renegotiate|counter|thirty|30|walk|turn|turning|pass + 60",
+     "evidence_quote": "thirty days or I walk"
+    },
+    {
+     "kind": "updated",
+     "question": "It's nine in the evening and I'm settling in at the caf\u00e9 for a work session \u2014 what should I order to drink?",
+     "spec": "decaf|decaffeinated|herbal|chamomile|barley|orzo|tea|tisane + espresso",
+     "evidence_quote": "the caf\u00e9 now knows me as the decaf guy"
+    },
+    {
+     "kind": "updated",
+     "question": "A regular client just asked for a rush job delivered by Sunday evening, at a premium rate. Should I accept?",
+     "spec": "decline|declining|turn|turning|pass|passing|refuse|refusing|counter|monday|weekday + weekend",
+     "evidence_quote": "weekends are off the table for good"
+    },
+    {
+     "kind": "updated",
+     "question": "Plan my Sunday ride \u2014 the fast road loop up to Superga, or something else?",
+     "spec": "gravel|mandria|trail|trails|unpaved|dirt|forest + tarmac",
+     "evidence_quote": "moved the Sunday ride onto the gravel tracks"
+    },
+    {
+     "kind": "updated",
+     "question": "Booking my accommodation for the Lisbon conference now \u2014 the sociable dorm bunks everyone from the translators' chat is taking, or a different option?",
+     "spec": "private|hotel|apartment|guesthouse|airbnb|pension|single|own + hostel",
+     "evidence_quote": "done with hostel bunks for good"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan my trip to the Zurich localization meetup \u2014 it's a short hop by air or about four hours overland \u2014 including how I should get around the city during the three days there.",
+     "spec": "train|rail|railway; bike|bicycle|cycle|cycling|velo + airport|flight|plane",
+     "evidence_quote": "beats an airport eating the whole day"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm at the caf\u00e9 for a late editing session and fancy something warm and milky \u2014 what exactly should I order?",
+     "spec": "decaf|decaffeinated|barley|orzo|chamomile|herbal|tea|chocolate|cocoa; oat|soy|almond|coconut|plant|dairy|lactose|rice + espresso",
+     "evidence_quote": "The cardiologist was polite about the palpitations"
+    },
+    {
+     "kind": "composed",
+     "question": "Booking my flight to the Helsinki conference: one departure leaves at dawn, the other just after lunch \u2014 which should I book, and which seat should I pick?",
+     "spec": "aisle; afternoon|later|latter|second|lunch|midday|noon + dawn",
+     "evidence_quote": "two hours of knee cramp otherwise"
+    },
+    {
+     "kind": "composed",
+     "question": "Recommend what kind of place I should book for a three-night retreat to finish the novel translation.",
+     "spec": "private|hotel|apartment|guesthouse|cottage|cabin|airbnb|agriturismo; quiet|quieter|silent|calm|peaceful|tranquil|secluded + hostel",
+     "evidence_quote": "after the snoring symphony in the Vienna dorm"
+    }
+   ]
+  },
+  {
+   "persona": "Eamon, 64, a retired merchant-navy second engineer living alone in Bosham on the Sussex coast; widower (Maureen died three years ago), daughter Siobhan and grandson Fergus up in Bristol, a loft of racing pigeons in the garden, a clock bench in the back room, and type-2 diabetes to keep an eye on.",
+   "sessions": [
+    {
+     "id": "c01",
+     "week": 0,
+     "text": "Out in the loft at half five with a mug of tea, two heaped sugars the way I've taken it since I was an apprentice, watching the young birds mess about on the landing board. Drove the van over to Pagham afterwards and came back with a wormy old Vienna regulator out of a house clearance, thirty quid the lot. Wrote the weather and the toss times in the loft book before I'd even got my coat off."
+    },
+    {
+     "id": "c02",
+     "week": 1,
+     "text": "Booked the table for what would have been our fortieth and told the girl on the phone we'd need to be well away from the kitchen doors and the speakers \u2014 thirty years stood beside diesels finished my right ear, and in a din I can't pick one voice out of the rest. Siobhan came down and we got through the evening without either of us making a fuss of it. She'd had a photograph of her mother at Rotterdam framed for me, one I'd never seen."
+    },
+    {
+     "id": "c03",
+     "week": 2,
+     "text": "Tom rang about the club supper in June and asked whether he should put a drink behind the bar for me. Told him what I tell everybody: I poured the last of the rum away the week of the funeral and I've not touched a drop since, so something cold and soft and I'm content. Entered the young birds for the five-hundred-mile national while I had him on the line, same as every June since Maureen was alive."
+    },
+    {
+     "id": "c04",
+     "week": 4,
+     "text": "Diabetic clinic on Tuesday and the nurse went over both feet with a torch and a little blue pin. She sent me off with one rule I'm to keep for good: seamless socks only, nothing with a ridge across the toe, because I'd not feel a blister start until it had turned into something serious. Ordered six pairs that afternoon and put the old lot in the rag bag. Fingertips like old leather from four finger pricks a day, but the numbers are behaving themselves."
+    },
+    {
+     "id": "c05",
+     "week": 6,
+     "text": "Took the overnight ferry to Rotterdam for the horological fair and slept better in that cabin than I have in months. Came home with a box of secondhand hand tools off a Dutchman's stall and a set of blued steel hands I fished out of a scrap tray for two euros. Fergus wanted to know whether the ship had a proper engine room; I told him it had two and he's not stopped asking since."
+    },
+    {
+     "id": "c06",
+     "week": 7,
+     "text": "A fellow turned up at the door with his grandmother's Vienna regulator and forty pounds, wanting me to gut it and drop a battery movement in the case so it would keep time without any bother. I sent him off to find somebody else \u2014 I'll not hollow out a good clock for anybody, whatever they're offering. Wrote the refusal in the job book anyway, because you always get asked twice."
+    },
+    {
+     "id": "c07",
+     "week": 9,
+     "text": "Fergus came down for half term and we spent Saturday on the harbour wall with a bag of chips and hardly a word between us, which suited the pair of us. A sparrowhawk had two goes at the birds on Sunday and put the whole loft up in the air. Two ridge tiles came off in the gale and there's a bucket under the landing until somebody sorts it."
+    },
+    {
+     "id": "c08",
+     "week": 11,
+     "text": "Ordered a headband visor with its own light on it rather than another eyeglass loupe \u2014 I want both hands free when I'm fitting a pallet, and a loupe wedged in the socket gives me a headache by eleven. Had the whole escapement stripped and cleaned before breakfast on Thursday while the light was clean and my hands were steady. By four in the afternoon I'm fit for nothing but sweeping up and feeding the birds."
+    },
+    {
+     "id": "c09",
+     "week": 12,
+     "text": "The podiatrist put the fear of God into me on Monday: never barefoot, not in the house, not out to the loft, not on sand, because I'd not feel the splinter or the bit of grit that starts the whole business off. There's a pair of proper slip-ons by the back door now and another pair beside the bed. And I came off the third rung of the loft ladder in the wet on Sunday and lay in the gravel a good ten minutes before I could get myself upright; that's the last ladder I ever go up, I'll pay a man."
+    },
+    {
+     "id": "c10",
+     "week": 14,
+     "text": "The van's gone to a lad in Portsmouth \u2014 it sat on the drive four months doing nothing and the insurance was daft money, so that's the end of me and driving. Got out to the reclamation yard at Fontwell on the bus instead and carried home a cast-iron door for the loft, which the driver had opinions about. Everything I laid out for it went in the red cash book on Sunday night, same as always."
+    },
+    {
+     "id": "c11",
+     "week": 16,
+     "text": "Bloods were up at the review, so the nurse fitted one of those sensors on the back of my arm and showed me how to scan it with the phone; I've not pricked a finger in three weeks. Same appointment, same lecture, so the sugar bowl went in the bin and I've taken to a few drops of liquid sweetener in the tea instead. Tastes like a stranger's tea for a week and then you forget what you were missing."
+    },
+    {
+     "id": "c12",
+     "week": 18,
+     "text": "The toaster packed up at fourteen months, sealed shut with plastic clips and not one screw anywhere on it, so it went in the bin because there was no way into the thing. I've told Siobhan straight: if it can't be taken apart with a screwdriver and put back together, it isn't coming into this house. Replaced it with a secondhand one off the market stall for six pounds, four screws in the base and an element you can actually reach."
+    },
+    {
+     "id": "c13",
+     "week": 20,
+     "text": "Scratched the long races off my card for good \u2014 short club sprints from here on, birds home the same day and me not sat up till dark waiting on stragglers. Went up to Bristol on the train for Fergus's birthday and came back the same night. He asked whether I'd ever been to Japan; twice, both times by sea, and I told him about the typhoon off Kyushu until his mother made me stop."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "My sock drawer is finally past saving and I'm ordering a fresh lot this week. What is the one thing I should be insisting on in the new pairs?",
+     "spec": "seamless|smooth|seamfree|flat; toe|toes|diabetic|diabetes|feet|foot + blister|blisters|ridge|ulcer",
+     "evidence_quote": "seamless socks only, nothing with a ridge across the toe"
+    },
+    {
+     "kind": "explicit",
+     "question": "Siobhan wants to take me out for a meal at a place in town and she's asked whether there's anything she ought to tell them when she books. What should she ask them for?",
+     "spec": "quiet|quieter|corner|away|booth|secluded; kitchen|speakers|speaker|music|noise|noisy|din + ear|hearing|deaf",
+     "evidence_quote": "well away from the kitchen doors and the speakers"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm kitting out a second bench in the back room for the really fiddly jobs. What sort of magnifying gear should I put on it, and what must it have built on?",
+     "spec": "headband|visor|head|optivisor|binocular; light|lit|lamp|led|illuminated|illumination + loupe|eyeglass",
+     "evidence_quote": "a headband visor with its own light on it"
+    },
+    {
+     "kind": "explicit",
+     "question": "The kettle is on its last legs. Before I hand over any money for a replacement, what should I be checking on it?",
+     "spec": "screws|screwed|screw|screwdriver|apart|dismantle|dismantled|opened; repairable|serviceable|repair|repaired|fixable|fix|serviced + glued|sealed|clips|bin",
+     "evidence_quote": "if it can't be taken apart with a screwdriver"
+    },
+    {
+     "kind": "implicit",
+     "question": "There's a clock museum in Vienna I've wanted to see for twenty years and I'm finally doing it this autumn. How should I make the journey out there?",
+     "spec": "train|trains|rail|sleeper|eurostar|ferry|boat|coach|sea|overland + fly|flying|flight|flights|plane|airport",
+     "evidence_quote": "Took the overnight ferry to Rotterdam for the horological fair"
+    },
+    {
+     "kind": "implicit",
+     "question": "The horological society has offered me a slot to demonstrate escapement cleaning at their open day and says I can pick any hour I like. Which should I take?",
+     "spec": "morning|mornings|dawn|breakfast|earliest|forenoon + afternoon|evening|late|night",
+     "evidence_quote": "Had the whole escapement stripped and cleaned before breakfast"
+    },
+    {
+     "kind": "implicit",
+     "question": "The nurse wants me keeping proper track of my blood pressure readings as well now. What should I be putting them down in?",
+     "spec": "notebook|logbook|ledger|diary|paper|pad|handwritten|written|pen|longhand + app|apps|phone|spreadsheet|digital",
+     "evidence_quote": "went in the red cash book on Sunday night"
+    },
+    {
+     "kind": "implicit",
+     "question": "The wardrobe in the back bedroom has finally given up and I need another one in there. Where should I be looking for it?",
+     "spec": "secondhand|used|auction|auctions|salvage|reclamation|reclaimed|charity|antique|antiques|vintage|junk|market|clearance|preowned + new|showroom|flatpack",
+     "evidence_quote": "a wormy old Vienna regulator out of a house clearance"
+    },
+    {
+     "kind": "negative",
+     "question": "Siobhan is putting me in the spare room at hers over Christmas and asked whether I need anything left beside the bed. What should I tell her?",
+     "spec": "slippers|slipper|shoes|footwear|sandals|slipons|moccasins + barefoot|feet|foot|neuropathy|floor",
+     "evidence_quote": "never barefoot, not in the house, not out to the loft"
+    },
+    {
+     "kind": "negative",
+     "question": "A neighbour's mantel clock has stood silent for twenty years and she wants it going again as cheaply as it can be done. What should end up inside that case when I hand it over?",
+     "spec": "mechanical|clockwork|original|wound|winding|windup|spring|pendulum|escapement + quartz|battery|electric|modern",
+     "evidence_quote": "I'll not hollow out a good clock for anybody"
+    },
+    {
+     "kind": "negative",
+     "question": "The pigeon club's annual supper is coming round and Tom needs to know what to put down against my name at the bar. What should I have him write?",
+     "spec": "alcohol|alcoholic|nonalcoholic|teetotal|sober|abstain|soft|water|tonic|squash + beer|wine|whisky|rum|pint|ale",
+     "evidence_quote": "I poured the last of the rum away"
+    },
+    {
+     "kind": "negative",
+     "question": "The gutter along the back of the loft is packed solid with moss and the overflow is running down the wall. How should I get it cleared?",
+     "spec": "hire|hired|pay|paid|someone|somebody|professional|handyman|tradesman|contractor|firm|service|pole|ground + ladder|ladders|climb|climbing|rung",
+     "evidence_quote": "that's the last ladder I ever go up"
+    },
+    {
+     "kind": "updated",
+     "question": "Fergus is making the tea and has shouted through to ask how I take mine these days. What should he put in it?",
+     "spec": "sweetener|sweeteners|stevia|sucralose|drops|unsweetened|sugarfree|plain + sugar|sugars|two|heaped",
+     "evidence_quote": "a few drops of liquid sweetener in the tea"
+    },
+    {
+     "kind": "updated",
+     "question": "Next season's race programme came through the door this morning and I've the entry form in front of me. Which events should I put the birds in for?",
+     "spec": "short|shorter|sprint|sprints|inland|local|nearby|100|150 + long|distance|national|hundred|500|marathon",
+     "evidence_quote": "short club sprints from here on"
+    },
+    {
+     "kind": "updated",
+     "question": "There's a farm sale out at Fontwell on Saturday with a box of movements in the lots and I'd like to be there. How should I make the trip?",
+     "spec": "bus|buses|coach|train|taxi|cab|lift|walk|delivered|delivery|carrier + drive|driving|drove|van|car",
+     "evidence_quote": "that's the end of me and driving"
+    },
+    {
+     "kind": "updated",
+     "question": "A chap at the club has just had the same diagnosis and asked what I use day to day to keep an eye on my levels. What should I tell him I'm on now?",
+     "spec": "sensor|sensors|patch|continuous|cgm|scanner|scan|arm|libre + finger|fingers|fingertip|prick|pricks|lancet",
+     "evidence_quote": "fitted one of those sensors on the back of my arm"
+    },
+    {
+     "kind": "composed",
+     "question": "Siobhan is booking Sunday lunch somewhere for the three of us and wants to get it right. Where should she have them sit us, and what should she order me to go with the meal?",
+     "spec": "quiet|quieter|corner|away|booth|secluded; alcohol|alcoholic|nonalcoholic|teetotal|water|soft|tonic|squash|juice + kitchen|speakers|wine|beer|pint",
+     "evidence_quote": "thirty years stood beside diesels finished my right ear"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan me a weekend up at Siobhan's next month. How should I get there, and roughly when should I set off?",
+     "spec": "train|rail|coach|bus|sleeper|ferry|sea; morning|mornings|dawn|breakfast|earliest|forenoon + fly|flight|plane|afternoon|evening",
+     "evidence_quote": "Went up to Bristol on the train for Fergus's birthday"
+    },
+    {
+     "kind": "composed",
+     "question": "There's a bare patch on the hall wall and I fancy a clock hanging there. Where should I be hunting for one, and what should be ticking away in it?",
+     "spec": "secondhand|used|auction|auctions|salvage|reclamation|charity|antique|antiques|vintage|clearance|market|junk; mechanical|clockwork|wound|winding|windup|spring|pendulum|fusee|weight + quartz|battery|new",
+     "evidence_quote": "wanting me to gut it and drop a battery movement"
+    },
+    {
+     "kind": "composed",
+     "question": "Siobhan keeps badgering me for a Christmas list and I've said socks and one small thing for the kitchen. What should she be looking for in each?",
+     "spec": "seamless|smooth|seamfree|flat; repairable|serviceable|repair|apart|dismantle|dismantled|screws|screwed|screwdriver|spares|parts + glued|sealed|clips|ridge|blister",
+     "evidence_quote": "sealed shut with plastic clips and not one screw anywhere"
+    }
+   ]
+  },
+  {
+   "persona": "Sorcha, 24, a veterinary nurse flat-sharing in Glasgow: plays roller derby as a blocker, saving hard for a van conversion, and floored every summer by hay fever.",
+   "sessions": [
+    {
+     "id": "d01",
+     "week": 0,
+     "text": "First Tuesday practice of the new season and coach spent ten minutes trying to talk me into jammer tryouts. I told her no, straight out \u2014 I'm a blocker, that's where I'm useful, and I'd hate every second with the star on my helmet. Came home to find Ruaridh had eaten my leftovers again and fell asleep on the couch still in my knee pads."
+    },
+    {
+     "id": "d02",
+     "week": 2,
+     "text": "First warm week of May and my face has already given up \u2014 eyes streaming by nine, sneezing so hard on a dental that I had to hand the scaler to Dawn. The practice manager rang twice about a rota swap and I let it ring out both times, then texted her back once I could see the screen. Spent Saturday indoors with the windows shut and a cold flannel over my eyes instead of going to the park."
+    },
+    {
+     "id": "d03",
+     "week": 3,
+     "text": "Opened a separate account for the van and moved \u00a3180 into it, and I said it out loud to Ruaridh so it counts: this van gets bought outright, in full, or it doesn't get bought at all, because I'm not paying interest to anybody for a metal box. Picked up a whole socket set and a jigsaw off Marketplace for \u00a335 from a fella in Rutherglen who's emigrating. At this rate I'm about eleven months off a shell."
+    },
+    {
+     "id": "d04",
+     "week": 5,
+     "text": "Third long surgical list this month and my hands came up in welts again by the end of it \u2014 the gloves in the prep room are the problem, so I've bought my own box of nitrile ones and written my name on the lid. Dawn says report it properly and she's right, I'll do it Monday. Came home starving and made the chicken thigh and rice traybake that does me four dinners."
+    },
+    {
+     "id": "d05",
+     "week": 6,
+     "text": "Second interview at the Shawlands practice went fine, though they want somebody who'll take a share of the out-of-hours \u2014 the night shifts at the emergency place are honestly the only reason the van fund is moving at all. Told them what I tell everyone: I won't take a job I can't get to on the bike, twenty minutes door to door is my limit, and I'm not sitting on a bus for an hour each way. Rode home along the canal at midnight and a heron watched me the whole way past."
+    },
+    {
+     "id": "d06",
+     "week": 8,
+     "text": "Mid-June and the grass pollen has properly flattened me \u2014 I ate lunch in the staff room with the door shut while everybody else sat out on the wall. The pharmacist tried to push the sedating tablets on me and I said absolutely not: I'm monitoring anaesthetics for eight hours at a stretch, and nothing that says may cause drowsiness goes anywhere near me. The wholesaler rep wanted a phone call about the new fluid pump and I asked him to put it all in an email instead."
+    },
+    {
+     "id": "d07",
+     "week": 10,
+     "text": "An hour on my own on the flat bit of car park behind Kelvin Hall \u2014 the soft 78a outdoor wheels I skate on eat that rough tarmac and I love them for it. Found a barely-worn second set on Gumtree for a tenner off a lassie who's packing it in. Sat up late pricing a two-ring propane hob and one of those wee gas heaters for the van, about \u00a3220 the pair."
+    },
+    {
+     "id": "d08",
+     "week": 12,
+     "text": "The factor emailed about noise after my Sunday circuits, so that's the end of skipping and box jumps in the flat \u2014 the lassie below has a newborn and these tenement floors are basically paper. No great loss, I've got practice Tuesday and Thursday and my legs are wrecked the rest of the week anyway. And I'm done taking the Sunday shift after a Saturday bout: I've limped through three of them now and it isn't worth the money, that day is for lying still."
+    },
+    {
+     "id": "d09",
+     "week": 14,
+     "text": "Heatwave, and the flat is a greenhouse with one window that actually opens. We had a greyhound in with a torn dew claw who fell asleep on my lap for twenty minutes while the vet wrote up his notes, and I'd have taken him home on the spot. Ruaridh has cut his own hair with the clippers and is refusing to discuss it with anyone."
+    },
+    {
+     "id": "d10",
+     "week": 16,
+     "text": "Six weeks now without meat and I'm not going back \u2014 the farm rotation finished the job that documentary started, so the traybake is chickpeas and roast veg these days and it's cheaper anyway. Told the head nurse I want the exotics ticket when it comes round: I'd rather spend my career with birds and reptiles than do another decade of dog boosters. She's putting my name forward for the funded place."
+    },
+    {
+     "id": "d11",
+     "week": 18,
+     "text": "The league has finally got the leisure centre hall on Thursdays and my outdoor wheels are hopeless on that floor \u2014 sliding out on every plough stop, so I need proper hard indoor ones before the first home bout. Sponsors' night at the brewery after and I was on lime and soda the whole evening as usual; a year off the drink now and nobody even asks anymore. Mum rang twice while I was on the track, so I sent her a long message back instead of phoning."
+    },
+    {
+     "id": "d12",
+     "week": 19,
+     "text": "First week of September and I walked the whole way to work with my eyes open \u2014 the first proper walk in months where I could just breathe. Started on the new day rota on Monday as well; the nights had been wrecking me and I'd rather do more days than ever go back to three overnights in a row. Got a nearly-new pair of Docs in the Barnardo's on Byres Road for \u00a38 and a roll of insulation off a joiner on Marketplace for the price of a coffee."
+    },
+    {
+     "id": "d13",
+     "week": 20,
+     "text": "Went to see a part-converted Transit and the seller had a bottle strapped under the bed with a hose older than me \u2014 that settles it, no gas in anything I sleep in, it'll be a diesel heater off the main tank and an induction ring off the leisure battery. Every window is getting proper blackout panels too; there's been tinfoil taped to my bedroom window for two years because I genuinely cannot sleep if there's any light at all. And Ruaridh's new plug-in air freshener went in the bin, because nothing perfumed comes into this flat again, my nose has enough to deal with."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "The league is running a skills clinic next month with three separate streams and I can only sign up for one. Which stream should I put my name down for?",
+     "spec": "blocker|blockers|blocking|wall|defence|defensive + jammer|jamming|star",
+     "evidence_quote": "I'm a blocker, that's where I'm useful"
+    },
+    {
+     "kind": "explicit",
+     "question": "I've taken the job at the Shawlands practice and it's about four miles from the flat. Recommend how I should be getting there and back each day.",
+     "spec": "bike|bicycle|cycle|cycling|riding|pedalling + car|drive|driving|bus|taxi|subway",
+     "evidence_quote": "I won't take a job I can't get to on the bike"
+    },
+    {
+     "kind": "explicit",
+     "question": "There's one funded CPD place at the practice this year and I have to name the area I want it in on the form. Which should I ask for?",
+     "spec": "exotic|exotics|reptile|reptiles|bird|birds|avian + canine|dog|dogs|equine|feline",
+     "evidence_quote": "I'd rather spend my career with birds and reptiles"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm making the window panels for the van's sleeping end this weekend and there's a whole wall of fabric options. What is the one property the material absolutely has to have?",
+     "spec": "blackout|opaque|lightproof|lighttight|lightblocking|light blocking + sheer|net|mesh|translucent|thin",
+     "evidence_quote": "I genuinely cannot sleep if there's any light at all"
+    },
+    {
+     "kind": "implicit",
+     "question": "There's a fella two hours away selling a part-converted van and I want to ask him about the MOT history and the rust. What's the best way for me to make first contact with him?",
+     "spec": "message|messages|text|texting|email|whatsapp|writing + call|calling|phone|ring|voicemail",
+     "evidence_quote": "I sent her a long message back instead of phoning"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need a circular saw, a set of clamps and a workbench for the van build and I've got about \u00a3120 for the lot. Where should I be sourcing them from?",
+     "spec": "used|secondhand|second hand|marketplace|gumtree|charity|auction|preloved + brand new|retail|screwfix",
+     "evidence_quote": "Picked up a whole socket set and a jigsaw off Marketplace"
+    },
+    {
+     "kind": "implicit",
+     "question": "I want to put in for two weeks off for a Highlands trip where I'd be sleeping outdoors and walking through fields most days. Which part of the year should I be asking for?",
+     "spec": "september|october|autumn|november|winter + may|june|july|summer|grass",
+     "evidence_quote": "the first proper walk in months where I could just breathe"
+    },
+    {
+     "kind": "implicit",
+     "question": "A six-week upholstery evening class runs one night a week and they'll take me on whichever weeknight I ask for. Which should I book?",
+     "spec": "monday|wednesday|friday + tuesday|thursday",
+     "evidence_quote": "I've got practice Tuesday and Thursday"
+    },
+    {
+     "kind": "negative",
+     "question": "The van I'm looking at will need a \u00a3900 gearbox job almost straight after I buy it, and I'll have about \u00a31,100 put by. Recommend how I should cover that bill.",
+     "spec": "cash|savings|saved|outright|upfront|debit + credit|finance|klarna|clearpay|loan|instalments",
+     "evidence_quote": "this van gets bought outright, in full"
+    },
+    {
+     "kind": "negative",
+     "question": "I'm putting in a personal order for a box of gloves for work and a couple of resistance bands to keep in my locker. What should I be checking the material is on both?",
+     "spec": "nitrile|vinyl|synthetic|fabric|cloth|tpe|neoprene + latex|rubber",
+     "evidence_quote": "so I've bought my own box of nitrile ones"
+    },
+    {
+     "kind": "negative",
+     "question": "Worst pollen day of the year tomorrow and I'm on a full surgical list from eight till six. Which kind of hay fever tablet should I ask the pharmacist for?",
+     "spec": "nondrowsy|non drowsy|nonsedating|cetirizine|loratadine|fexofenadine|acrivastine + piriton|chlorphenamine|sedating|promethazine|hydroxyzine",
+     "evidence_quote": "nothing that says may cause drowsiness goes anywhere near me"
+    },
+    {
+     "kind": "negative",
+     "question": "Ruaridh wants us to settle on one laundry liquid and one all-purpose spray for the whole flat instead of buying four each. What should I tell him to check for on the label?",
+     "spec": "unscented|scentless|fragrance free|fragrancefree|nonbio|hypoallergenic|sensitive + scented|perfumed|fragranced|floral|linen",
+     "evidence_quote": "nothing perfumed comes into this flat again"
+    },
+    {
+     "kind": "updated",
+     "question": "Sunday batch cook, one big traybake that has to do me four dinners in the week. What should I build it around?",
+     "spec": "chickpeas|chickpea|beans|lentils|tofu|halloumi|paneer + chicken|thighs|mince|beef|bacon|sausage",
+     "evidence_quote": "Six weeks now without meat and I'm not going back"
+    },
+    {
+     "kind": "updated",
+     "question": "The league is putting a bulk order in with the skate shop this week and I have to tell them what wheels I want for the season. Which should I ask for?",
+     "spec": "hard|harder|indoor|88a|90a|92a|95a + soft|softer|outdoor|78a|85a",
+     "evidence_quote": "I need proper hard indoor ones before the first home bout"
+    },
+    {
+     "kind": "updated",
+     "question": "I want two extra paid shifts a month to speed the van fund up and the agency has both kinds going. Which kind should I be putting myself down for?",
+     "spec": "day|days|daytime|morning|afternoon|weekday + night|nights|overnight|nightshift",
+     "evidence_quote": "I'd rather do more days than ever go back"
+    },
+    {
+     "kind": "updated",
+     "question": "Time to commit to how the van's heating and its hob are powered before I order anything. What should each of them run on?",
+     "spec": "diesel|electric|12v|nightheater; induction|electric|battery|12v + gas|propane|lpg|butane|bottle",
+     "evidence_quote": "no gas in anything I sleep in"
+    },
+    {
+     "kind": "composed",
+     "question": "On the weeks I can't get to the track I want to do 20 minutes of strength in the living room after work. What style of session should I build, and what should I check the resistance bands are made of before I order a set?",
+     "spec": "bodyweight|isometric|quiet|controlled|static|lowimpact|low impact; fabric|cloth|tpe|neoprene|cotton|synthetic + plyometric|burpees",
+     "evidence_quote": "that's the end of skipping and box jumps in the flat"
+    },
+    {
+     "kind": "composed",
+     "question": "Home bout on the Saturday and the end-of-season night out is straight after it. What should I be drinking at the party, and what should I put in the diary for the day after?",
+     "spec": "soft|alcoholfree|alcohol free|nonalcoholic|zero|lime|soda; rest|resting|recovery|recover|nothing|lying|off + beer|wine|pint|cider|prosecco|shift|overtime",
+     "evidence_quote": "that day is for lying still"
+    },
+    {
+     "kind": "composed",
+     "question": "I've got a week of annual leave to throw at the van \u2014 cutting the roof for the vent, insulating, all of it done out on the street. When in the year should I book it, and where should I be getting the vent and the ply from?",
+     "spec": "september|october|autumn|november|winter; used|secondhand|second hand|marketplace|gumtree|reclaimed|salvage + june|july|may|summer|brand new|screwfix",
+     "evidence_quote": "I walked the whole way to work with my eyes open"
+    },
+    {
+     "kind": "composed",
+     "question": "The new locum starts next week and wants a proper handover with me over a coffee some evening, and she's flexible on when. Which evening should I offer, and how should I set it up with her?",
+     "spec": "monday|wednesday|friday; message|text|email|whatsapp|writing + tuesday|thursday|call|phone|ring",
+     "evidence_quote": "Mum rang twice while I was on the track"
+    }
+   ]
+  },
+  {
+   "persona": "Rui, 41, a pastry chef at a small pastelaria in Campo de Ourique, Lisbon. Single father to In\u00eas, 9, who is with him Wednesdays and every second weekend; runs half-marathons along the river; rebuilding a 1976 Honda CB400 in a lock-up in Alc\u00e2ntara; cannot think straight in a loud open-plan room.",
+   "sessions": [
+    {
+     "id": "e01",
+     "week": 0,
+     "text": "Fourth week of the four o'clock start and my body has finally stopped arguing about it. The only running I get is at nine at night, once In\u00eas is asleep and the flat has gone still \u2014 the river path is empty by then and the lamps are enough to see by. Picked up Friday's lemons from Dona F\u00e1tima's stall at the Campo de Ourique market on the way home, the way I have every week for six years; the boxes the big supplier sends have never smelled of anything."
+    },
+    {
+     "id": "e02",
+     "week": 1,
+     "text": "The flavour rep left a bottle of vanilla essence on the bench with his samples and I sent it back out of the door with him \u2014 whole pods or nothing goes into my cr\u00e8me p\u00e2tissi\u00e8re, and he can write that on the account. Pulled a third of the sugar out of the \u00e9clair cream in the afternoon and tasted them side by side; the new one tastes of chocolate instead of just tasting sweet. In\u00eas, loyally, prefers the old one."
+    },
+    {
+     "id": "e03",
+     "week": 3,
+     "text": "Sunday in the lock-up with the CB. The left side cover is cracked and there's a reproduction going for twenty euros online, but I'd rather wait six months for a genuine period part than bolt shiny new plastic onto a 1976 frame. Changed the oil while I had her up on the block \u2014 straight mineral 20W50, the way the manual says, because the modern synthetics are made for engines with tighter tolerances than this one ever had. That manual is a greasy photocopy in a ring binder and I wouldn't trade it for anything on a screen."
+    },
+    {
+     "id": "e04",
+     "week": 4,
+     "text": "In\u00eas's skin-prick test came back and it's almonds and hazelnuts, the proper kind, with a pen to carry in her bag from now on. Spent the evening going through the cupboards and binning the praline, the marzipan and the nougat left over from Christmas \u2014 this flat is nut-free from now on, no exceptions and no 'may contain'. Took her to Caparica on Sunday to make up for the fright and she went into the sea in April, which is her all over."
+    },
+    {
+     "id": "e05",
+     "week": 5,
+     "text": "Tried to do the quarter's costings at that co-working place on Rua da Prata and lasted an hour \u2014 a podcast on speaker at the next table, table tennis going on behind me, and I read the same flour line four times without any of it landing. Walked out and told the agent I'll only look at places with a room with a door that shuts. Did the lot that night at the back table of the shop after everyone had gone home, in ninety minutes flat."
+    },
+    {
+     "id": "e06",
+     "week": 7,
+     "text": "Third year of Wednesday swimming lessons at the Alvalade pool and In\u00eas still hauls herself out at the end like someone released from custody. Tiago brought a box of couverture samples back from the salon and everyone reached for the milk ones; I ate the 80% and left the rest of the bar in my locker. Long week, good bread, nothing broke."
+    },
+    {
+     "id": "e07",
+     "week": 8,
+     "text": "The walk-in compressor died at five in the morning and we ran the whole day off a borrowed ice chest and pure stubbornness. Dona Am\u00e9lia turned seventy on Thursday and half the street came through the shop for a slice of her own cake. In\u00eas pulled out her own tooth with a door handle, having researched the method beforehand and told nobody."
+    },
+    {
+     "id": "e08",
+     "week": 10,
+     "text": "Rode the CB out to Colares on Saturday, the long way through the hills, because a bike with drum brakes and forty-year-old geometry has no business on the motorway and never will. The headlight cut out past Malveira and I spliced the connector at the roadside myself, with a lighter and a strip of tape, and got home on it. Ran the Cascais half on Sunday on three caffeine gels and felt like I'd swallowed a battery by the fifteenth kilometre."
+    },
+    {
+     "id": "e09",
+     "week": 12,
+     "text": "The rota changed and I'm on the ten o'clock start now, so I've moved my running to first light \u2014 the river path before the city is properly awake, and those nine-at-night loops are finished for good. Drove out to the mill at Alcanh\u00f5es on my day off to watch the stone-ground flour come off the bagger and brought four sacks home in the footwell; the distributor's catalogue is cheaper by a third and I still don't want it. In\u00eas came along and named the mill cat Bolacha."
+    },
+    {
+     "id": "e10",
+     "week": 14,
+     "text": "The hotel group came back wanting me for a monthly dessert masterclass and the only slot they have is a Wednesday evening, so that's a no \u2014 Wednesdays and every second weekend belong to In\u00eas, and nothing gets booked into them. Printed the twelve-week plan for the autumn half and taped it inside my locker door so I can put a pencil through each day as it goes. Tiago keeps telling me to use the app everyone uses; I've watched him lose two seasons of training to a dead phone."
+    },
+    {
+     "id": "e11",
+     "week": 16,
+     "text": "Made my own bars for the long runs \u2014 dried figs from Dona F\u00e1tima's stall, cooked rice, a pinch of salt, pressed into a tray and cut into squares, and no honey, because the figs are sweet enough as they are. Twenty kilometres on two of them and my stomach behaved itself the whole way, so the gels are going in the bin; I'm not paying three euros a sachet to feel seasick at kilometre fifteen. Took In\u00eas down to Sesimbra afterwards and we ate grilled fish with our feet in the sand."
+    },
+    {
+     "id": "e12",
+     "week": 18,
+     "text": "The loom finally let go \u2014 a puff of smoke behind the headstock and that smell of burnt insulation filling the lock-up \u2014 so I pushed the bike round to Z\u00e9's and told him anything electrical on this bike is his from now on. The dough sheeter quote came in at six thousand with twenty-four monthly payments offered on it, and I told them I'd wait until I can pay it outright, because I've never owed anyone money and I'm not starting at forty-one. Wrote both decisions in the back of the notebook where I keep the shop's numbers."
+    },
+    {
+     "id": "e13",
+     "week": 20,
+     "text": "In\u00eas asked to stop swimming and start judo, and two trial classes later she has thrown a boy half a head taller than her and found her people, so judo it is from September. Best July the shop has had since I started, and Dona Am\u00e9lia cried into the till roll about it. Sunday we took the ferry across the river and walked the sand at Trafaria until the light went."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm renting a bit of space near the bakery for recipe development and the paperwork \u2014 what's the one thing I should insist on before I sign?",
+     "spec": "door|doors|separate|private|enclosed|closed|soundproof|soundproofed|quiet|silent|walls + open-plan coworking",
+     "evidence_quote": "places with a room with a door that shuts"
+    },
+    {
+     "kind": "explicit",
+     "question": "The cracked side cover on the CB has to be dealt with before the summer runs \u2014 what kind of replacement should I be looking for?",
+     "spec": "original|originals|genuine|oem|period|nos|salvage|scrapyard|breaker|donor|secondhand|second-hand|authentic|factory + reproduction repro aftermarket",
+     "evidence_quote": "I'd rather wait six months for a genuine period part"
+    },
+    {
+     "kind": "explicit",
+     "question": "The CB is due an oil change before the good weather \u2014 what should I be pouring into it?",
+     "spec": "mineral|monograde|straight|20w50|20w 50|non-synthetic|nonsynthetic|conventional + synthetic",
+     "evidence_quote": "straight mineral 20W50, the way the manual says"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm costing the cr\u00e8me p\u00e2tissi\u00e8re for the new \u00e9clair line \u2014 in what form should I be buying the vanilla for it?",
+     "spec": "pod|pods|whole|vanilla beans + essence extract",
+     "evidence_quote": "whole pods or nothing goes into my cr\u00e8me p\u00e2tissi\u00e8re"
+    },
+    {
+     "kind": "implicit",
+     "question": "The sourdough line needs a steady weekly supply of flour \u2014 where should I be getting it from?",
+     "spec": "mill|mills|miller|moinho|market|mercado|stall|local|independent|producer|producers|regional|artisan|artisanal + distributor wholesaler catalogue",
+     "evidence_quote": "Drove out to the mill at Alcanh\u00f5es on my day off"
+    },
+    {
+     "kind": "implicit",
+     "question": "I want to keep proper track of my mileage and paces this season \u2014 what should I use to keep the record in?",
+     "spec": "paper|notebook|notebooks|logbook|pen|pencil|printed|printout|print|diary|journal|handwritten|by hand + app phone spreadsheet strava",
+     "evidence_quote": "Printed the twelve-week plan for the autumn half"
+    },
+    {
+     "kind": "implicit",
+     "question": "I'm putting a hot chocolate on the menu for the cold months \u2014 what kind of chocolate should I build it on?",
+     "spec": "dark|bitter|bittersweet|70|75|80|85|semisweet|semi-sweet|intense|noir + milk white",
+     "evidence_quote": "everyone reached for the milk ones; I ate the 80%"
+    },
+    {
+     "kind": "implicit",
+     "question": "I've got three free days with In\u00eas in August and want to book us somewhere \u2014 what kind of place should I look for?",
+     "spec": "beach|beaches|sea|seaside|coast|coastal|ocean|shore|sand|surf|waves|caparica|sesimbra|comporta|arr\u00e1bida|arrabida + inland museum",
+     "evidence_quote": "Took In\u00eas down to Sesimbra afterwards and we ate grilled fish"
+    },
+    {
+     "kind": "negative",
+     "question": "In\u00eas wants a crunchy layer running through the middle of her birthday cake \u2014 what should I make that crunch from?",
+     "spec": "seed|seeds|sesame|sunflower|pumpkin|oat|oats|puffed|rice|cereal|cornflake|cornflakes|nib|nibs|coconut|wafer|nut-free|nutfree|without nuts|no nuts|avoid nuts|allergy|allergies|allergen|allergens + praline nougatine almond hazelnut",
+     "evidence_quote": "this flat is nut-free from now on, no exceptions"
+    },
+    {
+     "kind": "negative",
+     "question": "I want to ride the CB down to a classic meet in \u00c9vora, about 130 km each way \u2014 what sort of route should I plan?",
+     "spec": "backroad|backroads|back roads|country|secondary|national|minor|scenic|smaller|quieter|inland + motorway a2 autoestrada toll",
+     "evidence_quote": "no business on the motorway and never will"
+    },
+    {
+     "kind": "negative",
+     "question": "A catering agency wants me on a regular Wednesday evening dessert service starting next month, and the money is good. What should I tell them?",
+     "spec": "decline|declining|refuse|refusing|turn it down|turn them down|turn down|turning it down|turning them down|turning down|say no|no thanks|pass on it|pass on this|passing on|reschedule|rescheduling|another night|different night|another evening|different evening|tuesday|thursday|monday + wednesdays in\u00eas",
+     "evidence_quote": "Wednesdays and every second weekend belong to In\u00eas"
+    },
+    {
+     "kind": "negative",
+     "question": "The dough sheeter I want is six thousand and the dealer has offered it over twenty-four months at zero interest. How should I go about buying it?",
+     "spec": "outright|upfront|up front|in full|full amount|lump|one payment|single payment|one go|all at once|pay cash|in cash + instalments installments financing credit",
+     "evidence_quote": "I'd wait until I can pay it outright"
+    },
+    {
+     "kind": "updated",
+     "question": "I want to add a third run to the week \u2014 what time of day should I put it?",
+     "spec": "morning|mornings|dawn|daybreak|first light|sunrise|sunup|before the shop|before work + night nine evening",
+     "evidence_quote": "I've moved my running to first light"
+    },
+    {
+     "kind": "updated",
+     "question": "The club's term fees are due and I can only renew one thing for In\u00eas \u2014 which should I pay for?",
+     "spec": "judo|dojo|martial|belt|grading + swimming pool",
+     "evidence_quote": "asked to stop swimming and start judo"
+    },
+    {
+     "kind": "updated",
+     "question": "The autumn half is six weeks out \u2014 what should I be carrying to eat during the race itself?",
+     "spec": "fig|figs|rice|homemade|home-made|squares|real food|whole food|own bars|homemade bars + gel gels sachet",
+     "evidence_quote": "the gels are going in the bin"
+    },
+    {
+     "kind": "updated",
+     "question": "The CB's charging circuit is dead again and the battery won't hold anything. How should I get it sorted?",
+     "spec": "z\u00e9|ze|shop|specialist|professional|auto-electrician|electrician|mechanic|expert|workshop|pro|take it in + yourself myself soldering diy",
+     "evidence_quote": "anything electrical on this bike is his from now on"
+    },
+    {
+     "kind": "composed",
+     "question": "I need to block out a full day to write next season's menu and redo the costings \u2014 where should I do it, and what should I be writing in?",
+     "spec": "quiet|quieter|private|door|enclosed|closed|empty|alone|silent|undisturbed; paper|notebook|pen|pencil|printed|printout|handwritten|by hand + open-plan coworking app",
+     "evidence_quote": "a podcast on speaker at the next table"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm riding the CB up to \u00d3bidos for a wedding, eighty kilometres, and she hasn't been serviced since the spring. What route should I take, and what should go in the engine beforehand?",
+     "spec": "backroad|backroads|back roads|country|secondary|national|minor|scenic|smaller|quieter|inland; mineral|monograde|straight|20w50|20w 50|non-synthetic|conventional + motorway a2 synthetic",
+     "evidence_quote": "the long way through the hills"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm building a chocolate tart for the autumn menu \u2014 what kind of chocolate should it be made with, and where should I get it?",
+     "spec": "dark|bitter|bittersweet|70|75|80|85|semisweet|semi-sweet|intense; small|local|independent|importer|producer|artisan|artisanal|market|mercado|specialist|craft|single-origin|maker + milk supermarket distributor",
+     "evidence_quote": "the distributor's catalogue is cheaper by a third"
+    },
+    {
+     "kind": "composed",
+     "question": "A complete exhaust system for the CB is coming up at a swap meet and the seller will split it over three months. What kind of system should I be after, and how should I settle up?",
+     "spec": "original|originals|genuine|oem|period|nos|authentic|factory|salvage|donor|secondhand|second-hand; outright|upfront|up front|in full|full amount|lump|one payment|single payment|one go|all at once|pay cash|in cash + reproduction repro instalments",
+     "evidence_quote": "bolt shiny new plastic onto a 1976 frame"
+    }
+   ]
+  },
+  {
+   "persona": "Wren, 33, a freelance front-of-house sound engineer in Toronto who tours with folk acts like the Ferry Sisters, keeps a saltwater reef tank in the apartment, and is rehabbing a pinned wrist.",
+   "sessions": [
+    {
+     "id": "f01",
+     "week": 0,
+     "text": "Ten weeks after they pinned the scaphoid and the splint is finally off, though the wrist still complains when I coil cable at the end of a night. Drove myself down to London for the Ferry Sisters show rather than ride in the band van again; my own car, my own schedule, and I can leave the second the last case is in. Put the ribbon on Nell's fiddle for the second night running and it sat in the mix without me fighting it."
+    },
+    {
+     "id": "f02",
+     "week": 1,
+     "text": "Sunday on the tank: forty litres out, forty in, and the acros on the top rock are finally colouring up. The stony corals are the whole reason I built this thing, and I will chase alkalinity numbers all year to keep them happy. Also worked out where the hair algae came from, which is that I topped off with tap water twice in June while the cartridges were on back order, and it cost me a summer. Nothing but RO/DI goes into that tank again, ever."
+    },
+    {
+     "id": "f03",
+     "week": 3,
+     "text": "The Barrie promoter has gone quiet about the six hundred he still owes me for two days at my $250 day rate, and I am not chasing it through small claims court. New rule, in writing on every gig from here: fifty percent up front before I put a hand on a cable, the balance on the night. Robin says it will cost me a couple of bookings a year and I said good."
+    },
+    {
+     "id": "f04",
+     "week": 4,
+     "text": "Stomach has been a wreck since the fortnight of ibuprofen after the surgery, and the doctor was blunt about it: no more NSAIDs, not for the wrist, not for anything. Acetaminophen and an ice pack are what I reach for now, doctor's orders, permanently. Cheered myself up with a second-hand DI box off Kijiji from a guy in Etobicoke, forty bucks, built like a brick."
+    },
+    {
+     "id": "f05",
+     "week": 6,
+     "text": "Four days at Aunt Ravenna's place on Stony Lake with no cell signal, which is the only way I ever actually stop. A raccoon got into the green bin two nights running and I have decided it is the same raccoon. Came home sunburnt and slept eleven hours."
+    },
+    {
+     "id": "f06",
+     "week": 7,
+     "text": "Brass bill at the Horseshoe last night, four horns in a low room, and I jammed the drugstore foam plugs in like always; everything above four kilohertz vanished and I mixed the back half by feel. The studio on Sterling offered me a nine o'clock start and I turned it down and told them why: nothing before noon, ever, on any job. I am never in bed before three after a show, and I mixed a matinee on four hours of sleep once and you could hear it in the room."
+    },
+    {
+     "id": "f07",
+     "week": 9,
+     "text": "Brought home a pair of tank-bred clowns and they went straight into the hospital tank in the closet: thirty days of quarantine before anything touches the display, no exceptions, ever again. The ich in 2023 took eleven fish in nine days and I am not living through that twice. Ate at the roti place on Bathurst after, the squash and chickpea one again, and read the whole time."
+    },
+    {
+     "id": "f08",
+     "week": 11,
+     "text": "Peterborough load-in was a flight of concrete stairs up from the alley and the promoter's idea of a crew was his nephew. The surgeon's line is still nothing heavier than a mic stand until spring, so from now on a paid local hand for load-in and load-out goes in the deal or I do not take the room. Ate at the falafel counter beside the venue both nights and the guy has my order memorised."
+    },
+    {
+     "id": "f09",
+     "week": 13,
+     "text": "Took the train to Kingston instead of driving and got two hours of actual work done each way; that is how every out-of-town gig happens from now on, no more white-knuckling the 401 with a wrist that seizes at hour three. Sunday was the reef club swap in Scarborough and I came home with three frags in a takeout container for less than one of them would have cost me shipped."
+    },
+    {
+     "id": "f10",
+     "week": 15,
+     "text": "Sackville: the whole band on the floor of Robin's cousin's living room, and I took the couch and woke up with the wrist locked solid. Told Robin over breakfast that I am booking my own motel for the rest of the run and eating the cost myself, because I am thirty-three and done sleeping on other people's floors. Nobody argued, which tells me they were all thinking it."
+    },
+    {
+     "id": "f11",
+     "week": 16,
+     "text": "Picked up the custom moulded plugs from the audiologist on College and wore them for the Burdock gig. The 15 dB filters pull the level down without eating the top end, so the drugstore foam went in the bin where it belongs; these are what go in my ears at every show from here on. Also bought a used road case off a player leaving the business, half the price of new and better wheels."
+    },
+    {
+     "id": "f12",
+     "week": 18,
+     "text": "Quoted the folk festival $400 a day instead of my old $250 and the producer said fine without so much as a pause. That is the number from here on, for everyone, and I have been underpricing myself for three years. Ran the ribbon on the fiddle and again on the banjo for the Larkin brothers set and both of them sat right where I put them. Dinner was the eggplant sandwich from the counter across from the venue, third time this month."
+    },
+    {
+     "id": "f13",
+     "week": 20,
+     "text": "Sold the last of the acros to somebody from the club and I feel lighter for it: this is a softies and LPS tank now, zoas and leathers and one hammer coral, because I am not testing alkalinity from a motel room in Sudbury at midnight. Devi has the key and comes by every third day whenever I am on the road for more than a week, and I pay her properly for it. Picked up two zoa frags at the club swap on the way home."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "The band is bunking at a friend's place in Sackville again on the fall run and there is space for me if I don't mind the living room. Where should I plan to sleep?",
+     "spec": "hotel|motel|airbnb|bnb|hostel|guesthouse + couch floors",
+     "evidence_quote": "I am booking my own motel for the rest of the run"
+    },
+    {
+     "kind": "explicit",
+     "question": "A promoter I have never worked with in Owen Sound wants me for a two-night booking in October. What should I nail down in writing before I say yes to the dates?",
+     "spec": "deposit|deposits|upfront|up front|retainer|prepayment|advance + 50 half",
+     "evidence_quote": "fifty percent up front before I put a hand on a cable"
+    },
+    {
+     "kind": "explicit",
+     "question": "The shop on Dundas is holding a pair of tank-bred clowns for me and I collect them Saturday. Walk me through what should happen the moment I get them home.",
+     "spec": "quarantine|quarantined|quarantining|hospital|isolation|isolate + thirty 30 ich",
+     "evidence_quote": "thirty days of quarantine before anything touches the display"
+    },
+    {
+     "kind": "explicit",
+     "question": "I have been offered a two-week residency in Montreal in the spring. What do I need to line up at home before I commit to it?",
+     "spec": "sitter|sitters|sitting|caretaker|feeder|minder|devi + tank third",
+     "evidence_quote": "Devi has the key and comes by every third day"
+    },
+    {
+     "kind": "implicit",
+     "question": "I am micing up a fiddle player for a live-off-the-floor session next month. What kind of microphone should I reach for?",
+     "spec": "ribbon|ribbons + condenser dynamic",
+     "evidence_quote": "Ran the ribbon on the fiddle and again on the banjo"
+    },
+    {
+     "kind": "implicit",
+     "question": "My headphone amp finally died and I need another one before the fall run, without spending much. How should I go about buying the replacement?",
+     "spec": "used|secondhand|second hand|preowned|refurbished|kijiji|marketplace + new",
+     "evidence_quote": "a second-hand DI box off Kijiji from a guy in Etobicoke"
+    },
+    {
+     "kind": "implicit",
+     "question": "I want to add a couple of new corals this spring. Where should I be getting them from?",
+     "spec": "swap|swaps|club|hobbyist|hobbyists|local|locally + online shipped",
+     "evidence_quote": "the reef club swap in Scarborough"
+    },
+    {
+     "kind": "implicit",
+     "question": "Robin is ordering pizza for the green room tonight and asked what she should put on mine. What should I tell her?",
+     "spec": "vegetarian|veggie|vegan|meatless|mushroom|mushrooms|margherita|plant + meat pepperoni",
+     "evidence_quote": "Ate at the falafel counter beside the venue both nights"
+    },
+    {
+     "kind": "negative",
+     "question": "The Peterborough room wants me back and load-in is a flight of stairs up from the alley with no house staff at all. What should I sort out before I confirm the date?",
+     "spec": "hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader + lifting carrying wrist",
+     "evidence_quote": "a paid local hand for load-in and load-out goes in the deal"
+    },
+    {
+     "kind": "negative",
+     "question": "The reef has dropped a couple of litres in this heat wave. What should I be topping it back up with?",
+     "spec": "ro di|rodi|reverse|osmosis|distilled|deionized|deionised + tap",
+     "evidence_quote": "Nothing but RO/DI goes into that tank again"
+    },
+    {
+     "kind": "negative",
+     "question": "The physio has a standing weekly slot open for the rest of the season and I need to claim one. What time of day should I ask them for?",
+     "spec": "afternoon|afternoons|evening|evenings|midday|noon|later|pm + morning early",
+     "evidence_quote": "nothing before noon, ever, on any job"
+    },
+    {
+     "kind": "negative",
+     "question": "Wrist is throbbing after a four-hour load-out and I have nothing in the bag for it. What painkiller should I pick up at the drugstore on the way home?",
+     "spec": "acetaminophen|tylenol|paracetamol + ibuprofen advil naproxen",
+     "evidence_quote": "no more NSAIDs, not for the wrist, not for anything"
+    },
+    {
+     "kind": "updated",
+     "question": "I have a Friday show in Kingston and I need to be back in the city by Saturday afternoon. How should I get myself there and back?",
+     "spec": "train|trains|rail|railway + drive driving car",
+     "evidence_quote": "that is how every out-of-town gig happens from now on"
+    },
+    {
+     "kind": "updated",
+     "question": "I am at the desk for a brass-heavy bill at the Horseshoe on Friday and that room is low and hard. What should I have in my ears for it?",
+     "spec": "custom|moulded|molded|filtered|filters|filter|musicians + foam drugstore",
+     "evidence_quote": "these are what go in my ears at every show"
+    },
+    {
+     "kind": "updated",
+     "question": "A festival is asking what I charge per day for a two-day contract. What number should I give them?",
+     "spec": "400|800|four hundred|eight hundred + 250",
+     "evidence_quote": "$400 a day instead of my old $250"
+    },
+    {
+     "kind": "updated",
+     "question": "The shop got a shipment in and I have one open spot on the rock. What kind of coral should I be looking at?",
+     "spec": "softie|softies|soft|lps|zoa|zoas|mushroom|mushrooms|leather|leathers|euphyllia|hammer + sps acropora acros",
+     "evidence_quote": "this is a softies and LPS tank now"
+    },
+    {
+     "kind": "composed",
+     "question": "Two-day booking in Ottawa in November, and the venue says load-in is one flight up with nothing in the way of house staff. How should I travel, and what do I need in the deal before I confirm?",
+     "spec": "train|trains|rail|railway; hire|hired|hiring|stagehand|stagehands|porter|helper|helpers|labour|labor|loader + drive lifting",
+     "evidence_quote": "got two hours of actual work done each way"
+    },
+    {
+     "kind": "composed",
+     "question": "Three-week Maritimes run in February and the band is staying with friends the whole way. What do I need to arrange at home, and what should I do about where I sleep?",
+     "spec": "sitter|sitters|sitting|caretaker|feeder|minder|devi; hotel|motel|airbnb|bnb|hostel|guesthouse + couch floors",
+     "evidence_quote": "whenever I am on the road for more than a week"
+    },
+    {
+     "kind": "composed",
+     "question": "A new promoter in Guelph wants a planning call to lock down a two-nighter. What should I settle in writing before I agree to the dates, and when in the day should I ask for the call?",
+     "spec": "deposit|deposits|upfront|up front|retainer|prepayment|advance; afternoon|afternoons|evening|evenings|midday|noon|later|pm + morning 50",
+     "evidence_quote": "New rule, in writing on every gig from here"
+    },
+    {
+     "kind": "composed",
+     "question": "I need another microphone for the fiddle-and-banjo act before the fall run and I am watching every dollar. What should I be looking for, and how should I buy it?",
+     "spec": "ribbon|ribbons; used|secondhand|second hand|preowned|refurbished|kijiji|marketplace + new",
+     "evidence_quote": "Put the ribbon on Nell's fiddle for the second night running"
+    }
+   ]
+  },
+  {
+   "persona": "Bronwyn, 58, secondary-school geography teacher in Adelaide, competitive lawn bowls player, sole carer for her ageing mother, vegetarian all her adult life.",
+   "sessions": [
+    {
+     "id": "g01",
+     "week": 0,
+     "text": "First day back and I was up at half four out of habit, with the whole Year 9 unit planned and a stack of maps trimmed before six. Ellie in the office asked whether I would fly over for the Melbourne conference in October and I laughed at her, because the drive is half the holiday, twelve hours with a thermos and the Coorong out the left window. Mum rang at seven to tell me the bin men had been."
+    },
+    {
+     "id": "g02",
+     "week": 1,
+     "text": "Faculty welcome dinner at a steakhouse on King William, of all places, and I had bread rolls, a garden salad and a side of chips, which is what four decades without meat gets you in this town. Two long blacks before the first bell and a third at recess got me through the day, and Damien reckons the staffroom machine is the only reason I am upright. Nobody asked me one question about the map exhibition I have been going on about since January."
+    },
+    {
+     "id": "g03",
+     "week": 3,
+     "text": "Wednesdays belong to Mum start to finish, dialysis at the Repat, then the chemist, then the fruit and veg place she refuses to swap. Took her to the two o'clock session of the new nature documentary on Sunday and sat on the end of the row as always, so I could stand and stretch the lower back twice without climbing over anybody. She talked through the entire second half about her sister in Whyalla."
+    },
+    {
+     "id": "g04",
+     "week": 4,
+     "text": "Pennant against Payneham and we got up by two shots on the last end, which nobody in our four saw coming. Saturdays are spoken for from September through to March and the school can put that in writing. Still doing my three laps of the parklands at a slow jog before school on the days I can face it, and Val, who sits with Mum, has started leaving notes on the fridge in enormous capitals."
+    },
+    {
+     "id": "g05",
+     "week": 6,
+     "text": "Club carnival at Lockleys and by the third game I had dragged my chair round behind the scoreboard again, which is where I watch from now, because the glare off the green since the eye surgery makes the whole rink swim. Bought three paperbacks for the long weekend, since Denise keeps pushing her e-reader at me and I keep telling her it is a proper paperback or nothing. Rained on the Sunday anyway and I got through two of them."
+    },
+    {
+     "id": "g06",
+     "week": 7,
+     "text": "Trivia night at the club was a write-off, because I cannot follow a word once there is music going, and the right ear has been gone since 2019, so half the table was just faces moving. Watched the documentary at home instead with the captions on, which is the only way I watch anything now. Asleep by half nine as usual, which Denise finds hilarious for a woman my age."
+    },
+    {
+     "id": "g07",
+     "week": 9,
+     "text": "Found Mum's old Gregory's street directory in the hall cupboard, the 1974 edition, with her pencil marks all over the Barossa roads. A student I taught in 2009 wrote to say she is doing hydrology at Flinders now and still remembers the day I made them measure the oval with trundle wheels. The staffroom photocopier ate forty double-sided worksheets and nobody has confessed."
+    },
+    {
+     "id": "g08",
+     "week": 11,
+     "text": "Presentation night at the club and Warren still asks me every single time what I am really drinking, thirty-odd years of soda and lime at that bar and the man cannot take it in. Played the far rink under the pines in the afternoon fours, which I ask for now whenever the draw lets me, because anything in the open after eleven and I am squinting the whole game. Came second in the singles again, to a woman who took the sport up in 2021."
+    },
+    {
+     "id": "g09",
+     "week": 12,
+     "text": "The physio was blunt about my thumbs, the arthritis is not going anywhere, so anything I have to grip hard or carry heavy is out, which apparently includes the school bag as it currently stands. Year 11 field trip down to Victor Harbor and I asked for the seat by the walkway on the coach, the same as every excursion, so I could get up at the halfway stop. Twenty-six students, one bus, nobody lost."
+    },
+    {
+     "id": "g10",
+     "week": 13,
+     "text": "Val can cover Mum for three nights and that is the absolute limit, because past that the routine goes and it takes a fortnight to get her back. Went in to the Central Market for Mum's chutney, left the car at Mitcham and took the tram, the way I always do, since paying to sit in a queue on Grote Street is a mug's game. Bought far too many olives, as usual."
+    },
+    {
+     "id": "g11",
+     "week": 15,
+     "text": "The cardiologist put the palpitations down to caffeine in the end, so I have been off it completely since Easter, peppermint tea in my own pot in the staffroom and the department thinks I have gone soft. Replaced my walking boots too, and the young bloke in the shop could not understand why I would not take the leather ones; I have not eaten them for thirty-eight years and I am not about to wear them. Denise says I should have been born a hundred years later."
+    },
+    {
+     "id": "g12",
+     "week": 17,
+     "text": "Booked the Overland for the Melbourne conference and it feels like admitting something out loud, but three hours on the Dukes with the glare coming off the bitumen last spring told me I cannot do the long highway runs any more. Left the car in the driveway and got the bus down to Keswick, which is the only civilised way to start a trip. Took the seat on the corridor side of the carriage so I could walk the length of the train every hour."
+    },
+    {
+     "id": "g13",
+     "week": 20,
+     "text": "The surgeon was blunt in the kindest possible way, no more running on that knee, ever, so it is the pool at Unley three mornings a week now and I am oddly pleased about it. I take the six o'clock lane while the shade is still across the far end and the sun has not come over the fence. And I have gone across to audiobooks entirely since the optometrist's news about the other eye, three novels deep already and I get through far more listening than I ever did reading."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "The old telly in the lounge has finally died and I am replacing it this week. What feature should I insist on in the new one?",
+     "spec": "subtitle|subtitles|caption|captions|dialogue|speech|soundbar|headphones",
+     "evidence_quote": "Watched the documentary at home instead with the captions on"
+    },
+    {
+     "kind": "explicit",
+     "question": "The geography teachers' association is running a study tour of the Flinders Ranges and lets you set your own dates. How many nights should I book?",
+     "spec": "three|3|shortest|minimum|briefest + week|fortnight|seven|ten|five",
+     "evidence_quote": "Val can cover Mum for three nights"
+    },
+    {
+     "kind": "explicit",
+     "question": "My old garden shears have finally given up. What two things should I be checking when I pick a replacement pair up in the shop?",
+     "spec": "light|lighter|lightweight|weight; grip|grips|handle|handles|ratchet|cushioned|padded",
+     "evidence_quote": "anything I have to grip hard or carry heavy is out"
+    },
+    {
+     "kind": "explicit",
+     "question": "The Field Naturalists want me to lead a half-day ramble in February and have left it to me which day of the weekend it runs on. Which day should I give them, and what is the reason?",
+     "spec": "sunday|sundays; pennant|bowls|club|fixture|match|competition + saturday|saturdays",
+     "evidence_quote": "Saturdays are spoken for from September through to March"
+    },
+    {
+     "kind": "implicit",
+     "question": "I am on the roster for the club's all-day carnival in February and I get to claim a spot to set my chair up. Which part of the green should I go for, and what should I take with me?",
+     "spec": "shade|shaded|shady|umbrella|awning|marquee|tree|trees|pines",
+     "evidence_quote": "dragged my chair round behind the scoreboard again"
+    },
+    {
+     "kind": "implicit",
+     "question": "I have a ticket to a two-hour author talk at the Town Hall and they let you choose your own seat when you book. Which seat should I go for?",
+     "spec": "aisle|end|edge|walkway|corridor|outer + middle|centre|center",
+     "evidence_quote": "sat on the end of the row as always"
+    },
+    {
+     "kind": "implicit",
+     "question": "The community college has asked me to run a six-week map-reading course in the January break and left the timetable completely up to me. What time of day should I schedule the sessions for?",
+     "spec": "morning|mornings|early|earlier|dawn|daytime|breakfast + evening|evenings|night|nights",
+     "evidence_quote": "a stack of maps trimmed before six"
+    },
+    {
+     "kind": "implicit",
+     "question": "I am going in to the Art Gallery on North Terrace for the map exhibition on a Sunday. How should I get in from Mitcham?",
+     "spec": "tram|train|bus|buses|public|transport|walk|walking + drive|driving|park|parking|car",
+     "evidence_quote": "left the car at Mitcham and took the tram"
+    },
+    {
+     "kind": "negative",
+     "question": "The faculty dinner in October asks everyone to nominate their main course a fortnight ahead off a fixed menu. What should I put down?",
+     "spec": "vegetarian|vegan|veggie|vegetables|mushroom|halloumi|gnocchi|eggplant|lentil|risotto + chicken|beef|lamb|steak|fish|salmon|prawn|pork|duck",
+     "evidence_quote": "four decades without meat gets you in this town"
+    },
+    {
+     "kind": "negative",
+     "question": "The principal wants me to nominate one fixed day each week to run the Year 10 fieldwork tutorial for the rest of the year. Which day should I put my hand up for?",
+     "spec": "monday|tuesday|thursday|friday + wednesday|wednesdays",
+     "evidence_quote": "Wednesdays belong to Mum start to finish"
+    },
+    {
+     "kind": "negative",
+     "question": "At the presentation night next month somebody will inevitably shout me a drink at the bar. What should I ask for?",
+     "spec": "soda|lime|lemonade|water|juice|ginger|tonic|mocktail|cordial + beer|wine|shiraz|champagne|bubbly|spirits|whisky",
+     "evidence_quote": "thirty-odd years of soda and lime at that bar"
+    },
+    {
+     "kind": "negative",
+     "question": "My wallet has finally fallen apart after fifteen years. What should I ask for the replacement to be made of?",
+     "spec": "canvas|cotton|nylon|synthetic|vegan|polyester|waxed|cork|recycled + leather|suede|hide|calfskin",
+     "evidence_quote": "could not understand why I would not take the leather ones"
+    },
+    {
+     "kind": "updated",
+     "question": "I get to the staffroom at half seven with twenty minutes before the first bell. What should I bring in from the cafe next door to see me through first period?",
+     "spec": "herbal|peppermint|chamomile|decaf|decaffeinated|rooibos|ginger + coffee|espresso|latte|caffeine|cappuccino",
+     "evidence_quote": "I have been off it completely since Easter"
+    },
+    {
+     "kind": "updated",
+     "question": "The geography teachers' conference is in Melbourne in October and I am definitely going. How should I get myself over there?",
+     "spec": "train|rail|overland|fly|flight|flying|plane|air + drive|driving|car|highway|road",
+     "evidence_quote": "I cannot do the long highway runs any more"
+    },
+    {
+     "kind": "updated",
+     "question": "I want to get my fitness back up before the season starts. What sort of training should I be doing three mornings a week?",
+     "spec": "swim|swimming|swims|pool|aqua|cycling|cycle|bike|elliptical|rowing + run|running|jog|jogging|runs",
+     "evidence_quote": "no more running on that knee, ever"
+    },
+    {
+     "kind": "updated",
+     "question": "There is a long trip coming up and I want to take the new Bill Bryson with me. What format should I get it in?",
+     "spec": "audiobook|audiobooks|audio|listen|listening|narrated|audible|spoken + paperback|print|hardback|paper",
+     "evidence_quote": "I have gone across to audiobooks entirely"
+    },
+    {
+     "kind": "composed",
+     "question": "I have been landed with booking the end-of-term staff dinner for twelve people. What should I be looking for when I choose the place?",
+     "spec": "vegetarian|vegan|veggie|vegetables|plant|meatless; quiet|quieter|noise|noisy|loud|music|acoustics|acoustic + steakhouse|barbecue|grill",
+     "evidence_quote": "a garden salad and a side of chips"
+    },
+    {
+     "kind": "composed",
+     "question": "I need a new satchel for school, since the one I have is falling apart. What should I specify when I order one?",
+     "spec": "light|lighter|lightweight|weight; canvas|cotton|nylon|synthetic|vegan|polyester|waxed|cork + leather|suede|hide",
+     "evidence_quote": "which apparently includes the school bag as it currently stands"
+    },
+    {
+     "kind": "composed",
+     "question": "I want to put on a social roll-up at the club for my birthday in February and they will let me pick the day and which rink we use. What should I ask for?",
+     "spec": "sunday|sundays|midweek|monday|tuesday|thursday|friday; shade|shaded|shady|pines|umbrella|awning|trees + saturday|saturdays",
+     "evidence_quote": "Played the far rink under the pines in the afternoon fours"
+    },
+    {
+     "kind": "composed",
+     "question": "I am doing the long haul across to Perth for my sister's 60th in the school holidays. What should I sort out before I go, both where to sit on the plane and what to take to fill the hours?",
+     "spec": "aisle|end|edge|walkway|corridor|outer; audiobook|audiobooks|audio|listen|listening|narrated|audible + window|middle|paperback|print",
+     "evidence_quote": "so I could stand and stretch the lower back twice"
+    }
+   ]
+  },
+  {
+   "persona": "Sunniva, 29, a marine biology PhD student in Bergen who sea-swims year round, plays in a regular board-game group, and lives with chronic insomnia.",
+   "sessions": [
+    {
+     "id": "h01",
+     "week": 0,
+     "text": "First proper swim of the autumn last night - I get in at six, after the lab is locked and the light has gone orange over Askoy. Cycled out to Marineholmen through sideways rain again; the bus goes right past my door and I have still never once been on it. Wrote the water temperature and the tide in pencil in the waterproof notebook before I got in, same as every swim since March."
+    },
+    {
+     "id": "h02",
+     "week": 1,
+     "text": "Saturday game day at Sindre's, so we started at two and Brass ran three and a half hours - I would have shuffled it straight back up and gone again if anyone had said yes. Left at nine sharp anyway; nothing that starts after eight goes in my calendar any more, because the one time I stayed till eleven I watched the ceiling until three. Sindre thinks I am being precious about it and I have stopped arguing."
+    },
+    {
+     "id": "h03",
+     "week": 2,
+     "text": "An espresso at three on Tuesday, purely out of habit, and I paid for it with a four-hour night. Nothing with caffeine after twelve from now on - decaf or rooibos, no exceptions, not even the good stuff on Marken. Deleted the task app off my phone the same evening and went back to a paper list on the desk, which I actually look at."
+    },
+    {
+     "id": "h04",
+     "week": 4,
+     "text": "The cod chapter has ruined restaurants for me. Four days inside stock-collapse numbers and now I can't put anything that came out of the sea on a plate; three years of counting them and it just isn't food any more. Got down to Nordnes for a dip afterwards and Ase was stuck on a bus somewhere, so I sat on the steps in my coat for twenty minutes rather than get in on my own."
+    },
+    {
+     "id": "h05",
+     "week": 5,
+     "text": "Abstract deadline for the Trondheim symposium tonight. Put in for the poster again - I don't stand up in front of rooms, I stand beside a board and let people come to me, and that has been fine for three conferences running. Sketched the layout out on paper first, then spent the rest of the evening gluing the sole back onto my swim boots with shoe goo instead of buying the new pair I keep looking at."
+    },
+    {
+     "id": "h06",
+     "week": 7,
+     "text": "Binned the last of the synthetic base layers this week - they hold the cold, they stink after one wear, and it's wool next to my skin or nothing at all from here on. Game night at the board-game cafe in Nostet as usual, which is fine except that the espresso machine screams and the table beside us was doing a murder mystery at full volume. Ase brought her sister along and we taught her Azul between rounds."
+    },
+    {
+     "id": "h07",
+     "week": 8,
+     "text": "Three days on the research vessel out past Fedje. A pod of harbour porpoises crossed the transect line on Wednesday morning and the whole deck went quiet, which does not happen twice in a season. I got maybe nine hours of sleep across the three nights because the generator sits directly under bunk four, but the CTD behaved itself and the data is clean."
+    },
+    {
+     "id": "h08",
+     "week": 10,
+     "text": "I've moved the swims to first light - in the water before breakfast, out and dressed by half seven. Six weeks of evening dips and I finally admitted that going in after dark leaves me buzzing until two, while the dawn ones make the whole day feel handled. Jonas met me at the steps at quarter past six, which is the only reason I actually went, and we swam out to the second marker and back."
+    },
+    {
+     "id": "h09",
+     "week": 12,
+     "text": "Everything else went sideways this week, so I am holding on to the one thing that works: the alarm goes at half six no matter what the night did, even after the two-hour one on Tuesday. Screens are out for the last two hours before bed as well - the phone charges in the hall now and it stays there. Picked up a wind-up clock at Fretex for forty kroner so I would stop needing an excuse to carry the phone through."
+    },
+    {
+     "id": "h10",
+     "week": 14,
+     "text": "Told the group I'm out for anything over ninety minutes on a weeknight - I love the long heavy ones but I can't be starting an endgame at ten and expecting to sleep afterwards. We finally house-ruled out anything where you get knocked out and sit there watching; being eliminated in the first hour and waiting around for everyone else is my idea of nothing. Borrowed Cascadia off Ase rather than buy it, and cycled it home in rain that found every hole in the bag."
+    },
+    {
+     "id": "h11",
+     "week": 16,
+     "text": "The Trondheim abstract came back accepted and I asked for the fifteen-minute talk slot instead of the poster board this time - I want to stand up and say the thing myself. Booked the travel tonight: the train up through Dovre, eight hours with a table and my own thermos, because I haven't flown since 2019 and I'm not breaking that for a symposium. Swam with Ase the morning it was due, which is the only reason the thing went in on time."
+    },
+    {
+     "id": "h12",
+     "week": 18,
+     "text": "My sister was over from Trondheim for four days and the flat has never been so loud. We did the funicular and the aquarium and every bakery between here and Torget, and she asked eleven questions about my thesis that I could not answer. The neighbour's cat has started coming in through the kitchen window whenever it rains, which is most days, and I have decided that this is fine."
+    },
+    {
+     "id": "h13",
+     "week": 20,
+     "text": "Cancelled the gym membership at last - four months of paying to run indoors under a strip light while the whole of Floyen sits there for free, and everything I do now happens outside. Hosting game night here from now on too: at the cafe I could never get people to wrap up, whereas in my own kitchen I can start clearing plates and everyone takes the hint. Walked up to Skomakerdiket after work and came back down in the dark with a head torch, and the car-owning half of the department thinks this is a personality disorder."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "A friend from the institute wants to start a monthly quiz evening with me and has left it to me to name the kick-off time. What should I tell her?",
+     "spec": "six|seven|6pm|7pm|1800|1830|1900|18 00|18 30|19 00|early|earlier + nine finish end",
+     "evidence_quote": "nothing that starts after eight goes in my calendar"
+    },
+    {
+     "kind": "explicit",
+     "question": "The base layer I change into after swimming has finally given up. Which fabric should I ask for when I replace it?",
+     "spec": "wool|woollen|woolen|merino|ull|lambswool + warm dry",
+     "evidence_quote": "it's wool next to my skin or nothing at all"
+    },
+    {
+     "kind": "explicit",
+     "question": "I've got a rare late one coming up, a colleague's leaving do that will run past midnight. What time should I be up the next day, and should the night before change that?",
+     "spec": "half six|six thirty|0630|630|6 30|06 30 + alarm regardless anyway",
+     "evidence_quote": "the alarm goes at half six no matter what"
+    },
+    {
+     "kind": "explicit",
+     "question": "I want to add a second kind of exercise alongside the swimming for the season ahead. What sort should I take up, and where should it happen?",
+     "spec": "outdoor|outdoors|outside|trail|forest|woods|hill|hills|mountain|skiing + torch dark hiking",
+     "evidence_quote": "four months of paying to run indoors under a strip light"
+    },
+    {
+     "kind": "implicit",
+     "question": "The game group has moved to a place about five kilometres across town on Thursdays, and it will be dark and wet by then. How should I get there and back?",
+     "spec": "bike|biking|bicycle|cycle|cycling|sykkel|on foot|walk it|walking + lights reflective waterproof",
+     "evidence_quote": "Cycled out to Marineholmen through sideways rain again"
+    },
+    {
+     "kind": "implicit",
+     "question": "I keep losing track of tank measurements between the lab bench and the boat. What should I be recording them in?",
+     "spec": "paper|notebook|notebooks|pencil|notepad|logbook|pen + waterproof pocket",
+     "evidence_quote": "Wrote the water temperature and the tide in pencil"
+    },
+    {
+     "kind": "implicit",
+     "question": "There's a gap in the weather on Sunday and I want a dip at Helleneset before the front comes in. What is the one condition I should insist on before I get in the water?",
+     "spec": "buddy|partner|someone|friend|company|together|accompanied|alone|solo|spotter|Jonas + shore watching tide",
+     "evidence_quote": "sat on the steps in my coat for twenty minutes"
+    },
+    {
+     "kind": "implicit",
+     "question": "My swim robe has worn through at the seams and I need something for after the morning dips. How should I go about getting a replacement?",
+     "spec": "second-hand|secondhand|used|repair|repaired|mend|mended|patch|patched|swap|swapped|borrow|borrowed|Fretex|charity|thrift|preloved + kroner cheap sew",
+     "evidence_quote": "gluing the sole back onto my swim boots with shoe goo"
+    },
+    {
+     "kind": "negative",
+     "question": "There's a three o'clock seminar on Thursdays with a drinks trolley and I always end up holding something. What should I take from it?",
+     "spec": "decaf|decaffeinated|herbal|rooibos|peppermint|mint|chamomile|water|juice|squash|cocoa + coffee espresso americano caffeine",
+     "evidence_quote": "Nothing with caffeine after twelve from now on"
+    },
+    {
+     "kind": "negative",
+     "question": "The department dinner for the visiting examiner is at a harbourside place and they want my main course choice by tomorrow. What should I put down?",
+     "spec": "vegetarian|vegan|mushroom|mushrooms|lentil|lentils|chickpea|chickpeas|halloumi|tofu|gnocchi|chicken|lamb|beef|pork|steak|duck + fish seafood cod salmon prawns",
+     "evidence_quote": "I can't put anything that came out of the sea"
+    },
+    {
+     "kind": "negative",
+     "question": "I'm restless in the hours between dinner and lights-out, and going to bed early only makes it worse. What should I actually do with that time?",
+     "spec": "read|reading|book|novel|paper|print|knit|knitting|journal|crossword|jigsaw|cards|bath|puzzle|walk + phone screen laptop tv scroll",
+     "evidence_quote": "Screens are out for the last two hours before bed"
+    },
+    {
+     "kind": "negative",
+     "question": "The Copenhagen meeting is in March and I need to book the journey there and back. How should I travel?",
+     "spec": "train|trains|rail|Dovre|ferry|ferries|boat|bus|coach|overland|sleeper + fly flight flying plane",
+     "evidence_quote": "I haven't flown since 2019 and I'm not breaking that"
+    },
+    {
+     "kind": "updated",
+     "question": "There's room for a third swim in the week now the fieldwork block is done. What time of day should I put it, and why that one?",
+     "spec": "morning|mornings|dawn|sunrise|daybreak|breakfast|first light + evening dark night dusk",
+     "evidence_quote": "I've moved the swims to first light"
+    },
+    {
+     "kind": "updated",
+     "question": "The group has asked me to choose the anchor game for a Thursday meetup. How long should the one I pick take to play?",
+     "spec": "ninety|90|60|sixty|short|shorter|quick|brief|under|hour and a half + heavy epic marathon 180",
+     "evidence_quote": "I'm out for anything over ninety minutes on a weeknight"
+    },
+    {
+     "kind": "updated",
+     "question": "There's a second meeting in Kiel in September with two submission formats open and I can only prepare one. Which should I put in for?",
+     "spec": "talk|talks|oral|presentation|speaking|speak|podium + poster board",
+     "evidence_quote": "I asked for the fifteen-minute talk slot"
+    },
+    {
+     "kind": "updated",
+     "question": "We need to settle where the group meets for the rest of the autumn, and everyone has asked what I would prefer. Where should I suggest?",
+     "spec": "home|flat|mine|yours|apartment|kitchen|host|hosting + cafe pub bar venue",
+     "evidence_quote": "Hosting game night here from now on too"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm having four people from the group over for supper before we play. What should I cook, and what time should I tell them to arrive?",
+     "spec": "vegetarian|vegan|mushroom|mushrooms|lentil|lentils|chickpea|chickpeas|bean|beans|halloumi|tofu|chicken|lamb|beef; six|seven|6pm|7pm|1800|1830|1900|18 00|18 30|19 00|early|earlier + nine wrap finish",
+     "evidence_quote": "three years of counting them and it just isn't food"
+    },
+    {
+     "kind": "composed",
+     "question": "I want to bring a game to the group that none of us has played. What mechanic should I make sure the box doesn't have, and how should I go about getting hold of it?",
+     "spec": "elimination|eliminate|eliminated|knockout|knocked; second-hand|secondhand|used|swap|swapped|borrow|borrowed|repair|repaired|Fretex|charity|thrift|preloved + ninety 90 short",
+     "evidence_quote": "anything where you get knocked out and sit there watching"
+    },
+    {
+     "kind": "composed",
+     "question": "I want to start keeping a two-line sleep log at night. What should I write it in, and where should the phone be while I do it?",
+     "spec": "paper|notebook|notepad|pencil|pen|journal|logbook; hall|hallway|corridor|kitchen|another room|other room|living room|out of the bedroom|outside the bedroom + clock charging",
+     "evidence_quote": "the phone charges in the hall now and it stays there"
+    },
+    {
+     "kind": "composed",
+     "question": "Saturday is forecast at minus two and I want my longest dip of the winter. What should I have on next to my skin beforehand, and what time should I get in?",
+     "spec": "wool|woollen|woolen|merino|ull|lambswool; morning|mornings|dawn|sunrise|daybreak|first light|breakfast + hat beanie thermos gloves",
+     "evidence_quote": "Binned the last of the synthetic base layers this week"
+    }
+   ]
+  },
+  {
+   "persona": "Desmond, 46, a logistics manager at a freight yard on Chicago's West Side. Recently divorced from Rachel, with week-on week-off custody of nine-year-old twins Owen and Josie. Two years sober, learning classical guitar from a teacher named Sofia, and rebuilding a one-man household out of marketplace listings.",
+   "sessions": [
+    {
+     "id": "i01",
+     "week": 0,
+     "text": "First full week in the apartment and the walls still echo at night. The yard threw Dale a send-off at the brewery on Thursday and I skipped it again, because I am two years sober and I don't sit in taprooms, that is the deal I made with myself. Replaced my wrecked yard boots on the way home and went composite toe this time, since steel toes turn my feet into ice blocks by ten in the morning out on that dock. I was up at five anyway and had the twins' lunches made before the first truck rolled."
+    },
+    {
+     "id": "i02",
+     "week": 1,
+     "text": "Bought a guitar off a retired band teacher out in Berwyn, a hundred and forty for the instrument and a case worth more than that, and I would rather let somebody else eat the depreciation. Restrung it at the kitchen table that night: steel is finished for me, this one takes nylon or nothing, my fingertips are still peeling from the last set. Ran the lakefront path Sunday and felt human for once, six miles is my church these days."
+    },
+    {
+     "id": "i03",
+     "week": 3,
+     "text": "Rode the Blue Line down to the Loop for the carrier lunch instead of crawling in on the Kennedy and paying forty to park. Ordered the Italian beef with the hot giardiniera, extra hot, and the Ryder rep watched me eat it like a nature documentary. The taqueria by the yard has my order memorized at this point; I have bought lunch out every workday since the move, because cooking twice a day for one person is not happening."
+    },
+    {
+     "id": "i04",
+     "week": 4,
+     "text": "Parent-teacher conferences ran back to back and both teachers used the word spirited about Owen, which I am choosing to take as a compliment. Josie has decided she is the one who reads the bedtime chapter now, and she corrects my voices. The yard lost power for six hours Tuesday and we ran the whole dock off a generator and a clipboard."
+    },
+    {
+     "id": "i05",
+     "week": 6,
+     "text": "Josie's celiac panel came back positive. I was in the kitchen at half past five Saturday clearing it down to the shelf liners, because nothing with gluten comes into this apartment now, not even the good pretzels I hide behind the cereal. Sofia handed me my first real flamenco study this week, and the Spanish repertoire is the whole reason I signed up for lessons. Owen has concluded that he too is a person with complex dietary needs."
+    },
+    {
+     "id": "i06",
+     "week": 7,
+     "text": "Signed the lease on the place off Milwaukee. I told the leasing agent straight out that I was not touching anything with fewer than two bedrooms, because the twins need a door that closes and I will cut somewhere else if I have to. Furnished most of it off marketplace listings, a dresser from a couple in Logan Square and a kitchen table someone was giving away. The rest of the old house is still in the Cicero storage unit and honestly the ninety a month is worth not having to decide."
+    },
+    {
+     "id": "i07",
+     "week": 9,
+     "text": "Owen lost a tooth in the middle of the third grade play and kept right on delivering his line, which I respect enormously. Josie has started narrating the weather like a broadcaster, hand gestures and all. Work was the usual November nonsense, two drivers out with the flu and a reefer down in Gary."
+    },
+    {
+     "id": "i08",
+     "week": 11,
+     "text": "Took the train in for the guitar society showcase downtown so I would not have to think about parking on a Saturday night. Rachel's mother put a whole album of the twins up after Thanksgiving and I asked her to take it down, because no pictures of my kids go up on social media, that one is not negotiable for me. She was not thrilled about it but she did it."
+    },
+    {
+     "id": "i09",
+     "week": 13,
+     "text": "Rachel called about swapping the winter break weeks and it went sideways inside four minutes, so I told her we are doing this in writing from now on, texts or the custody app, nothing on the phone where I cannot reread what was actually agreed. She sent it back in two lines and it was settled by nine. Made the twins tacos afterward with the chili oil on mine, and Owen tried a drop and declared war on me."
+    },
+    {
+     "id": "i10",
+     "week": 15,
+     "text": "Knee finally quit on me at mile four and the ortho was blunt about it: the pavement running is over, find water or find a bike. Started at the park district pool before work instead, six in the morning, forty laps, and the knee already likes me better for it. Booked the early flight to the Atlanta carrier summit so I am home in time for the Thursday handoff, which is the only reason I said yes to going."
+    },
+    {
+     "id": "i11",
+     "week": 17,
+     "text": "The shop has a nicer classical hanging on the wall with eighteen months at zero percent, and I walked out without it, because I don't finance anything anymore, not after what the divorce left me carrying. I will save for it and pay outright or I will not have it. Found a used footstool and a secondhand tuner on Reverb for eleven dollars instead, which is about my speed right now."
+    },
+    {
+     "id": "i12",
+     "week": 19,
+     "text": "Told Sofia I am done with the flamenco pieces for good; the Bach and the Renaissance lute transcriptions are what I actually want my hour to go to, and she is rebuilding the whole program around them. Started packing lunch from home the same week, leftovers in the same beat up container, and the fourteen dollars a day at the taqueria is finished. Put the ghost pepper sauce on tonight's leftovers and regretted nothing."
+    },
+    {
+     "id": "i13",
+     "week": 20,
+     "text": "Emptied the Cicero storage unit on Saturday, sold the patio set, gave eleven boxes to the church resale shop and cancelled the contract, because I am not paying rent on things I have not opened in a year. Rode the Metra in with Trent afterward for the guitar society meeting rather than deal with Saturday parking downtown. Two years and five months now, and the apartment finally looks like somebody lives in it on purpose."
+    }
+   ],
+   "questions": [
+    {
+     "kind": "explicit",
+     "question": "I'm restringing the guitar before the winter recital. What should I have the shop put on it?",
+     "spec": "nylon|classical + steel fingertips",
+     "evidence_quote": "this one takes nylon or nothing"
+    },
+    {
+     "kind": "explicit",
+     "question": "My yard boots have cracked through again and I need a new pair before January. What should I specify when I order them?",
+     "spec": "composite|nonmetallic|non metallic|carbon|fiberglass + steel cold",
+     "evidence_quote": "went composite toe this time"
+    },
+    {
+     "kind": "explicit",
+     "question": "I'm looking at places again for next year's lease. What is the one requirement I should give the agent before we start touring?",
+     "spec": "two|second|2|extra; bedroom|bedrooms|room|rooms + twins door",
+     "evidence_quote": "I was not touching anything with fewer than two bedrooms"
+    },
+    {
+     "kind": "explicit",
+     "question": "Rachel wants to renegotiate the spring break handoff. How should I run that back and forth with her?",
+     "spec": "writing|written|text|texts|email|app + phone call",
+     "evidence_quote": "we are doing this in writing from now on"
+    },
+    {
+     "kind": "implicit",
+     "question": "Sofia is reshuffling her weekly lesson slots and asked which one I want. What time of day should I claim, and why?",
+     "spec": "morning|mornings|early|earlier|dawn|daybreak + evening night",
+     "evidence_quote": "I was up at five anyway"
+    },
+    {
+     "kind": "implicit",
+     "question": "I need a small amp for the church gig in March and money is tight. How should I go about getting one?",
+     "spec": "used|secondhand|second hand|preowned|marketplace|reverb + new retail",
+     "evidence_quote": "let somebody else eat the depreciation"
+    },
+    {
+     "kind": "implicit",
+     "question": "I've got a carrier dinner in the Loop on a Friday night. How should I get down there?",
+     "spec": "train|metra|cta|transit|rail|blue line + driving parking",
+     "evidence_quote": "instead of crawling in on the Kennedy and paying forty to park"
+    },
+    {
+     "kind": "implicit",
+     "question": "I'm restocking the pantry at my place. What heat level should I get on the jar of giardiniera?",
+     "spec": "hot|spicy|fiery|ghost|habanero|hottest + mild medium",
+     "evidence_quote": "the hot giardiniera, extra hot"
+    },
+    {
+     "kind": "negative",
+     "question": "My cousin's wedding is in May and I'm standing up in it. What should I have in my hand for the toast?",
+     "spec": "mocktail|seltzer|soda|cider|tonic|alcoholic + champagne wine",
+     "evidence_quote": "two years sober and I don't sit in taprooms"
+    },
+    {
+     "kind": "negative",
+     "question": "The twins want to bake something for Owen's class party at my place. What do I have to rule out when I pick a recipe?",
+     "spec": "gluten|celiac|coeliac + wheat josie",
+     "evidence_quote": "nothing with gluten comes into this apartment now"
+    },
+    {
+     "kind": "negative",
+     "question": "My sister keeps asking for the recital pictures of the twins. How should I get them to her?",
+     "spec": "text|texts|email|airdrop|privately|directly + facebook instagram post",
+     "evidence_quote": "no pictures of my kids go up on social media"
+    },
+    {
+     "kind": "negative",
+     "question": "There's a much better classical hanging in the shop for eleven hundred dollars and I want it badly. How should I pay for it?",
+     "spec": "save|saving|savings|wait|outright|full + finance credit interest",
+     "evidence_quote": "I don't finance anything anymore"
+    },
+    {
+     "kind": "updated",
+     "question": "I've got forty minutes to myself before the twins wake up. What kind of cardio should I do?",
+     "spec": "swim|swimming|pool|laps|bike|cycling + running pavement",
+     "evidence_quote": "the pavement running is over, find water or find a bike"
+    },
+    {
+     "kind": "updated",
+     "question": "The last of the boxes from the old house are stacked at my parents' place and they want them gone. What should I do with all of it?",
+     "spec": "sell|selling|donate|donating|rid|goodwill + storage unit",
+     "evidence_quote": "not paying rent on things I have not opened in a year"
+    },
+    {
+     "kind": "updated",
+     "question": "Sofia asked me to bring in a piece I want to work up for the spring recital. What repertoire should I be looking at?",
+     "spec": "bach|renaissance|lute|baroque|dowland|prelude + flamenco spanish",
+     "evidence_quote": "the Bach and the Renaissance lute transcriptions"
+    },
+    {
+     "kind": "updated",
+     "question": "New quarter, new budget. What's my move on lunch during the yard weeks?",
+     "spec": "pack|packing|packed|bring|leftovers|from home + taqueria buying",
+     "evidence_quote": "Started packing lunch from home the same week"
+    },
+    {
+     "kind": "composed",
+     "question": "I'm hosting the guitar society potluck at my apartment next month. What should I tell people to bring, and what should I have in the fridge for myself?",
+     "spec": "gluten|celiac|coeliac; mocktail|seltzer|soda|cider|tonic|alcoholic + wine beer",
+     "evidence_quote": "not even the good pretzels I hide behind the cereal"
+    },
+    {
+     "kind": "composed",
+     "question": "I want to upgrade the instrument by the fall without blowing up my budget. How should I shop for it, and how should I handle the payment?",
+     "spec": "used|secondhand|second hand|preowned|marketplace|reverb; save|saving|savings|wait|outright|full + finance credit",
+     "evidence_quote": "a hundred and forty for the instrument"
+    },
+    {
+     "kind": "composed",
+     "question": "I have to be downtown for an all day inventory audit with the carrier next week. How should I get there, and what start time should I push for?",
+     "spec": "train|metra|cta|transit|rail|blue line; morning|mornings|early|earlier|dawn|daybreak + parking afternoon",
+     "evidence_quote": "Took the train in for the guitar society showcase downtown"
+    },
+    {
+     "kind": "composed",
+     "question": "Plan out my lunches for the next yard rotation. How should I be getting lunch, and how do I keep it from being boring by Wednesday?",
+     "spec": "pack|packing|packed|bring|leftovers|from home; hot|spicy|fiery|ghost|habanero|hottest + taqueria mild",
+     "evidence_quote": "with the chili oil on mine"
+    }
+   ]
+  }
+ ]
+}

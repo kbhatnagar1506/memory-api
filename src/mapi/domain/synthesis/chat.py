@@ -11,7 +11,13 @@ Three properties separate this from putting a vector store behind a chat box:
   * IT DECLINES. "I do not have that in memory" is a correct answer and the
     prompt says so explicitly. A chat that invents an answer from an empty
     result set is worse than one that returns nothing, because the failure is
-    invisible.
+    invisible. The rule has one boundary, added after a live run showed it
+    drawn in the wrong place: ARITHMETIC OVER STORED FIGURES is answering from
+    memory, not filling a gap. Asked to total four invoices the model added
+    them up; asked to average the same four it replied "I don't have that in
+    memory", because an average is nowhere written down. Both readings follow
+    from "answer only from the memories", which is how you know the rule was
+    underspecified rather than disobeyed.
   * IT REPORTS CONFIDENCE. Memories carry a `confidence` in metadata, and an
     unverified one is labelled as such in the context. A memory system that
     launders "someone told me this once" into a confident answer is actively
@@ -51,12 +57,17 @@ everything you know; you have no other knowledge of this subject.
 Rules:
 1. Answer ONLY from the memories. If they do not contain the answer, say so \
 plainly — "I don't have that in memory" — and stop. Do not fill the gap.
-2. Cite the memories you used as [1], [2] inline. Every factual claim needs \
+2. Counting, totalling, averaging or comparing the figures in the memories IS \
+answering from them, so do it and show the result. Every input must come from \
+a memory: if one you need is missing, decline under rule 1 instead of \
+estimating it. If you list the items you counted, the number you state must \
+equal the number you list.
+3. Cite the memories you used as [1], [2] inline. Every factual claim needs \
 one.
-3. A memory marked UNVERIFIED is not established fact. If you use one, say it \
+4. A memory marked UNVERIFIED is not established fact. If you use one, say it \
 is unverified and why it matters, in the same sentence.
-4. Where memories disagree, say so and give both. Do not silently pick one.
-5. Be brief and concrete. No preamble, no restating the question, no offers \
+5. Where memories disagree, say so and give both. Do not silently pick one.
+6. Be brief and concrete. No preamble, no restating the question, no offers \
 of further help.
 
 {history}Memories:

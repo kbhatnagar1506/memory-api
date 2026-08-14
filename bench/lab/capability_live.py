@@ -13,27 +13,37 @@ retrieve perfectly and still answer badly, and the whole argument of the lab
 work has been that those two failures need separating. This file deliberately
 puts the model back in.
 
-WHAT IS COVERED, and why each needs its own question:
+WHAT IS COVERED -- 39 capabilities, because "remembering" is not one skill:
 
-    direct        the fact is in one memory; the floor
-    count         a cardinality that exists in no single memory
-    order         first/last over dated rows
-    date_arith    a span between two events
-    compare       judgement over two retrieved figures
-    list_all      the table itself is the answer
-    temporal      a question scoped to a window ("in March")
-    multi         evidence deliberately split across memories
-    supersede     a fact that CHANGED; the old value is the trap
-    contradict    two memories that disagree and must not be silently picked
-    unverified    a memory marked shaky; the caveat must survive
-    abstain       the answer is NOT in the store; inventing it is the failure
-    preference    explicit / implicit / negative / updated / composed
-    tenancy       a fact that exists only in another space and must not leak
+    LOOKUP        direct, order, temporal, multi, list_all, paraphrase
+    ARITHMETIC    count, sum, max, min, average, group_by, date_arith, compare
+    CHANGE        supersede (value moved), reversal (the thing was undone),
+                  retraction (the first statement was wrong), refinement
+                  (vague became exact), partial_update (one field moved and
+                  the rest did not), contradict (two sources disagree)
+    SHAPE         negation, attribution (X SAID y, which is not y), conditional,
+                  planned (booked, not happened), recurring, interval
+    HARDNESS      distractor (Haldern vs Halden), multi_hop, numeric (18 vs 180)
+    PREFERENCE    explicit / implicit / negative / updated / composed
+    HONESTY       abstain, negative_existence, unverified, tenancy
 
-The last two are the ones a benchmark will not tell you about and a product
-lives or dies on: a memory system that invents an answer is worse than one that
-returns nothing, and one that leaks across spaces is a security incident rather
-than a quality problem.
+The change family is the point. Supersession is the tidy case everyone builds
+for; a reversal answered with the original value leaves the user holding a
+thing they returned, and a retraction answered with the original quotes a
+number that was never true. They fail differently and need testing separately.
+
+RESULT: 45/50, then 47, then 49 as each finding was fixed. Two of the first
+five failures were this file's own bugs -- a scorer that could not read "180cm"
+and a leak detector that flagged a coincidence of digits -- which is the usual
+ratio and the reason the replies are printed rather than just counted.
+
+The one that remains is honest and is NOT a synthesis failure. Asked to total
+four invoices, retrieval returns all four and the answer is right; asked to
+AVERAGE the same four, it returns three (the query says nothing about a count,
+so the fourth ranks below the cut) and the model declines rather than dividing
+by the wrong denominator. That is rule 2 working: an aggregate needs every
+member of its set, cosine ranking guarantees no such thing, and the fix belongs
+in retrieval rather than in another sentence of prompt.
 
     python -m bench.lab.capability_live
 """
@@ -163,6 +173,82 @@ MEMORIES: tuple[tuple[datetime, str, dict], ...] = (
         "Moved off the Bambu to a resin printer for the fine detail work on medical parts.",
         {},
     ),
+    # -- CHANGE OVER TIME, in each of the shapes it actually takes -----------
+    # Supersession is only the tidiest one. A value can also be REVERSED (the
+    # thing was undone), RETRACTED (the first statement was simply wrong),
+    # REFINED (vague became exact) or PARTIALLY updated (one field of a
+    # compound fact moved and the rest did not). Each fails differently: a
+    # reversal answered with the original leaves the user holding a thing they
+    # returned, a retraction answered with the original quotes a number that
+    # was never true.
+    (
+        _d(2026, 8, 9),
+        "Returned the resin printer. It could not hold tolerance on the "
+        "Vireo parts, so I am back on the Bambu for everything.",
+        {},
+    ),
+    (_d(2026, 5, 2), "Invoiced Okonjo Studio 2300 pounds for the retail fixture.", {}),
+    (
+        _d(2026, 5, 4),
+        "Correction: the Okonjo invoice was 3200, not 2300. I had missed "
+        "the tooling line entirely.",
+        {},
+    ),
+    (_d(2026, 3, 12), "The Milan trip cost somewhere around 800 all in, I think.", {}),
+    (_d(2026, 3, 30), "Final Milan total came to 847.20 once every receipt was in.", {}),
+    (_d(2026, 6, 15), "The Vireo enclosure is going in ABS.", {}),
+    (
+        _d(2026, 7, 2),
+        "Switched the Vireo enclosure from ABS to polycarbonate to pass "
+        "the drop test. Everything else about the job is unchanged.",
+        {},
+    ),
+    # -- CONTENT SHAPES that are not plain assertions ------------------------
+    # A negation, a third-party claim, a conditional and a plan are all things a
+    # memory store must hold WITHOUT flattening them into facts. Answering "he
+    # owns a Volvo" from "I don't own a car" is the same class of error as
+    # answering "aluminium will double" from "Marcus reckons aluminium will
+    # double" -- the memory was recorded correctly and read carelessly.
+    (
+        _d(2026, 1, 5),
+        "I do not own a car and never have. Everything moves by train or by courier.",
+        {},
+    ),
+    (_d(2026, 4, 20), "Marcus reckons aluminium prices will double by next spring.", {}),
+    (_d(2026, 6, 28), "If Vireo goes above 5000 units I will need a second supplier.", {}),
+    (
+        _d(2026, 8, 10),
+        "Booked the Rotterdam fair for October. Not been to that one before.",
+        {},
+    ),
+    (_d(2026, 2, 10), "Every Tuesday I do a full workshop clean-down.", {}),
+    (_d(2026, 1, 3), "I have been renting the Peckham unit since March 2025.", {}),
+    # -- MONEY, so aggregation has something real to aggregate ---------------
+    (_d(2026, 2, 18), "Invoiced Halden Foods 4200 pounds for the packaging refresh.", {}),
+    (_d(2026, 3, 25), "Invoiced Bramwell Cycles 5100 pounds for the light housing.", {}),
+    (_d(2026, 6, 23), "Invoiced Vireo Health 6800 pounds the same afternoon I shipped.", {}),
+    (_d(2026, 4, 10), "Bramwell paid 40 days after invoice. I had to chase them twice.", {}),
+    (_d(2026, 5, 30), "Okonjo paid on the day the invoice landed.", {}),
+    (_d(2026, 7, 4), "Vireo paid inside a fortnight, no chasing.", {}),
+    # -- RETRIEVAL HARDNESS --------------------------------------------------
+    # A near-name that is NOT the client (Haldern vs Halden), a fact stated
+    # only in words the question will not use, a three-link chain, and two
+    # numbers where one is a prefix of the other.
+    (
+        _d(2026, 2, 25),
+        "Had a call with Haldern Design about a rebrand. Nothing came of it.",
+        {},
+    ),
+    (
+        _d(2026, 6, 5),
+        "The bench lamp finally gave up, so the whole back wall is now lit "
+        "by a single overhead strip that flickers.",
+        {},
+    ),
+    (_d(2026, 1, 25), "My contact at Bramwell Cycles is Sarah Okoye.", {}),
+    (_d(2026, 6, 1), "Sarah Okoye left Bramwell and moved to Vireo Health in June.", {}),
+    (_d(2026, 4, 29), "The Okonjo fixture stands 180cm tall.", {}),
+    (_d(2026, 4, 30), "The shelf pitch on the Okonjo fixture is 18cm.", {}),
 )
 
 #: A DIFFERENT space, same org. Nothing here may ever appear in an answer about
@@ -234,6 +320,81 @@ CASES: tuple[tuple[str, str, str | None], ...] = (
         "Plan how I should get to a client review in Edinburgh next month.",
         "train|rail|sleeper + fly|flight|plane",
     ),
+    # -- change over time, beyond plain supersession -------------------------
+    ("reversal", "Which printer am I using for detail work now?", "bambu|x1c + resin"),
+    ("reversal", "Do I still have the resin printer?", "no|returned|sent back|not + bambu"),
+    ("retraction", "How much did I invoice Okonjo Studio?", "3200 + 2300"),
+    ("refinement", "Exactly what did the Milan trip cost?", "847"),
+    ("partial_update", "What material is the Vireo enclosure?", "polycarbonate|pc + abs"),
+    (
+        "partial_update",
+        "Did switching the Vireo material change anything else about that job?",
+        "no|nothing|unchanged|only|just|same",
+    ),
+    # -- content shapes that must not flatten into plain facts ---------------
+    ("negation", "What car do I drive?", "no|not|none|don't|do not|never"),
+    (
+        "attribution",
+        "Is aluminium going to double in price by spring?",
+        "marcus + reckons|thinks|said|claim|according|believes",
+    ),
+    (
+        "conditional",
+        "Do I need a second supplier for Vireo?",
+        "if|depends|only|unless|conditional|above|over|5000",
+    ),
+    ("planned", "Have I been to the Rotterdam fair?", "no|not|haven't|have not|booked|october"),
+    ("recurring", "What do I do every Tuesday?", "clean|cleaning|clean-down|workshop"),
+    ("interval", "How long have I had the Peckham unit?", "2025|march|year|18|eighteen"),
+    # -- aggregation over the invoice set ------------------------------------
+    ("sum", "What did I invoice in total across all four projects?", "19300|19 300"),
+    ("max", "Which project invoiced the most, and how much?", "vireo; 6800"),
+    ("min", "Which was my smallest invoice?", "okonjo|3200"),
+    ("average", "What was my average invoice value this year?", "4825"),
+    ("group_by", "How many projects did I ship in the second quarter?", "two|2 + okonjo|vireo"),
+    (
+        "set_difference",
+        "Which client was slowest to pay?",
+        "bramwell + 40|forty|chase",
+    ),
+    #: `?` prefix: a decline is ALSO a correct answer here.
+    #:
+    #: This case originally demanded a flat "no", and that encoded a closed-world
+    #: assumption a memory store does not get to make. Absence of an automotive
+    #: client in the store is not evidence the user never had one -- they may
+    #: simply never have written it down. The first run answered "I have worked
+    #: for Bramwell Cycles", which is both wrong and the closed-world reading
+    #: taken confidently; the run after answered "I don't have that in memory",
+    #: which is the honest one, and the spec scored it a failure. The spec was
+    #: what needed fixing.
+    (
+        "negative_existence",
+        "Have I ever worked with an automotive client?",
+        "?no|not|never|nothing|nobody|none",
+    ),
+    # -- retrieval hardness ---------------------------------------------------
+    (
+        "distractor",
+        "What did I do for Halden Foods?",
+        "packaging|refresh + haldern|rebrand",
+    ),
+    (
+        "distractor",
+        "Did the Haldern Design rebrand go ahead?",
+        "no|not|nothing|didn't|did not|never",
+    ),
+    (
+        "paraphrase",
+        "Is the lighting in my workshop any good?",
+        "flicker|flickers|single|overhead|strip|poor|bad|one",
+    ),
+    (
+        "multi_hop",
+        "Who is my contact at Vireo Health, and where did I know them from?",
+        "sarah|okoye; bramwell",
+    ),
+    ("numeric", "How tall is the Okonjo fixture?", "180 + 18"),
+    ("numeric", "What is the shelf pitch on the Okonjo fixture?", "18 + 180"),
 )
 
 
@@ -289,7 +450,12 @@ async def main() -> None:
                 query=question,
                 org_id=org.id,
                 space_id=main_space.id,
-                limit=10,
+                #: Wider than the product default because the aggregation cases
+                #: need four separate invoice memories at once, and a sum that
+                #: fails for want of a row is a RETRIEVAL result being reported
+                #: as an arithmetic one. Still well under the corpus size, so
+                #: the ranker is exercised rather than bypassed.
+                limit=20,
                 asked_at=ASKED_AT,
             )
         )
@@ -309,11 +475,20 @@ async def main() -> None:
         )
         # Leakage is checked against the OTHER space's distinctive values, not
         # against a similarity -- either the string is in the reply or it is not.
-        leaked = any(token in low for token in ("caldwell", "pantone", "3005", "4200"))
+        #
+        # Every token here must be UNIQUE to the other space. "4200" was in this
+        # list and flagged two CORRECT answers, because 4200 is also the Halden
+        # invoice in the main space: the detector was reporting a coincidence of
+        # digits as a tenancy breach. A leak check that cries wolf is worse than
+        # no leak check, because the one alarm that matters stops being read.
+        leaked = any(token in low for token in ("caldwell", "pantone", "3005"))
         if spec is None:
             #: abstain/tenancy: the ONLY correct behaviour is to decline, and a
             #: fluent invented answer is the failure this catches.
             correct = declined and not leaked
+        elif spec.startswith("?"):
+            #: open-world: either an explicit negative or an honest decline.
+            correct = declined or score(reply, Expected.parse(spec[1:])).correct
         else:
             correct = score(reply, Expected.parse(spec)).correct
         return {

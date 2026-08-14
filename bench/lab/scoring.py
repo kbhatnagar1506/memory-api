@@ -93,6 +93,24 @@ def _compound_forms(needle: str) -> list[str]:
     return forms
 
 
+def _right_edge(needle: str) -> str:
+    """What may follow a needle without it being a different token.
+
+    The general rule is "no letter or digit after", which is what stops "18"
+    matching inside "180". Applied to a NUMBER it also stops "180" matching
+    inside "180cm", and a live run scored two correct answers wrong for exactly
+    that -- "The Okonjo fixture is 180cm tall" against a spec of `180`. Numbers
+    arrive welded to their units constantly (40kg, 20mm, 85hr, 3200gbp) and a
+    scorer that cannot read them is measuring its own lexer.
+
+    So for an all-digit needle the guard narrows to "no DIGIT after". "18"
+    still cannot match "180", because what follows is a digit; "180" can now
+    match "180cm", because what follows is not. Non-numeric needles keep the
+    strict rule, where a following letter genuinely does mean a different word.
+    """
+    return r"(?!\d)" if needle.isdigit() else r"(?![0-9a-z])"
+
+
 def _contains(answer_norm: str, surface: str) -> bool:
     """Word-boundary containment of a normalized surface in a normalized answer.
 
@@ -103,7 +121,7 @@ def _contains(answer_norm: str, surface: str) -> bool:
     if not needle:
         return False
     return any(
-        re.search(rf"(?<![0-9a-z]){re.escape(form)}(?![0-9a-z])", answer_norm) is not None
+        re.search(rf"(?<![0-9a-z]){re.escape(form)}{_right_edge(form)}", answer_norm)
         for form in _compound_forms(needle)
     )
 

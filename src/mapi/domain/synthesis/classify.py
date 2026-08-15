@@ -130,6 +130,61 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
             r"(?:should|ought)\s+(?:i|we)\b"
             r"|\b(?:should|ought)\s+(?:i|we)\b"
             r"|\bhelp\s+me\s+\w+"
+            # 3b. THE SAME DELIBERATION IN AN EMBEDDED CLAUSE. English inverts
+            #     the subject and modal in a direct question ("what should I
+            #     wear") and does not in a subordinate one ("anything I should
+            #     request", "advice on what I should wear"). It is one frame
+            #     with two word orders, and only the inverted one was covered.
+            #
+            #     `(?!have|had)` is what keeps it out of the past: "what I
+            #     should have done in March" and "when we should have renewed"
+            #     REPORT a missed obligation, which is recall. `(?<!\bsay)` and
+            #     its siblings block reported advice -- "what did the doctor say
+            #     I should do" is a question about the corpus, not a request for
+            #     a recommendation, and routing it here makes the model invent
+            #     one instead of looking it up.
+            #     The lookbehinds are a closed class of REPORTING verbs, the
+            #     same justification frame 4 uses for its nouns: "she told me
+            #     what I should charge" embeds the deliberation under someone
+            #     else's past speech, so it is a question about the corpus.
+            #     They are separate assertions because Python requires each
+            #     lookbehind to be fixed-width, and "told me " is not "said ".
+            r"|(?<!\bsaid )(?<!\bsays )(?<!\btold )(?<!\btold me )(?<!\basked )"
+            r"(?<!\badvised )(?<!\bsaid that )"
+            #     The subject is any PERSONAL pronoun, not just first person.
+            #     "What should he put in my tea", "anything she ought to tell
+            #     them when she books" -- somebody else acting on the user's
+            #     behalf is still a request to apply the user's preferences,
+            #     and it was the single most common miss in the lab corpus.
+            #     Restricted to pronouns on purpose: "what should the invoice
+            #     threshold have been" must stay a lookup.
+            #     No REPORTING VERB may sit inside the window either. The
+            #     lookbehinds above guard the position before the wh-word
+            #     ("told me what I should charge"); this guards between it and
+            #     the pronoun ("what did the doctor SAY I should do"), which is
+            #     where the verb lands in the commoner phrasing and where
+            #     widening the window to five words first let it through.
+            r"\b(?:anything|something|what|which|where|how|whether)\s+"
+            r"(?:(?!(?:say|says|said|tell|tells|told|ask|asks|asked|advise|advises"
+            r"|advised|recommend|recommends|recommended|suggest|suggests|suggested)\b)"
+            r"\w+\s+){0,5}(?:i|we|he|she|they)\s+"
+            r"(?:should|ought\s+to|could)\s+(?!have\b|had\b)"
+            r"|\b(?:should|ought\s+to)\s+(?:he|she|they)\b(?!\s+have\b)"
+            # 3c. IMPERATIVE WITH A WH-COMPLEMENT. Frame 2 identifies its verbs
+            #     by the determiner after them, so "recommend a hotel" is caught
+            #     and "recommend WHAT KIND of hotel" is not -- same verb, same
+            #     request, different complement.
+            #     `when` is deliberately absent: after these verbs it is almost
+            #     always a temporal adverbial rather than a complement, and
+            #     including it routed "which wine did Priya SUGGEST WHEN we
+            #     met" -- a lookup -- to advice.
+            r"|\b(?:suggest|recommend|advise|propose|plan|pick|choose)\s+"
+            r"(?:me\s+)?(?:what|which|how|where|whether)\b"
+            # 3d. SUPERLATIVE. "What is the best way to get there" asks for a
+            #     judgement, not a stored fact. Present tense only: "what WAS
+            #     the best month for sales" is a lookup over history.
+            r"|\b(?:what|which)(?:\s+\w+){0,2}\s*(?:'s|\bis|\bare|\bwould\s+be)\s+"
+            r"the\s+(?:best|better|right|ideal|safest|cheapest)\b"
             # 4. AN ADVICE NOUN IN A REQUESTING CONTEXT. The nouns are a small
             #    closed set -- English has no further words for "a
             #    recommendation" -- but the noun ALONE is not the frame, and

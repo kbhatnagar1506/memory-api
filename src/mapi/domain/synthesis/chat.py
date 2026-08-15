@@ -59,7 +59,25 @@ log = get_logger(__name__)
 #: transcript would crowd out the retrieval it exists to support.
 MAX_HISTORY_TURNS = 8
 #: Characters of any one memory that reach the prompt.
-MAX_MEMORY_CHARS = 700
+#:
+#: A SAFETY VALVE, not a budget, and it was set as though it were a budget. At
+#: 700 a memory of 1042 characters lost its last third silently and mid-word --
+#: measured, with the operative clause ("the drop test must be run at minus 20
+#: degrees") among the characters discarded. Nothing marked the cut, so the
+#: model answered confidently from a fragment and had no way to know it was
+#: reading one.
+#:
+#: 700 was never near a real constraint either. Twenty memories at this size are
+#: about 20K tokens against a million-token window; the same reasoning already
+#: sets the benchmark's session clip at 24,000. The value exists so one
+#: pathological document cannot blow the context or the bill, and 4,000 does
+#: that while covering anything short of a genuine document.
+MAX_MEMORY_CHARS = 4_000
+
+#: Appended when a memory really is too long, because a truncation the reader
+#: cannot see is worse than the truncation itself: it converts "I am missing
+#: some of this" into "this is all there is".
+TRUNCATION_MARKER = " […truncated]"
 
 CHAT_PROMPT = """\
 You are answering from a memory store. The numbered memories below are \
@@ -215,7 +233,9 @@ def format_memories(hits: Sequence[ScoredMemory]) -> str:
     lines = []
     for i, hit in enumerate(hits, start=1):
         memory = hit.memory
-        text = (memory.content or "").strip()[:MAX_MEMORY_CHARS]
+        text = (memory.content or "").strip()
+        if len(text) > MAX_MEMORY_CHARS:
+            text = text[:MAX_MEMORY_CHARS] + TRUNCATION_MARKER
         stamp = ""
         if isinstance(memory.occurred_at, datetime):
             stamp = f" ({memory.occurred_at:%d %b %Y})"

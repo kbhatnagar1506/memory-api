@@ -30,6 +30,7 @@ from mapi.domain.synthesis.chat import (
     CHAT_PROMPT,
     MAX_HISTORY_TURNS,
     MAX_MEMORY_CHARS,
+    TRUNCATION_MARKER,
     ChatAnswer,
     Turn,
     answer,
@@ -101,6 +102,24 @@ def test_the_date_carries_the_day_not_just_the_month() -> None:
 def test_a_long_memory_is_clipped() -> None:
     rendered = format_memories([_hit("x" * (MAX_MEMORY_CHARS + 500))])
     assert len(rendered) < MAX_MEMORY_CHARS + 100
+
+
+def test_a_clipped_memory_says_so() -> None:
+    """A truncation the reader cannot see turns "some of this is missing" into
+    "this is all there is", and the model answers confidently from a fragment.
+
+    Measured at the old 700-char cap: a 1042-character memory lost its last
+    third mid-word, taking the operative clause with it, and nothing in the
+    rendered prompt indicated a cut had happened.
+    """
+    rendered = format_memories([_hit("x" * (MAX_MEMORY_CHARS + 500))])
+    assert TRUNCATION_MARKER.strip() in rendered
+
+
+def test_a_memory_that_fits_is_not_marked() -> None:
+    rendered = format_memories([_hit("a short fact")])
+    assert TRUNCATION_MARKER.strip() not in rendered
+    assert rendered.endswith("a short fact")
 
 
 @pytest.mark.parametrize("flag", ["unverified", "UNVERIFIED", "low", "unsure", "Low"])

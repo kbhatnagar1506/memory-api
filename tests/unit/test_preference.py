@@ -91,6 +91,36 @@ PLAN_IMPERATIVE = [
     "Please plan the trip.",
 ]
 
+#: Deliberation in an EMBEDDED clause, a wh-complement, a superlative, and a
+#: third party acting on the user's behalf. Found by routing this repo's own
+#: 177-question preference corpus through `classify`: 14% of it would have
+#: taken the fact-lookup contract in production and been free to refuse. The
+#: preference lab could not see it because it applies the advice prompt
+#: directly and never calls the classifier at all.
+EMBEDDED_DELIBERATION = [
+    "Is there anything I should request when I book the room?",
+    "What is the one thing I should be insisting on in the new pair?",
+    "She's asked whether there's anything she ought to tell them when she books.",
+    "What should he put in my tea?",
+    "Where should she book the table?",
+]
+#: Genuinely ambiguous on the surface and deliberately NOT asserted either way.
+#: "How long should the one I pick take to play?" is an advice request in
+#: context and a duration question in form, and it classifies DATE_ARITH. A
+#: test that forced it to ADVICE would be asserting that shape beats grammar,
+#: which is the fitting this frame set was written to avoid.
+AMBIGUOUS_BY_DESIGN = ["How long should the one I pick take to play?"]
+WH_COMPLEMENT = [
+    "Recommend what kind of place I should book for the retreat.",
+    "Suggest which of the two I should take.",
+    "Advise how to get there.",
+]
+SUPERLATIVE = [
+    "What's the best way to get across town?",
+    "Which is the right material for the panels?",
+    "What would be the safest option for the drive?",
+]
+
 ADVICE_QUESTIONS = [
     *DIRECTIVE_TO_ASSISTANT,
     *BARE_IMPERATIVE,
@@ -98,6 +128,9 @@ ADVICE_QUESTIONS = [
     *ADVICE_NOUN,
     *EVALUATE_A_PROPOSAL,
     *PLAN_IMPERATIVE,
+    *EMBEDDED_DELIBERATION,
+    *WH_COMPLEMENT,
+    *SUPERLATIVE,
 ]
 
 
@@ -140,6 +173,17 @@ FACTUAL_QUESTIONS = [
     # determiner, "the plan the architect gave me" is a recall question wearing
     # an imperative's shape. Anchoring to the start of the string is what keeps
     # these DIRECT.
+    # The embedded-deliberation frame's dangerous neighbours: the same words in
+    # the same order, reporting somebody else's past speech or a missed
+    # obligation. Each one broke a draft of that frame before its guard existed.
+    "What did the doctor say I should do?",
+    "She told me what I should charge — what was it?",
+    "He asked what I should bring.",
+    "What did she recommend I order?",
+    "What should they have done differently?",
+    "Which wine did Priya suggest when we met?",
+    "What was the best month for sales?",
+    "Which was the best performing account last year?",
     "What was the plan for March?",
     "Which plan did I pick last year?",
     "What plan am I on with the gym?",

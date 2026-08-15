@@ -1325,7 +1325,16 @@ async def evaluate_end_to_end(
             except Exception as exc:
                 return {"qid": question.qid, "error": f"answer: {exc}"[:200]}
             prediction = parse_answer(raw)
-            if not prediction.strip() or prediction == NO_OUTPUT:
+            #: Retry UNREADABLE output only, not an empty answer.
+            #:
+            #: These were one condition, and the three places that consume the
+            #: result disagreed about which was which. `NO_OUTPUT` means the
+            #: reply could not be parsed -- a truncation or a transport blip,
+            #: and worth one more attempt. An empty `answer` field in valid
+            #: JSON is the model deliberately asserting nothing, which is a
+            #: DECLINE (see the note on NO_OUTPUT), and retrying a decline
+            #: until it answers biases the benchmark toward answering.
+            if prediction == NO_OUTPUT:
                 # An empty completion is a transport failure wearing the mask
                 # of a wrong answer: the model returned nothing, and scoring
                 # that as "incorrect" attributes an API hiccup to the memory
@@ -1346,7 +1355,25 @@ async def evaluate_end_to_end(
                 # gets reported as a model's accuracy. Measured: 64 of 118
                 # gemini-2.5-pro "errors" were empty completions.
                 return {"qid": question.qid, "error": "answer: empty completion"}
-            declined = prediction.upper().startswith("NO_ANSWER")
+            #: An empty answer is a DECLINE, and saying so removes the single
+            #: largest source of noise in this benchmark.
+            #:
+            #: Measured across three runs: 28-34 predictions each are the empty
+            #: string, and the count swings by 6 between runs -- larger than any
+            #: effect the benchmark has been used to measure. 18 to 21 of the 30
+            #: ABSTENTION questions are empty, and because an empty string did
+            #: not start with "NO_ANSWER" it was not a decline, so it fell
+            #: through to the LLM judge, which graded silence as a correct
+            #: abstention sometimes and an answer other times. That is how a run
+            #: reports abstention 0.667 and the next reports 0.533 having
+            #: changed nothing that touches abstention.
+            #:
+            #: The sentinel path is judge-free by design and this belongs on it:
+            #: a reply that asserts nothing cannot have asserted something
+            #: wrong. On an unanswerable question that is correct behaviour; on
+            #: an answerable one it is a failure to answer and still scores
+            #: wrong. What it is not is a coin flip.
+            declined = not prediction.strip() or prediction.upper().startswith("NO_ANSWER")
 
             # -- derive path (opt-in, ablation-flagged) -----------------------
             # Two triggers, both measured on lme-full:

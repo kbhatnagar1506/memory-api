@@ -69,3 +69,38 @@ second.
     # export vectors from the embedding cache first (see recall.mjs header)
     node recall.mjs
     node recall_iterative.mjs
+
+## The filtered case
+
+Every real query is scoped to an org and a space, so the numbers above are the
+easy half. Adding `WHERE space_id = $1` and a btree index on it, same corpus,
+same k=60:
+
+    space share   ef    iterative        recall@60   full_recall   rows
+    1%            any   any               100.00%      100.0%      60/60
+    5%            any   any               100.00%      100.0%      60/60
+    25%           any   any               100.00%      100.0%      60/60
+    50%           40    off                32.77%        0.0%      19.7/60
+    50%           40    relaxed_order      99.25%       71.0%      60/60
+    50%           180   relaxed_order      99.47%       78.0%      60/60
+
+**Postgres will not use HNSW when the filter is selective**, and that is the
+whole story. `EXPLAIN` at 1% shows `Limit → Sort` over a btree hit on
+`space_id`: it pulls the space's rows and orders them exactly, so recall is
+100% and the index is never consulted. Only at 50% — where the filter stops
+paying for itself — does the planner switch to `Index Scan using
+chunks_embedding_idx`, and there the filtered case is WORSE than the unfiltered
+one: 78% full recall at ef=180 against 98% without a filter.
+
+So the exposure is not "filters break HNSW". It is a DOMINANT SPACE: a
+single-tenant deployment, or one space holding most of the table, where the
+scope predicate no longer discriminates. Multi-tenant traffic with many spaces
+lands on the exact path and never sees an approximation.
+
+This is also where `iterative_scan` is load-bearing rather than merely helpful:
+without it, a filtered query at ef=40 returned 19.7 rows of a requested 60 and
+32.77% recall.
+
+Caveat on the crossover: these are 20,000 rows, and the planner chooses on
+COST, not on a fixed share. The 25%/50% boundary here is not a constant to rely
+on — a much larger table moves it.

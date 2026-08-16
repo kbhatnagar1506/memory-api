@@ -79,6 +79,26 @@ log = get_logger(__name__)
 _HNSW_EF_SEARCH_FLOOR = 40
 #: pgvector's documented maximum for the parameter.
 _HNSW_EF_SEARCH_CEILING = 1_000
+#: Multiple of the requested row count. MEASURED, on pgvector's HNSW built at
+#: this project's own parameters (m=16, ef_construction=64) over 20,000 real
+#: text-embedding-004 vectors, asking for k=60 as the pipeline does:
+#:
+#:     ef_search  iterative_scan   recall@60   full_recall@60   median ms
+#:        40        relaxed_order     99.43%        82.0%          2.5
+#:       120  (2x)  relaxed_order     99.82%        94.0%          2.6
+#:       180  (3x)  relaxed_order     99.96%        98.0%          3.1
+#:       240  (4x)  relaxed_order     99.98%        99.0%          3.5
+#:
+#: Three rather than two because the metric that matters here is CONJUNCTIVE:
+#: a candidate set missing one member of an evidence pair loses the whole
+#: question, which is the same argument that turned the reranker off. 94% to
+#: 98% of queries getting their complete top-k costs half a millisecond on a
+#: pipeline that spends over a second.
+#:
+#: Four buys one more point for another 0.4ms and is left on the table
+#: deliberately -- the curve is flat past three and the ceiling is a real cost
+#: on the comprehensive path, where `wanted` reaches 600.
+_HNSW_EF_SEARCH_MULTIPLE = 3
 
 
 def _encode_cursor(value: str) -> str:
@@ -271,7 +291,10 @@ class PostgresStore(MemoryStore):
                 text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
             )
             if wanted > 0:
-                ef = max(_HNSW_EF_SEARCH_FLOOR, min(_HNSW_EF_SEARCH_CEILING, wanted * 2))
+                ef = max(
+                    _HNSW_EF_SEARCH_FLOOR,
+                    min(_HNSW_EF_SEARCH_CEILING, wanted * _HNSW_EF_SEARCH_MULTIPLE),
+                )
                 await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
             self._iterative_scan_supported = True
         except Exception as exc:

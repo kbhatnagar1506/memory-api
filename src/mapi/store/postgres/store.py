@@ -159,8 +159,11 @@ class PostgresStore(MemoryStore):
         max_scan_tuples: int = 20_000,
     ) -> None:
         self.dimensions = dimensions
-        #: None = not probed yet; probed on first vector search.
+        #: None = not probed yet; probed on first vector search. Two flags, not
+        #: one, because the settings they gate arrived in different pgvector
+        #: versions and must be able to fail independently.
         self._iterative_scan_supported: bool | None = None
+        self._ef_search_supported: bool | None = None
         self._max_scan_tuples = max_scan_tuples
         self._engine = create_async_engine(
             database_url,
@@ -283,6 +286,27 @@ class PostgresStore(MemoryStore):
         fails, we log once and never retry. SET LOCAL scopes the setting to the
         enclosing transaction — no leakage through the connection pool.
         """
+        # `ef_search` FIRST and in its own transaction-abort boundary, because
+        # it is supported far more widely than the two settings below --
+        # pgvector has had it since 0.5, iterative scans arrived in 0.8. Sharing
+        # one `try` put them the wrong way round: on 0.5-0.7 the iterative_scan
+        # SET raises, the whole block aborts, and ef_search is never applied and
+        # never retried. That is precisely backwards, because those are the
+        # versions with no iterative scan to rescue an under-returning query, so
+        # sizing the search list is the only protection they have.
+        if wanted > 0 and self._ef_search_supported is not False:
+            ef = max(
+                _HNSW_EF_SEARCH_FLOOR,
+                min(_HNSW_EF_SEARCH_CEILING, wanted * _HNSW_EF_SEARCH_MULTIPLE),
+            )
+            try:
+                await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
+                self._ef_search_supported = True
+            except Exception as exc:
+                self._ef_search_supported = False
+                await session.rollback()
+                log.warning("pgvector_ef_search_unavailable", error=str(exc)[:160])
+
         if self._iterative_scan_supported is False:
             return
         try:
@@ -290,12 +314,6 @@ class PostgresStore(MemoryStore):
             await session.execute(
                 text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
             )
-            if wanted > 0:
-                ef = max(
-                    _HNSW_EF_SEARCH_FLOOR,
-                    min(_HNSW_EF_SEARCH_CEILING, wanted * _HNSW_EF_SEARCH_MULTIPLE),
-                )
-                await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
             self._iterative_scan_supported = True
         except Exception as exc:
             self._iterative_scan_supported = False

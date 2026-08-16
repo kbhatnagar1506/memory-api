@@ -74,6 +74,12 @@ from .models import (
 
 log = get_logger(__name__)
 
+#: pgvector's own default for `hnsw.ef_search`, used as a floor so that sizing
+#: this per query can only ever widen the search list, never narrow it.
+_HNSW_EF_SEARCH_FLOOR = 40
+#: pgvector's documented maximum for the parameter.
+_HNSW_EF_SEARCH_CEILING = 1_000
+
 
 def _encode_cursor(value: str) -> str:
     return base64.urlsafe_b64encode(value.encode()).decode().rstrip("=")
@@ -223,8 +229,26 @@ class PostgresStore(MemoryStore):
             ],
         )
 
-    async def _enable_iterative_scan(self, session: Any) -> None:
+    async def _enable_iterative_scan(self, session: Any, wanted: int = 0) -> None:
         """Turn on pgvector 0.8's iterative index scans for this transaction.
+
+        `wanted` is how many rows the caller is about to ask the index for, and
+        it sizes `hnsw.ef_search`. That parameter was never set, so every query
+        ran at pgvector's default of 40 -- while the retrieval pipeline asks for
+        `limit * candidate_multiplier` candidates, which is 60 at the shipped
+        defaults and up to 600 for a comprehensive question. Requesting 60 rows
+        from a 40-row search list is asking the index for more than it looked
+        at: pgvector's own guidance is that ef_search must be at least k, and
+        recall degrades well before it drops below that.
+
+        This is invisible in every benchmark number this repo has, because
+        `bench/run.py` ingests into `InMemoryStore` and searches it by brute
+        force. Exact search cannot express this failure, so `full_recall@k =
+        0.968` is an upper bound on production rather than a measurement of it.
+
+        Sized at twice the request and floored at pgvector's default, so a small
+        query is never made worse; capped at 1000, which is the parameter's
+        documented ceiling.
 
         This is a correctness setting wearing a performance costume. Our vector
         queries always carry filters (tenant, space, status): pre-0.8, HNSW
@@ -246,6 +270,9 @@ class PostgresStore(MemoryStore):
             await session.execute(
                 text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
             )
+            if wanted > 0:
+                ef = max(_HNSW_EF_SEARCH_FLOOR, min(_HNSW_EF_SEARCH_CEILING, wanted * 2))
+                await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
             self._iterative_scan_supported = True
         except Exception as exc:
             self._iterative_scan_supported = False
@@ -1084,7 +1111,7 @@ class PostgresStore(MemoryStore):
             )
         async with self._session() as session:
             await self._scope(session, org_id)
-            await self._enable_iterative_scan(session)
+            await self._enable_iterative_scan(session, wanted=limit)
             # `<=>` is cosine DISTANCE; the retrieval layer works in similarity.
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
             stmt = (
@@ -1163,7 +1190,7 @@ class PostgresStore(MemoryStore):
             )
         async with self._session() as session:
             await self._scope(session, org_id)
-            await self._enable_iterative_scan(session)
+            await self._enable_iterative_scan(session, wanted=limit)
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
             stmt = (
                 select(MemoryRow, ChunkRow.embedding, distance)

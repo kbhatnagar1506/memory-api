@@ -3,11 +3,17 @@
 A production-grade memory API for AI agents. Hybrid retrieval, belief revision,
 and LLM reranking behind a typed, multi-tenant HTTP service.
 
-[![ci](https://github.com/krishnabhatnagar/mapi/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![ci](https://github.com/kbhatnagar1506/mapi/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.13-blue.svg)](pyproject.toml)
+[![mypy](https://img.shields.io/badge/mypy-strict-brightgreen.svg)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
 
 ```bash
 make install && make demo     # no Docker, no database, no API keys
 ```
+
+**82.4%** on LongMemEval's 500 questions (independent judge, official protocol) ·
+**0.968** full-recall@10 · 1320 tests · strict mypy · [how it was measured](#measurement)
 
 ---
 
@@ -220,6 +226,79 @@ Full OpenAPI at `/docs`.
   default pepper, debug errors, non-semantic embeddings, or a bootstrap key.
 - **Liveness vs readiness** are separate endpoints. Conflating them turns a
   brief database blip into a cluster-wide restart loop.
+
+---
+
+## Measurement
+
+Retrieval claims are cheap to make and cheap to check, so this repo checks them.
+`bench/` runs the service against public benchmarks; `bench/lab/` is a
+purpose-built experiment harness for the questions the public sets cannot answer.
+
+### LongMemEval — 500 questions, 23,867 documents
+
+Retrieval is scored with **no LLM in the loop**, so the numbers carry no judge
+variance and are exactly reproducible.
+
+| config | full_recall@10 | hit@10 | MRR |
+|---|---|---|---|
+| `vector_only` | **0.968** | 0.994 | 0.938 |
+| `hybrid_rrf` | 0.952 | 0.996 | 0.945 |
+| `lexical_only` | 0.916 | 0.984 | 0.909 |
+
+`full_recall@k` is the headline, not `hit@k`: it is 1.0 only when **every**
+evidence session is retrieved. 324 of the 500 questions need two or more
+sessions, so answering a three-hop question with one of three facts is a wrong
+answer that `hit@k` reports as a success.
+
+End-to-end (LongMemEval's published metric), answering with `gemini-2.5-flash`:
+
+**QA accuracy 82.4%** (95% CI 78.7–85.6, n=467) — **86.4%** with `gemini-2.5-pro`.
+
+> The judge is deliberately **not** the answering model. Grading your own output
+> is a known self-preference bias, and the largest published gap on this
+> benchmark (94.4% self-reported vs 49.0% independently measured) is attributed
+> to judge configuration rather than to the memory engine. Judge and protocol
+> are recorded in every result file.
+
+### The lab — measuring what benchmarks cannot
+
+Public sets are pass/fail on a fixed corpus; they cannot tell you *why* a
+capability fails or whether a proposed fix works. `bench/lab/` adds nine
+authored personas, 177 gated questions across five preference kinds, and
+**paired significance testing** (exact McNemar) on every arm.
+
+Two results worth the space, both of which changed the system:
+
+**Retrieval was the bottleneck, until it wasn't.** Sweeping the context budget
+from k=4 to the whole corpus:
+
+```
+k=4  115/177     k=8  135/177     k=16 152/177
+k=6  126/177     k=12 141/177     k=23 157/177   ← retrieval switched off
+```
+
+Monotonic to the top — on a 23-memory space the ranker is *losing* evidence, not
+sorting it. The useful part is the ceiling arm: with every memory in the window,
+`explicit` 35/36, `implicit` 34/35 and `updated` 36/36 are solved outright, while
+`composed` sits at 23/35. Three kinds were retrieval problems. Two were not.
+
+**So the remaining failures got a synthesis fix, with a control.** An
+instruction that enumerates every constraint, checks the draft against each, then
+commits to one recommendation:
+
+| arm | correct | paired vs baseline |
+|---|---|---|
+| baseline | 159/177 | — |
+| enumerate-then-answer | **169/177** | 13-3, p=0.021 |
+| answer-then-verify (2 calls) | 169/177 | 10-0, p=0.002 |
+
+The second model call buys nothing over the first (3-3, p=1.000), so the
+one-call version shipped. Four earlier candidates — write-time claim extraction,
+multi-query retrieval, a write-time domain index, and width itself — were tested
+the same way and **declined**, each because a plain width control matched it.
+Those nulls are committed with their numbers; a lab that only records wins is
+not measuring, it is advertising.
 
 ---
 

@@ -85,8 +85,15 @@ async def main(n_corpora: int, per_corpus: int) -> None:
     fired = {"ok": 0, "empty": 0}
 
     async def complete(prompt: str) -> str:
-        async with gap:
-            raw, _tokens = await client.complete(prompt, max_tokens=EXPANDER_MAX_TOKENS)
+        # NO SEMAPHORE HERE. `ask` already holds a slot while it awaits
+        # `pipeline.search`, and the expander runs INSIDE that search -- taking
+        # the same semaphore again is a re-entrant wait that can never be
+        # satisfied. Measured: all 8 slots held by searches blocked on
+        # expanders queued behind those very searches, 597 of 600 queries
+        # hitting HyDE's 12s timeout, median query latency 12,240ms, and one
+        # single successful expansion in the whole run. Concurrency is already
+        # bounded by the caller.
+        raw, _tokens = await client.complete(prompt, max_tokens=EXPANDER_MAX_TOKENS)
         if raw and raw.strip():
             fired["ok"] += 1
         else:

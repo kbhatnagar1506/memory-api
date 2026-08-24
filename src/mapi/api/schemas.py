@@ -508,6 +508,31 @@ class SearchRequestBody(Request):
     #: Costs an extra LLM call per search, which is why it stays off by default
     #: even now that it can be switched on. Requires a synthesis backend; with
     #: none configured the expander is a no-op and this flag does nothing.
+    #: OFF, and now on evidence rather than caution. HyDE asks the model for a
+    #: hypothetical answer and averages it into the query vector; measured over
+    #: 600 LoCoMo questions, both arms on one index, expansion firing on every
+    #: query (600/600, no timeouts, no empties):
+    #:
+    #:     arm                recall@10   full_recall@10   median ms
+    #:     no expansion         0.601         0.480           301
+    #:     expansion (HyDE)     0.587         0.465          1699
+    #:
+    #:     paired: better on 24, worse on 38, tied on 538   p=0.098
+    #:
+    #: Worse on three of four categories -- multi_hop 0.462 -> 0.441,
+    #: open_domain 0.363 -> 0.323, temporal 0.770 -> 0.765 -- and better only on
+    #: single_hop, the smallest bucket at n=31. Not significant, and it does not
+    #: need to be: there is no evidence of benefit, a consistent negative trend,
+    #: and a certain cost of one model call and 5.6x the latency per query.
+    #:
+    #: The mechanism explains the sign. The vector arm already handles semantic
+    #: similarity; averaging in an invented passage moves the query toward
+    #: specifics the model guessed. `open_domain` falls hardest, which is
+    #: exactly where a guess is least likely to be right.
+    #:
+    #: Kept exposed rather than deleted: a corpus whose queries are much shorter
+    #: than its documents is the case HyDE was designed for, and this is one
+    #: corpus. It should not be a default.
     use_expansion: bool = False
     #: Bridge to memories sharing a salient entity with the query. Costs one
     #: extra store lookup per entity, so also opt-in.

@@ -138,9 +138,21 @@ class HydeExpander(QueryExpander):
             return []
 
         passage = " ".join(raw.split())[: self.max_chars].strip()
-        # A model that returns nothing usable must not produce an empty string:
-        # the embedder rejects blank input, which would fail the whole search.
-        return [passage] if passage else []
+        if not passage:
+            # SAY SO. Returning [] here is correct -- the embedder rejects blank
+            # input and would fail the whole search -- but doing it silently
+            # makes "expansion did not help" and "expansion never ran"
+            # indistinguishable from the outside, and they need different fixes.
+            #
+            # Measured, on 600 LoCoMo questions: recall@10 identical to three
+            # decimals in every category, 0 of 600 questions moved, and the
+            # expanded arm was FASTER than the plain one. That reads as a clean
+            # null and was actually this branch firing on all 600, because the
+            # caller had given the model a 256-token budget that its reasoning
+            # consumed before it emitted anything.
+            log.warning("hyde_empty", expander=self.name, raw_chars=len(raw or ""))
+            return []
+        return [passage]
 
 
 class CompletionExpander(QueryExpander):
@@ -189,9 +201,21 @@ class CompletionExpander(QueryExpander):
             return []
 
         passage = " ".join(raw.split())[: self.max_chars].strip()
-        # Never an empty string: the embedder rejects blank input, and that
-        # rejection would fail the whole search rather than skip the expansion.
-        return [passage] if passage else []
+        if not passage:
+            # SAY SO. Returning [] here is correct -- the embedder rejects blank
+            # input and would fail the whole search -- but doing it silently
+            # makes "expansion did not help" and "expansion never ran"
+            # indistinguishable from the outside, and they need different fixes.
+            #
+            # Measured, on 600 LoCoMo questions: recall@10 identical to three
+            # decimals in every category, 0 of 600 questions moved, and the
+            # expanded arm was FASTER than the plain one. That reads as a clean
+            # null and was actually this branch firing on all 600, because the
+            # caller had given the model a 256-token budget that its reasoning
+            # consumed before it emitted anything.
+            log.warning("hyde_empty", expander=self.name, raw_chars=len(raw or ""))
+            return []
+        return [passage]
 
 
 __all__ = ["CompletionExpander", "HydeExpander", "NoopExpander", "QueryExpander"]

@@ -183,8 +183,41 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
             # 3d. SUPERLATIVE. "What is the best way to get there" asks for a
             #     judgement, not a stored fact. Present tense only: "what WAS
             #     the best month for sales" is a lookup over history.
-            r"|\b(?:what|which)(?:\s+\w+){0,2}\s*(?:'s|\bis|\bare|\bwould\s+be)\s+"
+            r"|\b(?:what|which|where|who)(?:\s+\w+){0,2}\s*"
+            r"(?:'s|\bis|\bare|\bwould\s+be)\s+"
             r"the\s+(?:best|better|right|ideal|safest|cheapest)\b"
+            # 3e. INDEFINITE + EVALUATIVE, which is how consumers actually ask.
+            #     3d covers "what's THE BEST way" and missed "what's A GOOD
+            #     place to eat" -- definite-superlative but not
+            #     indefinite-evaluative. Measured on consumer-register phrasing:
+            #     2 of 12 quality-seeking requests routed correctly, so "what's
+            #     a good place to eat", "where's a good spot for brunch" and
+            #     "any good cafes" all took the DECLINE contract and answered
+            #     "I don't have that in memory" to a request that always has an
+            #     answer.
+            #
+            #     The frame is the INDEFINITE DETERMINER doing the work: asking
+            #     for AN instance of a category is a recommendation request,
+            #     while asking for THE stored particular is recall. "what's a
+            #     good place" against "what's my usual coffee" -- same wh-word,
+            #     different determiner, different task.
+            #
+            #     CONTRACTED FORM ONLY, deliberately. "what's a good place"
+            #     matches; "what IS a good place" does not. Consumers contract,
+            #     and the uncontracted form is where definitional questions live
+            #     -- "what is a good faith estimate" would take the advice
+            #     contract and answer a general-knowledge question with a guess
+            #     dressed as a preference. The elided-apostrophe pass below
+            #     means "whats a good place" reaches this frame too, which is
+            #     the register that actually needed covering.
+            r"|\b(?:what|where|who|which)(?:'s|\bis|\bare)\s+"
+            r"(?:a|an|any|some)\s+(?:\w+\s+){0,2}"
+            r"(?:good|great|nice|decent|solid|cheap|affordable|reliable|easy|"
+            r"quick|quiet|fun|safe|better|best)\b"
+            #     And the bare form with no wh-word at all: "any good cafes",
+            #     "know any good places". Same indefinite-plus-evaluative shape.
+            r"|\b(?:any|know\s+any|got\s+any|got\s+a)\s+(?:\w+\s+){0,1}"
+            r"(?:good|great|nice|decent|solid|cheap|reliable|fun)\b"
             # 4. AN ADVICE NOUN IN A REQUESTING CONTEXT. The nouns are a small
             #    closed set -- English has no further words for "a
             #    recommendation" -- but the noun ALONE is not the frame, and
@@ -277,8 +310,18 @@ _RULES: tuple[tuple[QuestionKind, re.Pattern[str]], ...] = (
 )
 
 
+#: Elided apostrophes, which informal writing drops as a matter of course.
+#: "whats the best way" classified DIRECT while "what's the best way"
+#: classified ADVICE -- the same question, routed to opposite contracts by a
+#: punctuation mark. Restricted to wh-words because those are unambiguous:
+#: "whats" and "wheres" are not words, whereas "its", "id" and "ill" are, and
+#: expanding those would invent meanings the writer did not intend.
+_ELIDED_APOSTROPHE = re.compile(r"\b(what|where|how|who|when|why)s\b", re.IGNORECASE)
+
+
 def classify(question: str) -> QuestionKind:
     """Route a question to the machinery that can actually answer it."""
+    question = _ELIDED_APOSTROPHE.sub(r"\1's", question)
     for kind, pattern in _RULES:
         if pattern.search(question):
             return kind

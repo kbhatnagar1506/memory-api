@@ -121,6 +121,30 @@ SUPERLATIVE = [
     "What would be the safest option for the drive?",
 ]
 
+#: How consumers actually ask for a recommendation: contracted, indefinite,
+#: often unpunctuated. Found by probing the classifier in the consumer register
+#: rather than the editorial one every corpus in this repo is written in --
+#: 2 of 12 of these routed correctly, so "what's a good place to eat" took the
+#: DECLINE contract and answered "I don't have that in memory" to a request
+#: that always has an answer.
+#:
+#: The frame is the INDEFINITE DETERMINER: asking for AN instance of a category
+#: is a recommendation, asking for THE stored particular is recall. Same
+#: wh-word, different determiner, different task.
+QUALITY_SEEKING = [
+    "what's a good place to eat near me",
+    "where's a good spot for brunch",
+    "whats a good gift for mom",
+    "what's a good movie to watch tonight",
+    "who's a good dentist around here",
+    "what's a nice hotel in lisbon",
+    "whats a decent laptop for uni",
+    "any good places to eat",
+    "know any good cafes",
+    "where's the best coffee",
+    "who's the best dentist",
+]
+
 ADVICE_QUESTIONS = [
     *DIRECTIVE_TO_ASSISTANT,
     *BARE_IMPERATIVE,
@@ -131,6 +155,7 @@ ADVICE_QUESTIONS = [
     *EMBEDDED_DELIBERATION,
     *WH_COMPLEMENT,
     *SUPERLATIVE,
+    *QUALITY_SEEKING,
 ]
 
 
@@ -184,6 +209,16 @@ FACTUAL_QUESTIONS = [
     "Which wine did Priya suggest when we met?",
     "What was the best month for sales?",
     "Which was the best performing account last year?",
+    # Consumer-register recall that shares vocabulary with QUALITY_SEEKING.
+    # These are why frame 3e requires an INDEFINITE determiner and present
+    # tense: "a good place" is a request, "my best score" and "the best man at
+    # the wedding" are stored particulars.
+    "whats my usual coffee",
+    "whats my best score",
+    "who was the best man at the wedding",
+    "what was the best month for sales",
+    "what is a good faith estimate",
+    "whats the capital of france",
     "What was the plan for March?",
     "Which plan did I pick last year?",
     "What plan am I on with the gym?",

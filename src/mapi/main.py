@@ -41,6 +41,7 @@ from .domain.retrieval.rerank import (
 )
 from .service import MemoryService
 from .store import build_store
+from .warm import Warmer
 
 log = get_logger("mapi")
 
@@ -169,6 +170,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.bootstrap_admin_key:
         await _seed_bootstrap(app, settings)
 
+    # Before `yield`, so the process is not ready until pool, Redis and the
+    # embedding host are open. Bounded and failure-tolerant; see mapi.warm.
+    app.state.warmer = Warmer(
+        store=store, rate_limiter=app.state.rate_limiter, embedder=embedder, settings=settings
+    )
+    await app.state.warmer.start()
+
     log.info(
         "started",
         version=__version__,
@@ -181,6 +189,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        with contextlib.suppress(Exception):
+            await app.state.warmer.stop()
         with contextlib.suppress(Exception):
             await store.aclose()
         with contextlib.suppress(Exception):

@@ -48,6 +48,7 @@ def _construct(settings: Settings) -> EmbeddingProvider:
             location=settings.google_cloud_location,
             api_key=settings.gemini_api_key,
             query_cache_size=settings.query_embedding_cache_size,
+            keepalive_s=settings.embedding_keepalive_s,
             **common,  # type: ignore[arg-type]
         )
     if backend is EmbeddingBackend.OPENAI:

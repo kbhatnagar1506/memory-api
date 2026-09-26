@@ -1029,6 +1029,24 @@ class HealthResponse(Response):
     checks: dict[str, bool]
 
 
+class WarmCheck(Response):
+    """The last warm-up or keep-warm call to one dependency."""
+
+    ok: bool
+    latency_ms: float
+    #: "timeout", an exception type, an HTTP status or a connection count --
+    #: never a message, host or URL.
+    detail: str | None = None
+    #: Seconds since the call finished.
+    age_s: float
+
+
+class ReadyResponse(HealthResponse):
+    #: Per-dependency warm state (db, redis, embed). Informational: readiness
+    #: is still decided by `checks` alone. Absent when warming is disabled.
+    warm: dict[str, WarmCheck] | None = None
+
+
 __all__ = [
     "ApiKeyListResponse",
     "ApiKeyResponse",
@@ -1056,6 +1074,7 @@ __all__ = [
     "MultiSearchTarget",
     "MultiSearchTargetResult",
     "PurgeResponse",
+    "ReadyResponse",
     "RelationListResponse",
     "RelationResponse",
     "RetireRequest",
@@ -1068,4 +1087,5 @@ __all__ = [
     "SimilarResponse",
     "SpaceListResponse",
     "SpaceResponse",
+    "WarmCheck",
 ]

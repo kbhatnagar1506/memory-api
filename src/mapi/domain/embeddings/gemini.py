@@ -72,6 +72,7 @@ class GeminiEmbedder(EmbeddingProvider):
         location: str = "global",
         api_key: str | None = None,
         http_client: Any = None,
+        keepalive_s: float | None = None,
         **_: object,
     ) -> None:
         """`http_client`: an `httpx.AsyncClient` for the SDK to send through.
@@ -80,6 +81,12 @@ class GeminiEmbedder(EmbeddingProvider):
         connection pool across embedders -- and it is how the retry tests put
         a mock transport under the REAL SDK, so what they pin is the SDK's
         actual error objects and retry loop rather than a stand-in for them.
+
+        `keepalive_s`: how long an idle connection to the provider stays
+        pooled when the SDK builds its own client. httpx's default is 5 s, so
+        a search arriving after any longer pause paid a fresh TCP + TLS
+        handshake to Google, and `mapi.warm`'s keep-warm ping could not hold a
+        connection open. None keeps the SDK's default.
         """
         super().__init__(
             model=model,
@@ -119,6 +126,11 @@ class GeminiEmbedder(EmbeddingProvider):
                 http_status_codes=_SDK_RETRY_STATUSES,
             ),
             httpx_async_client=http_client,
+            async_client_args=(
+                _pool_args(keepalive_s)
+                if http_client is None and keepalive_s is not None
+                else None
+            ),
         )
 
         key = api_key or os.getenv("GEMINI_API_KEY")
@@ -150,6 +162,29 @@ class GeminiEmbedder(EmbeddingProvider):
     @property
     def name(self) -> str:
         return "gemini"
+
+    async def warm_connection(self, timeout_s: float) -> None:
+        """Open (or reuse) the provider connection WITHOUT spending tokens.
+
+        A GET of the model's metadata, through the same client, transport,
+        auth and pool the embedding calls use: the TCP + TLS handshake, the
+        DNS lookup and -- on Vertex -- the ADC access-token fetch all happen
+        here instead of on the first real request. One attempt, no SDK retry.
+
+        An HTTP error answer (403, 404) still proves the connection is open;
+        it is re-raised for `mapi.warm` to report, which counts it as warm.
+        """
+        from google.genai import types
+
+        await self._client.aio.models.get(
+            model=self.model,
+            config=types.GetModelConfig(
+                http_options=types.HttpOptions(
+                    timeout=int(timeout_s * 1000),
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                )
+            ),
+        )
 
     async def _call(
         self, texts: list[str], task_type: str, *, sdk_retry: bool = True
@@ -253,6 +288,17 @@ class GeminiEmbedder(EmbeddingProvider):
         if code in _NEVER_RETRY or (400 <= code < 500 and code != 408):
             return RetryDecision(retryable=False, status=code)
         return RetryDecision(retryable=True, status=code or None)
+
+
+def _pool_args(keepalive_s: float) -> dict[str, Any]:
+    """httpx client args for the SDK: its own pool sizes, a longer idle life."""
+    import httpx
+
+    return {
+        "limits": httpx.Limits(
+            max_connections=100, max_keepalive_connections=20, keepalive_expiry=keepalive_s
+        )
+    }
 
 
 def retry_after_seconds(exc: Any) -> float | None:

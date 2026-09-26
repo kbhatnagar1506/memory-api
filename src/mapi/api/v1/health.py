@@ -14,7 +14,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from ... import __version__
 from ...core.metrics import REGISTRY, STORE_UP
-from ..schemas import HealthResponse
+from ..schemas import HealthResponse, ReadyResponse
 
 router = APIRouter(tags=["operations"])
 
@@ -30,8 +30,13 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/ready", response_model=HealthResponse, summary="Readiness")
-async def ready(request: Request, response: Response) -> HealthResponse:
+@router.get(
+    "/ready",
+    response_model=ReadyResponse,
+    response_model_exclude_none=True,
+    summary="Readiness",
+)
+async def ready(request: Request, response: Response) -> ReadyResponse:
     store = request.app.state.store
     settings = request.app.state.settings
     try:
@@ -44,11 +49,14 @@ async def ready(request: Request, response: Response) -> HealthResponse:
     healthy = all(checks.values())
     if not healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    return HealthResponse(
+    warmer = getattr(request.app.state, "warmer", None)
+    warm = warmer.snapshot() if warmer is not None else None
+    return ReadyResponse(
         status="ok" if healthy else "degraded",
         version=__version__,
         environment=str(settings.environment),
         checks=checks,
+        warm=warm or None,
     )
 
 

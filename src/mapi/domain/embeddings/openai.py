@@ -43,6 +43,12 @@ class OpenAIEmbedder(EmbeddingProvider):
     def name(self) -> str:
         return "openai"
 
+    async def warm_connection(self, timeout_s: float) -> None:
+        """Open the provider connection WITHOUT spending tokens: a model
+        metadata GET through the same client the embedding calls use."""
+        client = self._client.with_options(timeout=timeout_s, max_retries=0)
+        await asyncio.to_thread(client.models.retrieve, self.model)
+
     def _call(self, texts: list[str]) -> list[Vector]:
         resp = self._client.embeddings.create(
             model=self.model,

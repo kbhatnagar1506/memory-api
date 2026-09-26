@@ -449,6 +449,33 @@ class Settings(BaseSettings):
     #: that Python has to format on the way in and parse on the way out.
     db_binary_vectors: bool = True
 
+    # -- warm-up and keep-warm (mapi.warm) --------------------------------------
+    #
+    # No request should pay a cold cost: at boot the pool, Redis and the
+    # embedding host are opened before the app reports ready, and a background
+    # loop keeps them open. Nothing here ever spends model tokens.
+
+    #: Run the boot warm-up and the keep-warm loop at all.
+    warm_enabled: bool = True
+    #: Pool connections opened (and SELECT 1'd) at boot and kept warm. The
+    #: pool has no minimum-size setting of its own -- `db_pool_size` is how
+    #: many it KEEPS, not how many it opens -- so this is the minimum. Clipped
+    #: to `db_pool_size`. 0 skips the database.
+    warm_db_connections: int = Field(default=4, ge=0, le=200)
+    #: Ceiling on the boot warm-up, and on each warmer inside it. A slow
+    #: dependency delays readiness by at most this, never blocks it.
+    warm_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    #: Keep-warm period: each round sleeps interval + uniform(0, jitter), so
+    #: the defaults repeat the cheap calls every 45-60 s. 0 disables the loop.
+    keep_warm_interval_s: float = Field(default=45.0, ge=0, le=3600)
+    keep_warm_jitter_s: float = Field(default=15.0, ge=0, le=3600)
+    #: Seconds an idle connection to the embedding provider stays in the
+    #: client's pool. httpx's default is 5 s, so a pause of more than five
+    #: seconds between searches meant a fresh TCP + TLS handshake to Google on
+    #: the next one, and a keep-warm ping could never hold a connection open.
+    #: Must exceed the keep-warm period for the ping to keep one alive.
+    embedding_keepalive_s: float = Field(default=120.0, gt=0, le=3600)
+
     @field_validator("chunk_overlap_tokens")
     @classmethod
     def _overlap_fits(cls, v: int, info: ValidationInfo) -> int:

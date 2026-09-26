@@ -108,6 +108,11 @@ class RedisRateLimiter(RateLimiter):
         self._namespace = namespace
         self._script = None
 
+    @property
+    def client(self) -> object:
+        """The Redis client this limiter shares -- what `mapi.warm` pings."""
+        return self._redis
+
     async def check(self, key: str, cost: int = 1) -> RateLimitDecision:
         full_key = f"{self._namespace}:{key}"
         try:

@@ -16,7 +16,8 @@ is the single most common write a memory system sees.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import asyncio
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
@@ -33,12 +34,14 @@ from .core.logging import get_logger
 from .core.metrics import EMBEDDINGS, INGESTED, SEARCH_LATENCY, SEARCH_STAGE_LATENCY
 from .core.quota import Quota, check_bytes, check_memories, check_writes
 from .domain.association import propose_associations
-from .domain.chunking import chunk_text, normalize
+from .domain.chunking import TextChunk, chunk_text, normalize
 from .domain.consolidation import (
     ContradictionProposal,
     DuplicateKind,
     apply_supersession,
+    dedupe_candidates,
     detect_near_duplicate,
+    keyed_unchanged,
     merge_duplicate,
     propose_contradictions,
     propose_supersessions,
@@ -55,6 +58,7 @@ from .domain.models import (
     Organization,
     RelationEdge,
     RelationType,
+    ReplaceMode,
     Space,
     utcnow,
 )
@@ -73,7 +77,7 @@ from .domain.synthesis.derive import CompleteFn, DerivedAnswer, SourceDoc, deriv
 from .domain.synthesis.extract import DEFAULT_SUBJECT, Claim, extract_claims
 from .domain.synthesis.hydrate import Neighbourhood, assemble
 from .domain.synthesis.understand import QueryUnderstanding
-from .store.base import MemoryFilter, MemoryStore, Page
+from .store.base import BulkEraseReport, MemoryFilter, MemoryStore, Page, PurgeReport
 
 log = get_logger(__name__)
 
@@ -126,6 +130,64 @@ class IngestResult:
     #: rather than a silent drop -- these memories are still active.
     supersede_declined: list[str] = field(default_factory=list)
     chunk_count: int = 0
+    #: Memories a keyed write with replace=erase destroyed. (Superseded ones
+    #: are in `superseded`, as for any other supersession.)
+    erased: list[str] = field(default_factory=list)
+
+
+# -- write-path inputs and outcomes ---------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class IngestItem:
+    """One write in a bulk request. Mirrors `ingest`'s keyword arguments."""
+
+    content: str
+    summary: str = ""
+    metadata: Mapping[str, object] | None = None
+    tags: Sequence[str] = ()
+    source: str = ""
+    occurred_at: datetime | None = None
+    key: str | None = None
+    replace: ReplaceMode = ReplaceMode.SUPERSEDE
+
+
+@dataclass(slots=True)
+class BulkOutcome:
+    """One bulk item's fate: its result, or the error that stopped it alone."""
+
+    index: int
+    result: IngestResult | None = None
+    error: MapiError | None = None
+
+
+@dataclass(slots=True)
+class _Prepared:
+    """A write validated, normalized and chunked, waiting only for vectors.
+
+    `memory` already has its final id, content, hash and key; `texts` are
+    the strings to embed (chunks framed by the context header), which are
+    never what gets stored.
+    """
+
+    memory: Memory
+    pieces: list[TextChunk]
+    texts: list[str]
+    size: int
+    replace: ReplaceMode = ReplaceMode.SUPERSEDE
+
+    def with_vectors(self, vectors: Sequence[list[float]]) -> Memory:
+        chunks = [
+            Chunk(
+                memory_id=self.memory.id,
+                ordinal=piece.ordinal,
+                text=piece.text,
+                token_estimate=piece.token_estimate,
+                embedding=list(vector),
+            )
+            for piece, vector in zip(self.pieces, vectors, strict=True)
+        ]
+        return self.memory.model_copy(update={"chunks": chunks})
 
 
 class MemoryService:
@@ -467,7 +529,7 @@ class MemoryService:
         space_id: str,
         content: str,
         summary: str = "",
-        metadata: dict[str, object] | None = None,
+        metadata: Mapping[str, object] | None = None,
         tags: Sequence[str] = (),
         source: str = "",
         occurred_at: datetime | None = None,
@@ -481,8 +543,82 @@ class MemoryService:
         extract: bool = True,
         claims: Sequence[Claim] | None = None,
         kind: MemoryKind = MemoryKind.EPISODIC,
+        key: str | None = None,
+        replace: ReplaceMode | str = ReplaceMode.SUPERSEDE,
     ) -> IngestResult:
+        """Write one memory. With a `key`, replace whatever holds that key.
+
+        Unkeyed writes run the full pipeline in the module docstring. Keyed
+        writes skip it: the caller has already said which fact this is, so
+        near-duplicate detection, supersession proposals, contradiction
+        adjudication and claim extraction have nothing to decide -- and each
+        was a way for a changed value to be merged into its old text or
+        hidden behind it.
+        """
         await self.get_space_or_raise(org_id, space_id)
+        prepared = self._prepare(
+            org_id,
+            space_id,
+            content=content,
+            summary=summary,
+            metadata=metadata,
+            tags=tags,
+            source=source,
+            occurred_at=occurred_at,
+            kind=kind,
+            key=key,
+            replace=ReplaceMode(replace),
+        )
+
+        # Quotas before embedding, because embedding is where the money is.
+        # Checking after would let a tenant over their limit still spend the
+        # vendor call that the limit exists to prevent.
+        await self._check_quota(org_id, prepared.size)
+
+        if prepared.memory.key is not None:
+            return await self._write_keyed(prepared)
+
+        # -- exact duplicate: cheapest check, before any embedding ----------
+        if dedupe:
+            duplicate = await self._fold_exact_duplicate(prepared)
+            if duplicate is not None:
+                return duplicate
+
+        vectors = await self._embed_prepared(prepared)
+        return await self._write_unkeyed(
+            prepared,
+            vectors,
+            dedupe=dedupe,
+            auto_supersede=auto_supersede,
+            detect_conflicts=detect_conflicts,
+            extract=extract,
+            claims=claims,
+        )
+
+    # -- write-path stages -------------------------------------------------
+
+    def _prepare(
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        content: str,
+        summary: str = "",
+        metadata: Mapping[str, object] | None = None,
+        tags: Sequence[str] = (),
+        source: str = "",
+        occurred_at: datetime | None = None,
+        kind: MemoryKind = MemoryKind.EPISODIC,
+        key: str | None = None,
+        replace: ReplaceMode = ReplaceMode.SUPERSEDE,
+    ) -> _Prepared:
+        """Validate, normalize and chunk one write. No I/O.
+
+        Split out so bulk ingest can prepare every item before embedding any
+        of them -- which is what lets a hundred items share a handful of
+        embedding calls instead of making one each.
+        """
+        from pydantic import ValidationError as ModelValidationError
 
         cleaned = normalize(content)
         if not cleaned:
@@ -493,54 +629,27 @@ class MemoryService:
                 f"content is {size} bytes, limit is {self.settings.max_content_bytes}",
                 field="content",
             )
-
-        # Quotas before embedding, because embedding is where the money is.
-        # Checking after would let a tenant over their limit still spend the
-        # vendor call that the limit exists to prevent.
-        await self._check_quota(org_id, size)
-
-        # -- exact duplicate: cheapest check, before any embedding ----------
-        if dedupe:
-            from .domain.models import content_hash
-
-            existing = await self.store.find_by_content_hash(
-                org_id, space_id, content_hash(cleaned)
+        try:
+            memory = Memory(
+                org_id=org_id,
+                space_id=space_id,
+                content=cleaned,
+                summary=summary,
+                metadata=dict(metadata or {}),
+                tags=list(tags),
+                source=source,
+                kind=kind,
+                occurred_at=occurred_at or utcnow(),
+                key=key,
             )
-            if existing is not None:
-                incoming = Memory(
-                    org_id=org_id,
-                    space_id=space_id,
-                    content=cleaned,
-                    metadata=dict(metadata or {}),
-                    tags=list(tags),
-                    source=source,
-                    occurred_at=occurred_at or utcnow(),
-                )
-                merged = merge_duplicate(existing, incoming)
-                await self.store.upsert_memory(merged)
-                INGESTED.labels(outcome="duplicate_exact").inc()
-                return IngestResult(
-                    memory=merged,
-                    created=False,
-                    duplicate_of=existing.id,
-                    duplicate_kind=DuplicateKind.EXACT,
-                    similarity=1.0,
-                    chunk_count=len(merged.chunks),
-                )
+        except ModelValidationError as exc:
+            # A 422 naming the field, not a 500: the model's own validators
+            # (tag length, key shape) are input validation too.
+            errors = exc.errors()
+            message = errors[0]["msg"] if errors else "invalid memory"
+            location = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
+            raise ValidationError(message, field=location or None) from exc
 
-        memory = Memory(
-            org_id=org_id,
-            space_id=space_id,
-            content=cleaned,
-            summary=summary,
-            metadata=dict(metadata or {}),
-            tags=list(tags),
-            source=source,
-            kind=kind,
-            occurred_at=occurred_at or utcnow(),
-        )
-
-        # -- chunk and embed --------------------------------------------------
         pieces = chunk_text(
             cleaned,
             target_tokens=self.settings.chunk_target_tokens,
@@ -563,25 +672,131 @@ class MemoryService:
             if self.settings.contextual_embedding
             else ""
         )
+        return _Prepared(
+            memory=memory,
+            pieces=pieces,
+            texts=[for_embedding(p.text, header) for p in pieces],
+            size=size,
+            replace=replace,
+        )
+
+    async def _embed_prepared(self, prepared: _Prepared) -> list[list[float]]:
         try:
-            result = await self.embedder.embed([for_embedding(p.text, header) for p in pieces])
-            EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(pieces))
+            result = await self.embedder.embed(prepared.texts)
+            EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(
+                len(prepared.texts)
+            )
         except Exception:
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()
             INGESTED.labels(outcome="embed_error").inc()
             raise
+        return result.vectors
 
-        chunks = [
-            Chunk(
-                memory_id=memory.id,
-                ordinal=piece.ordinal,
-                text=piece.text,
-                token_estimate=piece.token_estimate,
-                embedding=vector,
-            )
-            for piece, vector in zip(pieces, result.vectors, strict=True)
-        ]
-        memory = memory.model_copy(update={"chunks": chunks})
+    async def _fold_exact_duplicate(self, prepared: _Prepared) -> IngestResult | None:
+        """Merge an exact restatement into the memory already holding it.
+
+        Looks the holder up at write time, always. Only ACTIVE unkeyed
+        memories qualify -- see `consolidation.dedupe_eligible`.
+        """
+        memory = prepared.memory
+        existing = await self.store.find_by_content_hash(
+            memory.org_id, memory.space_id, memory.content_sha256
+        )
+        if existing is None:
+            return None
+        merged = merge_duplicate(existing, memory)
+        await self.store.upsert_memory(merged)
+        INGESTED.labels(outcome="duplicate_exact").inc()
+        return IngestResult(
+            memory=merged,
+            created=False,
+            duplicate_of=existing.id,
+            duplicate_kind=DuplicateKind.EXACT,
+            similarity=1.0,
+            chunk_count=len(merged.chunks),
+        )
+
+    @staticmethod
+    def _unchanged(existing: Memory) -> IngestResult:
+        """The report for a keyed write that found its payload already there."""
+        INGESTED.labels(outcome="unchanged_key").inc()
+        return IngestResult(
+            memory=existing,
+            created=False,
+            duplicate_of=existing.id,
+            duplicate_kind=DuplicateKind.EXACT,
+            similarity=1.0,
+            chunk_count=len(existing.chunks),
+        )
+
+    async def _write_keyed(
+        self,
+        prepared: _Prepared,
+        vectors: Sequence[list[float]] | None = None,
+        *,
+        known: Memory | None = None,
+        looked_up: bool = False,
+    ) -> IngestResult:
+        """Replace whatever holds this key, atomically; or do nothing at all.
+
+        The unchanged check runs twice on purpose. Here, before embedding, so
+        a re-sync of an unchanged snapshot costs no vendor call; and again
+        inside `store.write_keyed`, under the key's lock, because another
+        writer may have moved the key in between.
+        """
+        memory = prepared.memory
+        org_id, space_id, key = memory.org_id, memory.space_id, memory.key
+        if key is None:  # pragma: no cover - callers route on the key
+            raise ValidationError("a keyed write needs a key", field="key")
+        active = known
+        if not looked_up:
+            found = await self.store.get_active_by_keys(org_id, space_id, [key])
+            active = found.get(key)
+        if active is not None and keyed_unchanged(active, memory):
+            return self._unchanged(active)
+
+        if vectors is None:
+            vectors = await self._embed_prepared(prepared)
+        outcome = await self.store.write_keyed(
+            prepared.with_vectors(vectors), mode=prepared.replace
+        )
+        if outcome.unchanged:
+            return self._unchanged(outcome.memory)
+
+        if prepared.replace is ReplaceMode.SUPERSEDE:
+            # The replaced row still exists, so its derivation edges do too.
+            for old_id in outcome.replaced:
+                await self._mark_derivations_stale(
+                    org_id, space_id, await self._direct_derivatives(org_id, space_id, old_id)
+                )
+        else:
+            await self._mark_derivations_stale(org_id, space_id, outcome.derivatives)
+        INGESTED.labels(outcome="created").inc()
+        return IngestResult(
+            memory=outcome.memory,
+            created=True,
+            superseded=outcome.replaced if prepared.replace is ReplaceMode.SUPERSEDE else [],
+            erased=outcome.replaced if prepared.replace is ReplaceMode.ERASE else [],
+            chunk_count=len(outcome.memory.chunks),
+        )
+
+    async def _write_unkeyed(
+        self,
+        prepared: _Prepared,
+        vectors: Sequence[list[float]],
+        *,
+        dedupe: bool = True,
+        auto_supersede: bool = True,
+        detect_conflicts: bool = True,
+        extract: bool = True,
+        claims: Sequence[Claim] | None = None,
+    ) -> IngestResult:
+        """The consolidation pipeline for a write with its vectors in hand."""
+        memory = prepared.with_vectors(vectors)
+        org_id, space_id = memory.org_id, memory.space_id
+        cleaned = memory.content
+        tags = memory.tags
+        chunks = memory.chunks
 
         # -- neighbours: one lookup, four consumers ----------------------------
         # Deduplication, supersession, contradiction and association all ask
@@ -601,12 +816,16 @@ class MemoryService:
 
         # -- near duplicate ----------------------------------------------------
         if dedupe and chunks:
+            # Only ACTIVE, unkeyed neighbours may absorb this write: a
+            # superseded row would swallow a restated value and stay hidden,
+            # and a keyed row belongs to its key.
+            mergeable = dedupe_candidates(pairs)
             verdict = detect_near_duplicate(
                 chunks[0].embedding or [],
-                [(m.id, v) for m, v in pairs],
+                [(m.id, v) for m, v in mergeable],
                 threshold=self.settings.dedupe_threshold,
                 text=cleaned,
-                texts={m.id: m.content for m, _ in pairs},
+                texts={m.id: m.content for m, _ in mergeable},
             )
             if verdict.is_duplicate and verdict.existing_id:
                 existing = await self.store.get_memory(org_id, space_id, verdict.existing_id)
@@ -646,8 +865,11 @@ class MemoryService:
             # in a space with more than 256 memories, anything older simply
             # stopped being a supersession or contradiction candidate, so a
             # fact stated last year could never be revised.
+            # A keyed memory is replaced through its key and nothing else, so
+            # it is never a supersession target for an unkeyed write.
+            revisable = [(m, v) for m, v in pairs if m.key is None]
             all_proposals = (
-                propose_supersessions(memory, chunks[0].embedding or [], pairs)
+                propose_supersessions(memory, chunks[0].embedding or [], revisable)
                 if auto_supersede
                 else []
             )
@@ -827,6 +1049,192 @@ class MemoryService:
             extracted=written_claims,
             chunk_count=len(chunks),
         )
+
+    # -- bulk ingest -------------------------------------------------------
+
+    async def ingest_many(
+        self,
+        *,
+        org_id: str,
+        space_id: str,
+        items: Sequence[IngestItem],
+        dedupe: bool = True,
+        auto_supersede: bool = True,
+        detect_conflicts: bool = True,
+        extract: bool = True,
+    ) -> list[BulkOutcome]:
+        """Write many memories with one embedding pass. Per-item outcomes.
+
+        Three stages, because the expensive one parallelises and the other
+        two must not:
+
+          1. PREPARE every item and settle, with two batched lookups, the ones
+             that need no vectors at all -- an unchanged keyed item, an exact
+             restatement of an existing memory.
+          2. EMBED every remaining chunk in one pass: batches of the
+             provider's batch size, `embedding_concurrency` at a time. A
+             100-item bulk used to make ~100 sequential embedding calls; this
+             makes ceil(chunks / batch_size).
+          3. WRITE sequentially, in request order, with the vectors in hand.
+             Sequential on purpose: dedupe, keys and supersession all compare
+             a write against what is already stored, so item 7 must see item
+             6. Each write re-checks what stage 1 assumed, which makes stage 1
+             an optimisation and never a correctness input.
+
+        One bad item no longer loses the whole response: validation, a
+        failed embedding batch or a write error is reported against the
+        items it touched, and every other item proceeds.
+        """
+        await self.get_space_or_raise(org_id, space_id)
+
+        outcomes = [BulkOutcome(index=i) for i in range(len(items))]
+        prepared: dict[int, _Prepared] = {}
+        for i, item in enumerate(items):
+            try:
+                prepared[i] = self._prepare(
+                    org_id,
+                    space_id,
+                    content=item.content,
+                    summary=item.summary,
+                    metadata=item.metadata,
+                    tags=item.tags,
+                    source=item.source,
+                    occurred_at=item.occurred_at,
+                    key=item.key,
+                    replace=ReplaceMode(item.replace),
+                )
+            except MapiError as exc:
+                outcomes[i].error = exc
+
+        # One quota check for the request. Quota is account state, not a
+        # property of an item, and checking per item would cost a usage
+        # query for each one. The overshoot is bounded by one request, the
+        # same trade quota.py already makes for concurrency.
+        await self._check_quota(org_id, sum(p.size for p in prepared.values()))
+
+        # -- stage 1: what needs no vectors ---------------------------------
+        keys = [p.memory.key for p in prepared.values() if p.memory.key is not None]
+        active = await self.store.get_active_by_keys(org_id, space_id, keys) if keys else {}
+        digests = [p.memory.content_sha256 for p in prepared.values() if p.memory.key is None]
+        by_hash = (
+            await self.store.find_by_content_hashes(org_id, space_id, digests)
+            if dedupe and digests
+            else {}
+        )
+        needs_vectors: list[int] = []
+        #: Items whose key or content an EARLIER item in this request also
+        #: carries. Stage 1's lookups predate that earlier write, so these
+        #: look again at write time -- and embed then, if they must.
+        repeated: set[int] = set()
+        seen_keys: set[str] = set()
+        seen_hashes: set[str] = set()
+        for i, p in prepared.items():
+            key, digest = p.memory.key, p.memory.content_sha256
+            if key is not None:
+                current = active.get(key)
+                if key in seen_keys:
+                    repeated.add(i)
+                elif current is None or not keyed_unchanged(current, p.memory):
+                    needs_vectors.append(i)
+                seen_keys.add(key)
+            else:
+                if dedupe and digest in seen_hashes:
+                    repeated.add(i)
+                elif not (dedupe and digest in by_hash):
+                    needs_vectors.append(i)
+                seen_hashes.add(digest)
+
+        # -- stage 2: one embedding pass ------------------------------------
+        vectors, failures = await self._embed_many({i: prepared[i] for i in needs_vectors})
+
+        # -- stage 3: sequential writes -------------------------------------
+        for i, p in prepared.items():
+            if i in failures:
+                outcomes[i].error = failures[i]
+                continue
+            try:
+                if p.memory.key is not None:
+                    outcomes[i].result = await self._write_keyed(
+                        p,
+                        vectors.get(i),
+                        known=active.get(p.memory.key),
+                        looked_up=i not in repeated,
+                    )
+                    continue
+                digest = p.memory.content_sha256
+                if dedupe and (i in repeated or digest in by_hash):
+                    # Re-read, never fold into stage 1's snapshot: an earlier
+                    # item may have superseded that row since, and merging
+                    # into the stale copy would write it back ACTIVE. Stage 1
+                    # only decided that this item could skip the embed pass;
+                    # if the row is no longer eligible, it embeds below.
+                    duplicate = await self._fold_exact_duplicate(p)
+                    if duplicate is not None:
+                        outcomes[i].result = duplicate
+                        continue
+                item_vectors = vectors.get(i)
+                if item_vectors is None:
+                    item_vectors = await self._embed_prepared(p)
+                outcomes[i].result = await self._write_unkeyed(
+                    p,
+                    item_vectors,
+                    dedupe=dedupe,
+                    auto_supersede=auto_supersede,
+                    detect_conflicts=detect_conflicts,
+                    extract=extract,
+                )
+            except MapiError as exc:
+                outcomes[i].error = exc
+        return outcomes
+
+    async def _embed_many(
+        self, prepared: Mapping[int, _Prepared]
+    ) -> tuple[dict[int, list[list[float]]], dict[int, MapiError]]:
+        """Every chunk of every item, packed into provider-sized batches.
+
+        Chunks are packed across item boundaries, so the call count is
+        ceil(total chunks / batch size) however the chunks fall into items.
+        A failed batch fails exactly the items with a chunk in it; the other
+        batches' vectors are still used. Batches run `embedding_concurrency`
+        at a time -- bounded, because unbounded fan-out is how one bulk
+        request turns into a burst of 429s.
+        """
+        flat: list[tuple[int, int, str]] = [
+            (i, ordinal, text)
+            for i, p in prepared.items()
+            for ordinal, text in enumerate(p.texts)
+        ]
+        size = max(1, self.embedder.batch_size)
+        batches = [flat[start : start + size] for start in range(0, len(flat), size)]
+        gate = asyncio.Semaphore(max(1, self.settings.embedding_concurrency))
+        pieces: dict[int, dict[int, list[float]]] = {i: {} for i in prepared}
+        failures: dict[int, MapiError] = {}
+
+        async def run(batch: list[tuple[int, int, str]]) -> None:
+            async with gate:
+                try:
+                    result = await self.embedder.embed([text for _, _, text in batch])
+                except MapiError as exc:
+                    error: MapiError = exc
+                except Exception as exc:  # a provider bug, not a caller's
+                    error = ProviderError(f"{self.embedder.name}: {type(exc).__name__}")
+                else:
+                    EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(batch))
+                    for (i, ordinal, _), vector in zip(batch, result.vectors, strict=True):
+                        pieces[i][ordinal] = vector
+                    return
+            EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()
+            INGESTED.labels(outcome="embed_error").inc()
+            for i, _, _ in batch:
+                failures.setdefault(i, error)
+
+        await asyncio.gather(*(run(batch) for batch in batches))
+        vectors = {
+            i: [by_ordinal[n] for n in range(len(prepared[i].texts))]
+            for i, by_ordinal in pieces.items()
+            if i not in failures
+        }
+        return vectors, failures
 
     async def _write_claims(
         self,
@@ -1274,11 +1682,28 @@ class MemoryService:
         Works on live AND already-deleted memories: delete leaves history
         behind by design, and an erasure request must be able to purge that
         residue too.
+
+        Idempotent, as DECISIONS.md has always said it is: erasing what is
+        not there reports `already_erased` instead of a 404. A retried
+        compliance request -- the response to the first attempt lost in
+        transit -- must not look like a failure, and a memory in another
+        tenant reads exactly the same way, so nothing leaks.
         """
         memory = await self.store.get_memory(org_id, space_id, memory_id)
         versions = await self.store.list_memory_versions(org_id, space_id, memory_id)
         if memory is None and not versions:
-            raise NotFoundError(f"memory {memory_id} not found", field="memory_id")
+            return {
+                "memory_id": memory_id,
+                "space_id": space_id,
+                "content_sha256": "",
+                "chunks_removed": 0,
+                "edges_removed": 0,
+                "edges_bridged": 0,
+                "versions_purged": 0,
+                "derived_memories_affected": [],
+                "erased_at": utcnow().isoformat(),
+                "already_erased": True,
+            }
 
         # The hash must be captured BEFORE the purge; afterwards there is
         # nothing left to hash. Prefer the live row, fall back to the last
@@ -1316,7 +1741,102 @@ class MemoryService:
             "versions_purged": report.versions_purged,
             "derived_memories_affected": derivatives,
             "erased_at": utcnow().isoformat(),
+            "already_erased": False,
         }
+
+    # -- bulk erasure, retirement and purge --------------------------------
+
+    async def _attest_bulk(
+        self, org_id: str, space_id: str, report: BulkEraseReport, **identity: str
+    ) -> dict[str, object]:
+        """Stale the survivors' derivations, then describe what was destroyed."""
+        await self._mark_derivations_stale(org_id, space_id, report.derivatives)
+        if report.memory_ids:
+            INGESTED.labels(outcome="erased").inc(len(report.memory_ids))
+        log.info(
+            "memories_erased",
+            space_id=space_id,
+            count=len(report.memory_ids),
+            versions_purged=report.versions_purged,
+        )
+        return {
+            **identity,
+            "space_id": space_id,
+            "memory_ids": report.memory_ids,
+            "memories_erased": len(report.memory_ids),
+            "chunks_removed": report.chunks_removed,
+            "edges_removed": report.edges_removed,
+            "edges_bridged": report.edges_bridged,
+            "versions_purged": report.versions_purged,
+            "derived_memories_affected": report.derivatives,
+            "erased_at": utcnow().isoformat(),
+        }
+
+    async def erase_by_tag(self, org_id: str, space_id: str, tag: str) -> dict[str, object]:
+        """Erase everything a tag has ever been on, in one transaction.
+
+        The one-call answer to "forget everything about this person" in a
+        shared space: a caller that tags each writer's memories (facemash
+        tags directory cards `person:u-<id>`) can withdraw all of them
+        without listing, paging and erasing one id at a time -- N+2 calls,
+        any of which could fail half way.
+        """
+        normalized = tag.strip().casefold()
+        if not normalized:
+            raise ValidationError("tag must not be empty", field="tag")
+        report = await self.store.erase_by_tag(org_id, space_id, normalized)
+        return await self._attest_bulk(org_id, space_id, report, tag=normalized)
+
+    async def erase_by_key(self, org_id: str, space_id: str, key: str) -> dict[str, object]:
+        """Erase every memory that holds or ever held `key`, history included."""
+        report = await self.store.erase_by_key(org_id, space_id, key)
+        return await self._attest_bulk(org_id, space_id, report, key=key)
+
+    async def retire_keys(
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        status: MemoryStatus = MemoryStatus.ARCHIVED,
+    ) -> tuple[list[Memory], list[str]]:
+        """Archive the facts under `keys`: hidden from search, kept as history.
+
+        For a sync client whose source dropped a section: the key's memory
+        should stop answering questions, but nothing was asked to be
+        forgotten, so this is not an erase. Returns (retired, keys with no
+        active memory). The second list is not an error -- a retried retire
+        finds nothing left to do.
+        """
+        if status is not MemoryStatus.ARCHIVED:
+            raise ValidationError("keys can only be retired to 'archived'", field="status")
+        await self.get_space_or_raise(org_id, space_id)
+        retired = await self.store.retire_keys(org_id, space_id, keys, status=status)
+        for memory in retired:
+            # Archival hides a source exactly as deletion does, so what was
+            # derived from it stops being served as current.
+            await self._mark_derivations_stale(
+                org_id, space_id, await self._direct_derivatives(org_id, space_id, memory.id)
+            )
+        found = {m.key for m in retired}
+        missing = [k for k in dict.fromkeys(keys) if k not in found]
+        return retired, missing
+
+    async def purge_space(self, org_id: str, space_id: str) -> PurgeReport:
+        """Destroy a space and all of its history. See `MemoryStore.purge_space`.
+
+        No existence check first, on purpose: purging a space that is
+        already gone still has work to do (the version history DELETE left
+        behind), and a retry must succeed with zeros rather than 404.
+        """
+        report = await self.store.purge_space(org_id, space_id)
+        log.info(
+            "space_purged",
+            space_id=space_id,
+            memories=report.memories,
+            memory_versions=report.memory_versions,
+        )
+        return report
 
     async def chat(
         self,

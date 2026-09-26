@@ -119,7 +119,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
                     store_backend=StoreBackend.MEMORY,
                     embedding_backend=EmbeddingBackend(args.embeddings),
                     embedding_dimensions=args.dimensions,
-                    embedding_model="text-embedding-004",
+                    embedding_model=args.embedding_model,
                 )
             ),
             NoopReranker(),
@@ -159,7 +159,7 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
         store_backend=StoreBackend.MEMORY,
         embedding_backend=EmbeddingBackend(args.embeddings),
         embedding_dimensions=args.dimensions,
-        embedding_model="text-embedding-004",
+        embedding_model=args.embedding_model,
         embedding_batch_size=args.batch_size,
         embedding_cache_size=20000,
         rerank_backend=RerankBackend.HEURISTIC,
@@ -462,6 +462,9 @@ async def main() -> int:
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--embeddings", default="gemini")
     parser.add_argument("--dimensions", type=int, default=768)
+    # gemini-embedding-001: text-embedding-004 is retired on the Developer API.
+    # Pass the old name to replay a run against its cached vectors.
+    parser.add_argument("--embedding-model", default="gemini-embedding-001")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument(

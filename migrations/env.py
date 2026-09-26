@@ -49,7 +49,11 @@ def _do_run(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    config.set_main_option("sqlalchemy.url", _url())
+    # `%%`: the option passes through configparser interpolation, so a URL
+    # carrying any percent-encoded byte -- a password with '/' or '@' in it
+    # -- failed with an interpolation error that quoted the whole URL,
+    # password included, into the traceback.
+    config.set_main_option("sqlalchemy.url", _url().replace("%", "%%"))
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

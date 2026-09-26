@@ -32,6 +32,7 @@ from ...core.errors import (
 )
 from ...core.ids import new_id
 from ...core.logging import get_logger
+from ...domain.consolidation import keyed_unchanged
 from ...domain.embeddings.base import Vector
 from ...domain.models import (
     ApiKey,
@@ -45,17 +46,21 @@ from ...domain.models import (
     Organization,
     RelationEdge,
     RelationType,
+    ReplaceMode,
     Scope,
     Space,
     User,
     utcnow,
 )
 from ..base import (
+    BulkEraseReport,
     EraseReport,
+    KeyedWrite,
     LexicalHit,
     MemoryFilter,
     MemoryStore,
     Page,
+    PurgeReport,
     TenantUsage,
     VectorHit,
 )
@@ -239,6 +244,7 @@ class PostgresStore(MemoryStore):
             updated_at=row.updated_at,
             content_sha256=row.content_sha256,
             version=row.version,
+            key=row.memory_key,
             chunks=[
                 Chunk(
                     id=c.id,
@@ -611,97 +617,130 @@ class PostgresStore(MemoryStore):
     # -- memories ------------------------------------------------------------
 
     async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
-        when = _require_aware(now or utcnow())
-        async with self._session() as session, session.begin():
-            await self._scope(session, memory.org_id)
-            row = await session.get(MemoryRow, memory.id)
-            if row is None:
-                row = MemoryRow(id=memory.id)
-                session.add(row)
-            row.org_id = memory.org_id
-            row.space_id = memory.space_id
-            row.content = memory.content
-            row.summary = memory.summary
-            row.meta = memory.metadata
-            row.tags = memory.tags
-            row.source = memory.source
-            row.kind = memory.kind.value
-            row.status = memory.status.value
-            row.occurred_at = _require_aware(memory.occurred_at)
-            row.created_at = _require_aware(memory.created_at)
-            row.updated_at = _require_aware(memory.updated_at)
-            row.content_sha256 = memory.content_sha256
-            row.version = memory.version
+        from sqlalchemy.exc import IntegrityError
 
-            # Bitemporal history, in the same transaction as the row write so
-            # the live table and its audit trail cannot disagree.
-            #
-            # A write that does not bump `version` is an in-place correction,
-            # not a new state, so it overwrites the open snapshot rather than
-            # opening a second one. Otherwise a caller that re-saves without
-            # bumping would either violate uq_versions_memory_version here or
-            # accumulate duplicate snapshots — and the in-memory backend
-            # applies the same rule, which is what keeps the two in agreement.
-            open_version = await session.scalar(
+        when = _require_aware(now or utcnow())
+        try:
+            async with self._session() as session, session.begin():
+                await self._scope(session, memory.org_id)
+                await self._upsert_in_session(session, memory, when)
+        except IntegrityError as exc:
+            # The only unique index a plain upsert can hit that a caller can
+            # cause is one ACTIVE row per key. 409 names it; a 500 would not.
+            if "uq_memories_space_key_active" in str(exc):
+                raise ConflictError(
+                    f"key {memory.key!r} is already held by an active memory", field="key"
+                ) from exc
+            raise
+        return memory
+
+    async def _upsert_in_session(
+        self, session: Any, memory: Memory, when: datetime, *, fresh: bool = False
+    ) -> None:
+        """`upsert_memory`'s body, inside a transaction the caller owns.
+
+        `fresh`: the caller knows no row has this id yet -- a keyed write's
+        new row, whose id was minted for it -- so the three reads that
+        reconcile an EXISTING row (the row, its open version, its old
+        chunks) are skipped. Over a WAN link those three round trips are
+        most of a keyed write's database time. A wrong promise cannot
+        overwrite anything: the INSERT's primary key refuses it.
+        """
+        row = None if fresh else await session.get(MemoryRow, memory.id)
+        if row is None:
+            row = MemoryRow(id=memory.id)
+            session.add(row)
+        row.org_id = memory.org_id
+        row.space_id = memory.space_id
+        row.content = memory.content
+        row.summary = memory.summary
+        row.meta = memory.metadata
+        row.tags = memory.tags
+        row.source = memory.source
+        row.kind = memory.kind.value
+        row.status = memory.status.value
+        row.occurred_at = _require_aware(memory.occurred_at)
+        row.created_at = _require_aware(memory.created_at)
+        row.updated_at = _require_aware(memory.updated_at)
+        row.content_sha256 = memory.content_sha256
+        row.version = memory.version
+        row.memory_key = memory.key
+
+        # Bitemporal history, in the same transaction as the row write so
+        # the live table and its audit trail cannot disagree.
+        #
+        # A write that does not bump `version` is an in-place correction,
+        # not a new state, so it overwrites the open snapshot rather than
+        # opening a second one. Otherwise a caller that re-saves without
+        # bumping would either violate uq_versions_memory_version here or
+        # accumulate duplicate snapshots — and the in-memory backend
+        # applies the same rule, which is what keeps the two in agreement.
+        open_version = (
+            None
+            if fresh
+            else await session.scalar(
                 select(MemoryVersionRow).where(
                     MemoryVersionRow.memory_id == memory.id,
                     MemoryVersionRow.valid_to.is_(None),
                 )
             )
-            snapshot = MemoryVersion.snapshot(memory, valid_from=when)
-            if open_version is not None and open_version.version == memory.version:
-                open_version.content = snapshot.content
-                open_version.summary = snapshot.summary
-                open_version.meta = snapshot.metadata
-                open_version.tags = snapshot.tags
-                open_version.source = snapshot.source
-                open_version.status = snapshot.status.value
-                open_version.occurred_at = _require_aware(snapshot.occurred_at)
-            else:
-                if open_version is not None:
-                    open_version.valid_to = when
-                session.add(
-                    MemoryVersionRow(
-                        id=snapshot.id,
-                        memory_id=snapshot.memory_id,
-                        org_id=snapshot.org_id,
-                        space_id=snapshot.space_id,
-                        version=snapshot.version,
-                        content=snapshot.content,
-                        summary=snapshot.summary,
-                        meta=snapshot.metadata,
-                        tags=snapshot.tags,
-                        source=snapshot.source,
-                        kind=snapshot.kind.value,
-                        status=snapshot.status.value,
-                        occurred_at=_require_aware(snapshot.occurred_at),
-                        valid_from=when,
-                    )
+        )
+        snapshot = MemoryVersion.snapshot(memory, valid_from=when)
+        if open_version is not None and open_version.version == memory.version:
+            open_version.content = snapshot.content
+            open_version.summary = snapshot.summary
+            open_version.meta = snapshot.metadata
+            open_version.tags = snapshot.tags
+            open_version.source = snapshot.source
+            open_version.status = snapshot.status.value
+            open_version.occurred_at = _require_aware(snapshot.occurred_at)
+            open_version.memory_key = snapshot.key
+        else:
+            if open_version is not None:
+                open_version.valid_to = when
+            session.add(
+                MemoryVersionRow(
+                    id=snapshot.id,
+                    memory_id=snapshot.memory_id,
+                    org_id=snapshot.org_id,
+                    space_id=snapshot.space_id,
+                    version=snapshot.version,
+                    content=snapshot.content,
+                    summary=snapshot.summary,
+                    meta=snapshot.metadata,
+                    tags=snapshot.tags,
+                    source=snapshot.source,
+                    kind=snapshot.kind.value,
+                    status=snapshot.status.value,
+                    occurred_at=_require_aware(snapshot.occurred_at),
+                    valid_from=when,
+                    memory_key=snapshot.key,
                 )
+            )
 
-            # Chunks are replaced wholesale: a re-embedded memory has entirely
-            # new vectors, and reconciling them individually is more code and
-            # more ways to leave a stale vector behind.
+        # Chunks are replaced wholesale: a re-embedded memory has entirely
+        # new vectors, and reconciling them individually is more code and
+        # more ways to leave a stale vector behind.
+        if not fresh:
             await session.execute(delete(ChunkRow).where(ChunkRow.memory_id == memory.id))
-            for chunk in memory.chunks:
-                if chunk.embedding is not None and len(chunk.embedding) != self.dimensions:
-                    raise StoreError(
-                        f"chunk {chunk.id} has {len(chunk.embedding)} dimensions, "
-                        f"index expects {self.dimensions}"
-                    )
-                session.add(
-                    ChunkRow(
-                        id=chunk.id,
-                        memory_id=memory.id,
-                        org_id=memory.org_id,
-                        space_id=memory.space_id,
-                        ordinal=chunk.ordinal,
-                        text=chunk.text,
-                        token_estimate=chunk.token_estimate,
-                        embedding=chunk.embedding,
-                    )
+        for chunk in memory.chunks:
+            if chunk.embedding is not None and len(chunk.embedding) != self.dimensions:
+                raise StoreError(
+                    f"chunk {chunk.id} has {len(chunk.embedding)} dimensions, "
+                    f"index expects {self.dimensions}"
                 )
-        return memory
+            session.add(
+                ChunkRow(
+                    id=chunk.id,
+                    memory_id=memory.id,
+                    org_id=memory.org_id,
+                    space_id=memory.space_id,
+                    ordinal=chunk.ordinal,
+                    text=chunk.text,
+                    token_estimate=chunk.token_estimate,
+                    embedding=chunk.embedding,
+                )
+            )
 
     async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
         async with self._session() as session:
@@ -830,58 +869,62 @@ class PostgresStore(MemoryStore):
         # it, which is worse than failing outright.
         async with self._session() as session, session.begin():
             await self._scope(session, org_id)
-            chunk_count = (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(ChunkRow)
-                    .where(
-                        ChunkRow.memory_id == memory_id,
-                        ChunkRow.org_id == org_id,
-                        ChunkRow.space_id == space_id,
-                    )
-                )
-                or 0
-            )
-            edges_bridged = await self._bridge_supersession(
-                session, org_id, space_id, memory_id
-            )
-            edge_result = await session.execute(
-                delete(RelationEdgeRow).where(
-                    RelationEdgeRow.org_id == org_id,
-                    RelationEdgeRow.space_id == space_id,
-                    (RelationEdgeRow.source_id == memory_id)
-                    | (RelationEdgeRow.target_id == memory_id),
-                )
-            )
-            edges_removed = int(cast(CursorResult[Any], edge_result).rowcount or 0)
+            return await self._erase_in_session(session, org_id, space_id, memory_id)
 
-            version_result = await session.execute(
-                delete(MemoryVersionRow).where(
-                    MemoryVersionRow.memory_id == memory_id,
-                    MemoryVersionRow.org_id == org_id,
-                    MemoryVersionRow.space_id == space_id,
+    async def _erase_in_session(
+        self, session: Any, org_id: str, space_id: str, memory_id: str
+    ) -> EraseReport:
+        """`erase_memory`'s body, inside a transaction the caller owns."""
+        chunk_count = (
+            await session.scalar(
+                select(func.count())
+                .select_from(ChunkRow)
+                .where(
+                    ChunkRow.memory_id == memory_id,
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
                 )
             )
-            versions_purged = int(cast(CursorResult[Any], version_result).rowcount or 0)
-
-            row_result = await session.execute(
-                delete(MemoryRow).where(
-                    MemoryRow.id == memory_id,
-                    MemoryRow.org_id == org_id,
-                    MemoryRow.space_id == space_id,
-                )
+            or 0
+        )
+        edges_bridged = await self._bridge_supersession(session, org_id, space_id, memory_id)
+        edge_result = await session.execute(
+            delete(RelationEdgeRow).where(
+                RelationEdgeRow.org_id == org_id,
+                RelationEdgeRow.space_id == space_id,
+                (RelationEdgeRow.source_id == memory_id)
+                | (RelationEdgeRow.target_id == memory_id),
             )
-            row_existed = bool(cast(CursorResult[Any], row_result).rowcount)
+        )
+        edges_removed = int(cast(CursorResult[Any], edge_result).rowcount or 0)
 
-            if not row_existed and versions_purged == 0:
-                return EraseReport(existed=False)
-            return EraseReport(
-                existed=True,
-                chunks_removed=chunk_count if row_existed else 0,
-                edges_removed=edges_removed,
-                versions_purged=versions_purged,
-                edges_bridged=edges_bridged,
+        version_result = await session.execute(
+            delete(MemoryVersionRow).where(
+                MemoryVersionRow.memory_id == memory_id,
+                MemoryVersionRow.org_id == org_id,
+                MemoryVersionRow.space_id == space_id,
             )
+        )
+        versions_purged = int(cast(CursorResult[Any], version_result).rowcount or 0)
+
+        row_result = await session.execute(
+            delete(MemoryRow).where(
+                MemoryRow.id == memory_id,
+                MemoryRow.org_id == org_id,
+                MemoryRow.space_id == space_id,
+            )
+        )
+        row_existed = bool(cast(CursorResult[Any], row_result).rowcount)
+
+        if not row_existed and versions_purged == 0:
+            return EraseReport(existed=False)
+        return EraseReport(
+            existed=True,
+            chunks_removed=chunk_count if row_existed else 0,
+            edges_removed=edges_removed,
+            versions_purged=versions_purged,
+            edges_bridged=edges_bridged,
+        )
 
     async def list_memories(
         self,
@@ -928,20 +971,378 @@ class PostgresStore(MemoryStore):
     async def find_by_content_hash(
         self, org_id: str, space_id: str, digest: str
     ) -> Memory | None:
+        found = await self.find_by_content_hashes(org_id, space_id, [digest])
+        return found.get(digest)
+
+    async def find_by_content_hashes(
+        self, org_id: str, space_id: str, digests: Sequence[str]
+    ) -> dict[str, Memory]:
+        """One query for a whole bulk request's exact-duplicate gate.
+
+        ACTIVE and unkeyed only -- see `consolidation.dedupe_eligible`. The
+        lowest id wins a digest held by more than one row, as it always has.
+        """
+        wanted = list(dict.fromkeys(digests))
+        if not wanted:
+            return {}
         async with self._session() as session:
             await self._scope(session, org_id)
-            row = await session.scalar(
+            rows = await session.scalars(
                 select(MemoryRow)
                 .where(
                     MemoryRow.org_id == org_id,
                     MemoryRow.space_id == space_id,
-                    MemoryRow.content_sha256 == digest,
-                    MemoryRow.status != MemoryStatus.ARCHIVED.value,
+                    MemoryRow.content_sha256.in_(wanted),
+                    MemoryRow.status == MemoryStatus.ACTIVE.value,
+                    MemoryRow.memory_key.is_(None),
                 )
                 .order_by(MemoryRow.id)
-                .limit(1)
             )
-            return self._to_memory(row) if row else None
+            found: dict[str, Memory] = {}
+            for row in rows:
+                found.setdefault(row.content_sha256, self._to_memory(row))
+            return found
+
+    # -- keyed memories --------------------------------------------------------
+
+    async def get_active_by_keys(
+        self, org_id: str, space_id: str, keys: Sequence[str]
+    ) -> dict[str, Memory]:
+        wanted = list(dict.fromkeys(keys))
+        if not wanted:
+            return {}
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            rows = await session.scalars(
+                select(MemoryRow).where(
+                    MemoryRow.org_id == org_id,
+                    MemoryRow.space_id == space_id,
+                    MemoryRow.memory_key.in_(wanted),
+                    MemoryRow.status == MemoryStatus.ACTIVE.value,
+                )
+            )
+            return {str(r.memory_key): self._to_memory(r) for r in rows}
+
+    @staticmethod
+    async def _lock_key(session: Any, space_id: str, key: str) -> None:
+        """Serialize writers of one key until this transaction ends.
+
+        The partial unique index alone would let two concurrent first writes
+        race to the INSERT and fail one of them; a transaction-scoped
+        advisory lock makes the second wait and then REPLACE the first,
+        which is the outcome a caller writing "the current value" expects.
+        Advisory locks need no privilege, and the xact form cannot leak
+        through the pool -- commit or rollback releases it.
+        """
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))"),
+            {"lock": f"mapi:key:{space_id}:{key}"},
+        )
+
+    @staticmethod
+    async def _set_status_in_session(
+        session: Any, row: MemoryRow, status: MemoryStatus, when: datetime
+    ) -> None:
+        """Change a row's status as a new version, leaving its chunks alone.
+
+        `_upsert_in_session` would rewrite every chunk to flip one column;
+        a status change is not a re-embedding.
+        """
+        row.status = status.value
+        row.version = row.version + 1
+        row.updated_at = when
+        open_version = await session.scalar(
+            select(MemoryVersionRow).where(
+                MemoryVersionRow.memory_id == row.id,
+                MemoryVersionRow.valid_to.is_(None),
+            )
+        )
+        if open_version is not None:
+            open_version.valid_to = when
+        session.add(
+            MemoryVersionRow(
+                id=new_id("version"),
+                memory_id=row.id,
+                org_id=row.org_id,
+                space_id=row.space_id,
+                version=row.version,
+                content=row.content,
+                summary=row.summary,
+                meta=dict(row.meta or {}),
+                tags=list(row.tags or []),
+                source=row.source,
+                kind=row.kind,
+                status=row.status,
+                occurred_at=row.occurred_at,
+                valid_from=when,
+                memory_key=row.memory_key,
+            )
+        )
+
+    @staticmethod
+    async def _key_holders(session: Any, org_id: str, space_id: str, key: str) -> list[str]:
+        """Every memory id under `key`: live rows in any status, plus history."""
+        live = select(MemoryRow.id).where(
+            MemoryRow.org_id == org_id,
+            MemoryRow.space_id == space_id,
+            MemoryRow.memory_key == key,
+        )
+        history = select(MemoryVersionRow.memory_id).where(
+            MemoryVersionRow.org_id == org_id,
+            MemoryVersionRow.space_id == space_id,
+            MemoryVersionRow.memory_key == key,
+        )
+        rows = await session.execute(live.union(history))
+        return sorted({str(r[0]) for r in rows})
+
+    @staticmethod
+    async def _derivatives_in_session(
+        session: Any, org_id: str, space_id: str, memory_ids: Sequence[str]
+    ) -> list[str]:
+        """First-hop DERIVED_FROM sources of `memory_ids` outside that set."""
+        ids = list(memory_ids)
+        if not ids:
+            return []
+        rows = await session.execute(
+            select(RelationEdgeRow.source_id).where(
+                RelationEdgeRow.org_id == org_id,
+                RelationEdgeRow.space_id == space_id,
+                RelationEdgeRow.target_id.in_(ids),
+                RelationEdgeRow.type == RelationType.DERIVED_FROM.value,
+            )
+        )
+        erased = set(ids)
+        return sorted({str(r[0]) for r in rows} - erased)
+
+    async def _erase_many_in_session(
+        self, session: Any, org_id: str, space_id: str, memory_ids: Sequence[str]
+    ) -> BulkEraseReport:
+        derivatives = await self._derivatives_in_session(session, org_id, space_id, memory_ids)
+        erased: list[str] = []
+        chunks = edges = bridged = versions = 0
+        for memory_id in memory_ids:
+            report = await self._erase_in_session(session, org_id, space_id, memory_id)
+            if not report.existed:
+                continue
+            erased.append(memory_id)
+            chunks += report.chunks_removed
+            edges += report.edges_removed
+            bridged += report.edges_bridged
+            versions += report.versions_purged
+        return BulkEraseReport(
+            memory_ids=erased,
+            chunks_removed=chunks,
+            edges_removed=edges,
+            edges_bridged=bridged,
+            versions_purged=versions,
+            derivatives=[d for d in derivatives if d not in erased],
+        )
+
+    async def write_keyed(
+        self,
+        memory: Memory,
+        *,
+        mode: ReplaceMode,
+        reason: str = "replaced under the same key",
+        now: datetime | None = None,
+    ) -> KeyedWrite:
+        from sqlalchemy.exc import IntegrityError
+
+        if memory.key is None:
+            raise ValidationError("write_keyed needs a memory with a key", field="key")
+        key = memory.key
+        when = _require_aware(now or utcnow())
+        try:
+            async with self._session() as session, session.begin():
+                await self._scope(session, memory.org_id)
+                await self._lock_key(session, memory.space_id, key)
+                active_row = await session.scalar(
+                    select(MemoryRow).where(
+                        MemoryRow.org_id == memory.org_id,
+                        MemoryRow.space_id == memory.space_id,
+                        MemoryRow.memory_key == key,
+                        MemoryRow.status == MemoryStatus.ACTIVE.value,
+                    )
+                )
+                if active_row is not None:
+                    active = self._to_memory(active_row)
+                    if keyed_unchanged(active, memory):
+                        return KeyedWrite(memory=active, unchanged=True, mode=mode)
+                    if active_row.id == memory.id:
+                        raise ValidationError(
+                            "a keyed write replaces the active row with a NEW memory; "
+                            f"{memory.id} is the row it would replace",
+                            field="id",
+                        )
+
+                replaced: list[str] = []
+                derivatives: list[str] = []
+                if mode is ReplaceMode.ERASE:
+                    holders = await self._key_holders(
+                        session, memory.org_id, memory.space_id, key
+                    )
+                    report = await self._erase_many_in_session(
+                        session, memory.org_id, memory.space_id, holders
+                    )
+                    replaced, derivatives = report.memory_ids, report.derivatives
+                elif active_row is not None:
+                    await self._set_status_in_session(
+                        session, active_row, MemoryStatus.SUPERSEDED, when
+                    )
+                    replaced.append(active_row.id)
+                # The old row must stop being ACTIVE before the new one lands,
+                # or the partial unique index sees two -- flush order within
+                # one flush is the unit of work's choice, not ours.
+                await session.flush()
+                await self._upsert_in_session(session, memory, when, fresh=True)
+                if mode is ReplaceMode.SUPERSEDE and active_row is not None:
+                    await session.flush()
+                    session.add(
+                        RelationEdgeRow(
+                            id=new_id("edge"),
+                            org_id=memory.org_id,
+                            space_id=memory.space_id,
+                            source_id=memory.id,
+                            target_id=active_row.id,
+                            type=RelationType.SUPERSEDES.value,
+                            reason=reason,
+                            confidence=1.0,
+                            created_at=when,
+                        )
+                    )
+        except IntegrityError as exc:
+            if "memories_pkey" in str(exc):
+                raise ConflictError(
+                    f"memory {memory.id} already exists; a keyed write creates a new one",
+                    field="id",
+                ) from exc
+            raise ConflictError(
+                f"key {key!r} was written concurrently; retry the write", field="key"
+            ) from exc
+        return KeyedWrite(
+            memory=memory,
+            unchanged=False,
+            mode=mode,
+            replaced=replaced,
+            derivatives=derivatives,
+        )
+
+    async def retire_keys(
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        status: MemoryStatus = MemoryStatus.ARCHIVED,
+        now: datetime | None = None,
+    ) -> list[Memory]:
+        wanted = list(dict.fromkeys(keys))
+        if not wanted:
+            return []
+        when = _require_aware(now or utcnow())
+        async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
+            rows = list(
+                await session.scalars(
+                    select(MemoryRow)
+                    .where(
+                        MemoryRow.org_id == org_id,
+                        MemoryRow.space_id == space_id,
+                        MemoryRow.memory_key.in_(wanted),
+                        MemoryRow.status == MemoryStatus.ACTIVE.value,
+                    )
+                    .with_for_update()
+                )
+            )
+            order = {key: i for i, key in enumerate(wanted)}
+            rows.sort(key=lambda r: order.get(str(r.memory_key), len(order)))
+            for row in rows:
+                await self._set_status_in_session(session, row, status, when)
+            await session.flush()
+            return [self._to_memory(r) for r in rows]
+
+    async def erase_by_key(self, org_id: str, space_id: str, key: str) -> BulkEraseReport:
+        async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
+            await self._lock_key(session, space_id, key)
+            holders = await self._key_holders(session, org_id, space_id, key)
+            return await self._erase_many_in_session(session, org_id, space_id, holders)
+
+    # -- bulk erasure and purge --------------------------------------------------
+
+    async def erase_by_tag(self, org_id: str, space_id: str, tag: str) -> BulkEraseReport:
+        async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
+            live = select(MemoryRow.id).where(
+                MemoryRow.org_id == org_id,
+                MemoryRow.space_id == space_id,
+                MemoryRow.tags.contains([tag]),
+            )
+            history = select(MemoryVersionRow.memory_id).where(
+                MemoryVersionRow.org_id == org_id,
+                MemoryVersionRow.space_id == space_id,
+                MemoryVersionRow.tags.contains([tag]),
+            )
+            ids = sorted({str(r[0]) for r in await session.execute(live.union(history))})
+            return await self._erase_many_in_session(session, org_id, space_id, ids)
+
+    async def purge_space(self, org_id: str, space_id: str) -> PurgeReport:
+        """Children first, in one transaction, counting as it goes.
+
+        Explicit deletes rather than leaning on the FK cascade from `spaces`:
+        `memory_versions` has no foreign key to cascade through, and the
+        counts are the attestation -- a cascade would report one row.
+        """
+
+        def count(result: Any) -> int:
+            return int(cast(CursorResult[Any], result).rowcount or 0)
+
+        async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
+            versions = count(
+                await session.execute(
+                    delete(MemoryVersionRow).where(
+                        MemoryVersionRow.org_id == org_id,
+                        MemoryVersionRow.space_id == space_id,
+                    )
+                )
+            )
+            edges = count(
+                await session.execute(
+                    delete(RelationEdgeRow).where(
+                        RelationEdgeRow.org_id == org_id,
+                        RelationEdgeRow.space_id == space_id,
+                    )
+                )
+            )
+            chunks = count(
+                await session.execute(
+                    delete(ChunkRow).where(
+                        ChunkRow.org_id == org_id,
+                        ChunkRow.space_id == space_id,
+                    )
+                )
+            )
+            memories = count(
+                await session.execute(
+                    delete(MemoryRow).where(
+                        MemoryRow.org_id == org_id,
+                        MemoryRow.space_id == space_id,
+                    )
+                )
+            )
+            spaces = count(
+                await session.execute(
+                    delete(SpaceRow).where(SpaceRow.id == space_id, SpaceRow.org_id == org_id)
+                )
+            )
+            return PurgeReport(
+                spaces=spaces,
+                memories=memories,
+                chunks=chunks,
+                relation_edges=edges,
+                memory_versions=versions,
+            )
 
     # -- relations: a typed, indexed graph ------------------------------------
 
@@ -1065,6 +1466,7 @@ class PostgresStore(MemoryStore):
             occurred_at=row.occurred_at,
             valid_from=row.valid_from,
             valid_to=row.valid_to,
+            key=row.memory_key,
         )
 
     async def get_memory_as_of(
@@ -1113,6 +1515,7 @@ class PostgresStore(MemoryStore):
                 status=version.status,
                 occurred_at=version.occurred_at,
                 version=version.version,
+                key=version.key,
                 chunks=[],
             )
 

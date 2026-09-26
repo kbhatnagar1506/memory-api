@@ -13,28 +13,56 @@ Two provider-specific details that matter:
   * Calls use the SDK's NATIVE ASYNC client, not the blocking client in a
     worker thread. The thread-based version deadlocked under load: see
     `_call` for the full post-mortem.
+
+Retries are split by who can do them properly -- see `classify_error`.
 """
 
 from __future__ import annotations
 
+import email.utils
 import os
+import re
+import time
 from typing import Any
 
 from ...core.errors import ConfigurationError, ProviderError
 from ...core.logging import get_logger
-from .base import EmbeddingProvider, Vector
+from .base import EmbeddingProvider, RetryDecision, Vector
 
 log = get_logger(__name__)
 
 TASK_DOCUMENT = "RETRIEVAL_DOCUMENT"
 TASK_QUERY = "RETRIEVAL_QUERY"
 
+#: Texts per request the Developer API accepts. 101 is a 400 (verified live),
+#: and a 400 is never retried, so an oversized batch fails every large write.
+DEVELOPER_API_MAX_BATCH = 100
+
+#: The default model. text-embedding-004 is retired on the Developer API.
+DEFAULT_MODEL = "gemini-embedding-001"
+
+#: Statuses the SDK's own retry loop handles: server-side and transient. 429
+#: is deliberately NOT here -- the SDK waits on a jittered exponential and
+#: ignores Retry-After/RetryInfo, which for a per-minute quota means retrying
+#: into the same closed window. MAPI's loop reads the hint instead.
+_SDK_RETRY_STATUSES = [500, 502, 503, 504]
+#: The SDK's backoff for those: first delay and jitter, in seconds (its own
+#: defaults). Module constants so tests driving the real SDK through a mock
+#: transport can shrink them instead of sleeping through them.
+_SDK_RETRY_INITIAL_DELAY_S = 1.0
+_SDK_RETRY_JITTER_S = 1.0
+
+#: Client errors a retry cannot fix: bad request, auth, missing model.
+_NEVER_RETRY = frozenset({400, 401, 403, 404, 409, 413, 422})
+
+_RETRY_DELAY = re.compile(r"^\s*(\d+(?:\.\d+)?)s\s*$")
+
 
 class GeminiEmbedder(EmbeddingProvider):
     def __init__(
         self,
         *,
-        model: str = "text-embedding-004",
+        model: str = DEFAULT_MODEL,
         dimensions: int = 768,
         batch_size: int = 32,
         timeout_s: float = 20.0,
@@ -42,8 +70,16 @@ class GeminiEmbedder(EmbeddingProvider):
         project: str | None = None,
         location: str = "global",
         api_key: str | None = None,
+        http_client: Any = None,
         **_: object,
     ) -> None:
+        """`http_client`: an `httpx.AsyncClient` for the SDK to send through.
+
+        None (the default) lets the SDK build its own. Passing one shares a
+        connection pool across embedders -- and it is how the retry tests put
+        a mock transport under the REAL SDK, so what they pin is the SDK's
+        actual error objects and retry loop rather than a stand-in for them.
+        """
         super().__init__(
             model=model,
             dimensions=dimensions,
@@ -65,9 +101,30 @@ class GeminiEmbedder(EmbeddingProvider):
         # aborts a stuck request. Set slightly above our own timeout so the
         # transport gives up first and raises, rather than us abandoning an
         # await while the request lives on.
-        http_options = genai_types.HttpOptions(timeout=int(timeout_s * 1000) + 5_000)
+        #
+        # The SDK retries server errors and dropped connections itself, with
+        # jittered backoff: that is what it does well, and it never saw a
+        # retry option before this (retry_options=None means one attempt).
+        # Two attempts, not five, because MAPI's own loop sits outside it and
+        # the two multiply.
+        http_options = genai_types.HttpOptions(
+            timeout=int(timeout_s * 1000) + 5_000,
+            retry_options=genai_types.HttpRetryOptions(
+                attempts=2,
+                initial_delay=_SDK_RETRY_INITIAL_DELAY_S,
+                jitter=_SDK_RETRY_JITTER_S,
+                max_delay=8.0,
+                http_status_codes=_SDK_RETRY_STATUSES,
+            ),
+            httpx_async_client=http_client,
+        )
 
         key = api_key or os.getenv("GEMINI_API_KEY")
+        if key and batch_size > DEVELOPER_API_MAX_BATCH:
+            raise ConfigurationError(
+                f"batch_size={batch_size} exceeds the Gemini Developer API's limit of "
+                f"{DEVELOPER_API_MAX_BATCH} texts per request"
+            )
         if key:
             self._client = genai.Client(api_key=key, http_options=http_options)
             self.backend = "developer-api"
@@ -92,7 +149,9 @@ class GeminiEmbedder(EmbeddingProvider):
     def name(self) -> str:
         return "gemini"
 
-    async def _call(self, texts: list[str], task_type: str) -> list[Vector]:
+    async def _call(
+        self, texts: list[str], task_type: str, *, sdk_retry: bool = True
+    ) -> list[Vector]:
         """Native async SDK call — no worker thread involved.
 
         This used to run the blocking client through `asyncio.to_thread` under
@@ -113,6 +172,14 @@ class GeminiEmbedder(EmbeddingProvider):
             "task_type": task_type,
             "output_dimensionality": self.dimensions,
         }
+        if not sdk_retry:
+            # The query path owns its whole budget: one retry at most, inside
+            # a deadline measured in hundreds of milliseconds. An SDK retry
+            # with a one-second initial delay cannot fit in it.
+            config["http_options"] = types.HttpOptions(
+                timeout=int(self.query_timeout_s * 1000) + 1_000,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            )
         response = await self._client.aio.models.embed_content(
             model=self.model,
             contents=list(texts),  # type: ignore[arg-type]  # SDK stub is narrower than runtime
@@ -143,10 +210,86 @@ class GeminiEmbedder(EmbeddingProvider):
         cached = self._cache_get(f"__query__{text}")
         if cached is not None:
             return cached
-        raw = await self._call([text], TASK_QUERY)
-        vec = self._validate(raw, 1)[0]
+        vec = await self._query_with_deadline(
+            lambda: self._call([text], TASK_QUERY, sdk_retry=False)
+        )
         self._cache_put(f"__query__{text}", vec)
         return vec
 
+    # -- failure classification ------------------------------------------
 
-__all__ = ["TASK_DOCUMENT", "TASK_QUERY", "GeminiEmbedder"]
+    def classify_error(self, exc: BaseException) -> RetryDecision:
+        """Sort a google-genai failure by who, if anyone, should retry it.
+
+        * 429: MAPI retries, waiting at least as long as the server asked
+          (Retry-After header, else the RetryInfo detail Gemini attaches).
+        * 5xx and dropped connections: the SDK has already retried with
+          backoff; MAPI may retry once more on top, as for any unknown
+          failure, which bounds a persistent outage at a few attempts.
+        * 400/401/403/404 and friends: nobody. A retired model, a bad key or
+          an oversized batch answers the same way every time.
+        """
+        try:
+            from google.genai import errors as genai_errors
+        except ImportError:  # pragma: no cover - the extra is installed if we exist
+            return super().classify_error(exc)
+        if not isinstance(exc, genai_errors.APIError):
+            return super().classify_error(exc)
+        code = int(exc.code or 0)
+        if code == 429:
+            return RetryDecision(
+                retryable=True,
+                retry_after=retry_after_seconds(exc),
+                rate_limited=True,
+                status=code,
+            )
+        if code in _NEVER_RETRY or (400 <= code < 500 and code != 408):
+            return RetryDecision(retryable=False, status=code)
+        return RetryDecision(retryable=True, status=code or None)
+
+
+def retry_after_seconds(exc: Any) -> float | None:
+    """The wait a 429 asked for, from the header or the error body.
+
+    Gemini states it in two places and not always both: an HTTP
+    `Retry-After` (seconds or an HTTP date) and a `google.rpc.RetryInfo`
+    entry in the error details (`"retryDelay": "34s"`). None when neither is
+    present or parseable -- the caller then falls back to its own backoff.
+    """
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    raw = headers.get("retry-after") if headers is not None else None
+    if raw:
+        value = str(raw).strip()
+        try:
+            return max(0.0, float(value))
+        except ValueError:
+            try:
+                when = email.utils.parsedate_to_datetime(value)
+            except (TypeError, ValueError):
+                when = None
+            if when is not None:
+                return max(0.0, when.timestamp() - time.time())
+
+    details = getattr(exc, "details", None)
+    body = details.get("error", details) if isinstance(details, dict) else None
+    entries = body.get("details") if isinstance(body, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        if not str(entry.get("@type", "")).endswith("google.rpc.RetryInfo"):
+            continue
+        match = _RETRY_DELAY.match(str(entry.get("retryDelay", "")))
+        if match:
+            return float(match.group(1))
+    return None
+
+
+__all__ = [
+    "DEFAULT_MODEL",
+    "DEVELOPER_API_MAX_BATCH",
+    "TASK_DOCUMENT",
+    "TASK_QUERY",
+    "GeminiEmbedder",
+    "retry_after_seconds",
+]

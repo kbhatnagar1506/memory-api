@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, status
 
 from ...core.errors import NotFoundError, ValidationError
 from ...core.ids import is_valid
-from ...domain.models import Scope, Space
+from ...domain.models import Scope, Space, utcnow
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, StoreDep, require_scope
 from ..schemas import (
     CreateSpaceRequest,
+    PurgeResponse,
     SpaceListResponse,
     SpaceResponse,
 )
@@ -95,6 +96,36 @@ async def delete_space(
         raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
     if not await store.delete_space(principal.org_id, space_id):
         raise NotFoundError(f"space {space_id} not found", field="space_id")
+
+
+@router.post(
+    "/{space_id}/purge",
+    response_model=PurgeResponse,
+    summary="Destroy a space and all of its history",
+)
+async def purge_space(
+    space_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_WRITE))],
+) -> PurgeResponse:
+    """The right-to-erasure form of DELETE. DELETE removes the live rows and
+    keeps version history as an audit trail, so a deleted space's content
+    stayed readable through `/versions`; purge removes versions, edges,
+    chunks, memories and the space in one transaction and reports each
+    count. Idempotent: purging again -- or purging a space DELETE already
+    removed -- returns 200, with zeros once nothing is left."""
+    if not is_valid(space_id, "space"):
+        raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
+    report = await service.purge_space(principal.org_id, space_id)
+    return PurgeResponse(
+        space_id=space_id,
+        spaces=report.spaces,
+        memories=report.memories,
+        chunks=report.chunks,
+        relation_edges=report.relation_edges,
+        memory_versions=report.memory_versions,
+        purged_at=utcnow().isoformat(),
+    )
 
 
 __all__ = ["router"]

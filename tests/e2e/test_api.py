@@ -831,11 +831,16 @@ async def test_erase_reports_derived_memories(client, space_id) -> None:
     assert attestation["edges_removed"] == 1
 
 
-async def test_erase_missing_memory_is_404(client, space_id) -> None:
+async def test_erase_missing_memory_is_idempotent(client, space_id) -> None:
+    """Erase is idempotent (DECISIONS.md): nothing left to erase is a 200
+    that says so, not a 404 that makes a retried compliance request fail."""
     response = await client.post(
         f"/v1/spaces/{space_id}/memories/mem_00000000000000000000000000/erase"
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["already_erased"] is True
+    assert body["versions_purged"] == 0 and body["chunks_removed"] == 0
 
 
 async def test_erase_requires_write_scope(app_context, space_id) -> None:

@@ -92,7 +92,9 @@ class Settings(BaseSettings):
 
     # -- embeddings -------------------------------------------------------
     embedding_backend: EmbeddingBackend = EmbeddingBackend.DETERMINISTIC
-    embedding_model: str = "text-embedding-004"
+    #: text-embedding-004 is retired on the Gemini Developer API (404). Its
+    #: successor, asked for 768 dimensions, fits the Vector(768) column as is.
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimensions: int = Field(default=768, ge=8, le=4096)
     embedding_batch_size: int = Field(default=32, ge=1, le=512)
     embedding_timeout_s: float = Field(default=20.0, gt=0)

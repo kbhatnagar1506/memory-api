@@ -13,12 +13,89 @@ slot), so it is banned here even though this path is lower-volume.
 
 from __future__ import annotations
 
+import os
+import re
+from typing import Any
+
 from ...config import Settings, SynthesisBackend
 from ...core.errors import ConfigurationError
 from ...core.logging import get_logger
 from .derive import CompleteFn
 
 log = get_logger(__name__)
+
+#: Model families that take a thinking BUDGET (a token count). Everything
+#: newer -- 3.x and the `-latest` aliases, which now resolve to 3.x -- takes
+#: a thinking LEVEL instead, and treats a budget as a legacy hint it may
+#: refuse: measured on the Developer API, gemini-3.5-flash-lite and
+#: gemini-flash-lite-latest answer `thinking_budget=0` with 400
+#: INVALID_ARGUMENT, and gemini-3.1-pro-preview refuses budget 0 outright.
+_BUDGET_FAMILIES = re.compile(r"^gemini-[12](\.\d+)?-")
+
+
+def uses_thinking_levels(model: str) -> bool:
+    """Whether `model` is configured by thinking level rather than budget."""
+    return _BUDGET_FAMILIES.match(model.rsplit("/", 1)[-1].lower()) is None
+
+
+def thinking_level_for(model: str, budget: int) -> str:
+    """The thinking level that stands in for a token budget on a level model.
+
+    The settings stay budgets -- one knob per path, meaningful on every
+    family -- and this maps them onto the four levels: 0 (think as little as
+    the model allows) is MINIMAL, a small allowance LOW, a working one
+    MEDIUM, a large one HIGH. Pro models have no MINIMAL (measured: 400
+    "Thinking level MINIMAL is not supported"), so theirs floors at LOW.
+    """
+    if budget <= 0:
+        level = "MINIMAL"
+    elif budget <= 1024:
+        level = "LOW"
+    elif budget <= 8192:
+        level = "MEDIUM"
+    else:
+        level = "HIGH"
+    if level == "MINIMAL" and "pro" in model.rsplit("/", 1)[-1].lower().split("-"):
+        level = "LOW"
+    return level
+
+
+def _thinking_config(genai_types: Any, model: str, budget: int) -> Any:
+    if uses_thinking_levels(model):
+        level = getattr(genai_types.ThinkingLevel, thinking_level_for(model, budget))
+        return genai_types.ThinkingConfig(thinking_level=level)
+    return genai_types.ThinkingConfig(thinking_budget=budget)
+
+
+def _client(settings: Settings, genai: Any, genai_types: Any) -> Any:
+    """A Gemini client: Vertex when a project is configured, else an API key.
+
+    Completion was Vertex-only, so a deployment whose only Google credential
+    is an API key (facemash's MAPI VM, which has no aiplatform role) could
+    embed but never derive, chat, extract or classify a query. The key --
+    `MAPI_GEMINI_API_KEY`, or the SDK's own `GEMINI_API_KEY` -- now works too.
+
+    Project FIRST, unlike the embedder, so that no configuration that worked
+    before changes route: a deployment holding both a project and a key kept
+    completing on Vertex, and the Developer API does not serve every model
+    Vertex does (gemini-2.5-flash, still the default here, answers 404 there).
+    The key is reached only where the old code raised.
+    """
+    http_options = genai_types.HttpOptions(timeout=60_000)
+    if settings.google_cloud_project:
+        return genai.Client(
+            vertexai=True,
+            project=settings.google_cloud_project,
+            location=settings.google_cloud_location,
+            http_options=http_options,
+        )
+    key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
+    if key:
+        return genai.Client(api_key=key, http_options=http_options)
+    raise ConfigurationError(
+        "synthesis_backend=gemini requires google_cloud_project, or gemini_api_key "
+        "(or GEMINI_API_KEY) for the Developer API"
+    )
 
 
 def _gemini(
@@ -33,18 +110,15 @@ def _gemini(
     which parses to nothing and looks exactly like "this passage contained
     no facts". A silent, plausible zero is the worst failure shape
     available, so truncation is logged rather than swallowed.
+
+    On 3.x models the budget is expressed as a thinking level instead; see
+    `thinking_level_for`.
     """
-    if not settings.google_cloud_project:
-        raise ConfigurationError("synthesis_backend=gemini requires google_cloud_project")
     from google import genai
     from google.genai import types as genai_types
 
-    client = genai.Client(
-        vertexai=True,
-        project=settings.google_cloud_project,
-        location=settings.google_cloud_location,
-        http_options=genai_types.HttpOptions(timeout=60_000),
-    )
+    client = _client(settings, genai, genai_types)
+    thinking = _thinking_config(genai_types, model, thinking_budget)
 
     async def complete(prompt: str) -> str:
         response = await client.aio.models.generate_content(
@@ -53,7 +127,7 @@ def _gemini(
             config=genai_types.GenerateContentConfig(
                 temperature=0.0,
                 max_output_tokens=max_output_tokens,
-                thinking_config=genai_types.ThinkingConfig(thinking_budget=thinking_budget),
+                thinking_config=thinking,
             ),
         )
         candidates = response.candidates or []
@@ -103,8 +177,17 @@ def build_extractor(settings: Settings) -> CompleteFn | None:
 
     Split so both can be pointed at different models without one dragging
     the other.
+
+    Off unless `write_extraction` asks for it. This callable is what every
+    write-path model call goes through -- claim extraction AND supersession
+    and contradiction adjudication -- so building it whenever synthesis was
+    on meant that turning on /derive or /chat also put a model call (and its
+    latency, cost and rate limit) on every write. Write-time extraction was
+    measured and declined (d3eb07b); it is now a separate decision.
     """
     if settings.synthesis_backend is SynthesisBackend.NONE:
+        return None
+    if not settings.write_extraction:
         return None
     if settings.synthesis_backend is SynthesisBackend.GEMINI:
         return _gemini(
@@ -139,4 +222,10 @@ def build_understander(settings: Settings) -> CompleteFn | None:
     raise ConfigurationError(f"unknown synthesis backend: {settings.synthesis_backend}")
 
 
-__all__ = ["build_completer", "build_extractor", "build_understander"]
+__all__ = [
+    "build_completer",
+    "build_extractor",
+    "build_understander",
+    "thinking_level_for",
+    "uses_thinking_levels",
+]

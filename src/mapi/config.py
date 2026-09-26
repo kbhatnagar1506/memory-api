@@ -358,6 +358,23 @@ class Settings(BaseSettings):
     #: eval arm H compares 200 against a self-describing first line.
     contextual_min_chars: int = Field(default=0, ge=0, le=100_000)
 
+    # -- write-path model use ------------------------------------------------
+    #: Whether writes call the synthesis model at all: claim extraction, and
+    #: the adjudication that confirms a proposed supersession or contradiction.
+    #: Separate from `synthesis_backend` so that turning on /derive or /chat
+    #: does not also put a model call on every write -- extraction was
+    #: measured net-negative on recall and declined (d3eb07b), and on a
+    #: bulk ingest it is the throughput and rate-limit ceiling. With it off,
+    #: supersessions are still proposed by similarity, just never confirmed
+    #: by a model, exactly as with no synthesis backend.
+    write_extraction: bool = Field(
+        default=False,
+        description=(
+            "Run claim extraction and supersession/contradiction adjudication on "
+            "writes. Needs synthesis_backend; off by default."
+        ),
+    )
+
     @field_validator("chunk_overlap_tokens")
     @classmethod
     def _overlap_fits(cls, v: int, info: ValidationInfo) -> int:

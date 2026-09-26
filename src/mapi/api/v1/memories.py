@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
+from ...bulkwrite import BulkStats
 from ...core.errors import ProviderError, ValidationError
 from ...core.ids import is_valid
 from ...domain.models import MAX_KEY_CHARS, MemoryKind, MemoryStatus, RelationType, Scope
@@ -146,9 +147,11 @@ async def bulk_create(
     trouble instead of a 200 full of item errors.
     """
     _validate_space_id(space_id)
+    stats = BulkStats()
     outcomes = await service.ingest_many(
         org_id=principal.org_id,
         space_id=space_id,
+        stats=stats,
         items=[
             IngestItem(
                 content=item.content,
@@ -167,6 +170,16 @@ async def bulk_create(
         upstream = next((o.error for o in outcomes if isinstance(o.error, ProviderError)), None)
         if upstream is not None:
             raise upstream
+    # Where the time went, for the caller's own logs: the server's are
+    # `bulk_ingest`. Server-Timing is the standard carrier and changes no body.
+    response.headers["server-timing"] = ", ".join(
+        [
+            f"db;dur={stats.db_ms:.1f}",
+            f"embed;dur={stats.embed_ms:.1f}",
+            f"cpu;dur={stats.cpu_ms:.1f}",
+            f"total;dur={stats.total_ms:.1f}",
+        ]
+    )
     items = [_to_bulk_item(o, expose_detail=settings.debug_errors) for o in outcomes]
     created = sum(1 for i in items if i.created)
     if not created:

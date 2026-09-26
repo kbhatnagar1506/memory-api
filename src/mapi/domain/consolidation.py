@@ -24,8 +24,10 @@ per-request and per-space.
 
 from __future__ import annotations
 
+import contextlib
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -173,7 +175,39 @@ def differs_materially(left: str, right: str) -> bool:
     copies of a restatement, which costs a row. The failure it prevents costs
     a fact.
     """
-    return set(_DISTINCTIVE.findall(left.lower())) != set(_DISTINCTIVE.findall(right.lower()))
+    return _distinctive(left) != _distinctive(right)
+
+
+#: Distinctive-token sets by text, for the duration of one `distinctive_memo()`.
+_DISTINCTIVE_MEMO: ContextVar[dict[str, frozenset[str]] | None] = ContextVar(
+    "mapi_distinctive_memo", default=None
+)
+
+
+def _distinctive(text: str) -> frozenset[str]:
+    memo = _DISTINCTIVE_MEMO.get()
+    if memo is None:
+        return frozenset(_DISTINCTIVE.findall(text.lower()))
+    found = memo.get(text)
+    if found is None:
+        found = frozenset(_DISTINCTIVE.findall(text.lower()))
+        memo[text] = found
+    return found
+
+
+@contextlib.contextmanager
+def distinctive_memo() -> Iterator[None]:
+    """Remember `differs_materially`'s token sets inside this block.
+
+    The near-duplicate check runs it against every candidate before looking
+    at similarity, so a bulk write re-scanned the same texts thousands of
+    times. A pure function of the text; scoped like `similarity_memo`.
+    """
+    token = _DISTINCTIVE_MEMO.set({})
+    try:
+        yield
+    finally:
+        _DISTINCTIVE_MEMO.reset(token)
 
 
 def detect_near_duplicate(
@@ -426,6 +460,7 @@ __all__ = [
     "detect_exact_duplicate",
     "detect_near_duplicate",
     "differs_materially",
+    "distinctive_memo",
     "keyed_unchanged",
     "merge_duplicate",
     "propose_contradictions",

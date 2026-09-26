@@ -44,7 +44,9 @@ picture legible as the corpus grows.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Iterator, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .embeddings.base import Vector, cosine_similarity
@@ -83,8 +85,38 @@ class AssociationProposal:
     confidence: float
 
 
+#: Entity sets by text, for the duration of one `entity_memo()` block.
+_ENTITY_MEMO: ContextVar[dict[str, frozenset[str]] | None] = ContextVar(
+    "mapi_entity_memo", default=None
+)
+
+
+@contextlib.contextmanager
+def entity_memo() -> Iterator[None]:
+    """Remember `_entities` answers inside this block.
+
+    Extraction is a pure function of the text, and the write path runs it on
+    every neighbour of every write: a 91-item bulk of 1-4 KB sections scanned
+    the same few hundred texts ~3,800 times, over a second of CPU. Scoped to
+    one unit of work (a bulk write) rather than a process-wide cache, because
+    the keys are whole memory texts.
+    """
+    token = _ENTITY_MEMO.set({})
+    try:
+        yield
+    finally:
+        _ENTITY_MEMO.reset(token)
+
+
 def _entities(text: str) -> set[str]:
-    return set(extract_entities(text, max_entities=12))
+    memo = _ENTITY_MEMO.get()
+    if memo is None:
+        return set(extract_entities(text, max_entities=12))
+    found = memo.get(text)
+    if found is None:
+        found = frozenset(extract_entities(text, max_entities=12))
+        memo[text] = found
+    return set(found)
 
 
 def propose_associations(
@@ -160,5 +192,6 @@ __all__ = [
     "MIN_SIMILARITY",
     "TAG_SIMILARITY_FLOOR",
     "AssociationProposal",
+    "entity_memo",
     "propose_associations",
 ]

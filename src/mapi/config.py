@@ -403,6 +403,13 @@ class Settings(BaseSettings):
         ),
     )
 
+    # -- write path: bulk round trips -------------------------------------------
+    #: Write a bulk request's items in ONE store transaction with batched
+    #: statements (`bulkwrite`), instead of a session per store call per item.
+    #: Same decisions, same order; ~a dozen round trips per request instead of
+    #: ~35 per item. False restores the sequential path without a deploy.
+    bulk_write_batching: bool = True
+
     # -- read path: per-request round trips (B6-B8, B13) ----------------------
     #
     # Every knob here trades a little staleness or a little memory for fewer

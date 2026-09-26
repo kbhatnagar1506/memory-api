@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import contextlib
 import math
 import time
 import unicodedata
 from array import array
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from ...core.errors import ConfigurationError, ProviderError, ProviderTimeoutError
@@ -86,12 +88,88 @@ def normalize_query(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", text).split())
 
 
+class _SimilarityMemo:
+    """Pairwise cosines and per-vector norms, remembered by object identity.
+
+    The write path asks the same question several times per candidate: the
+    near-duplicate check, both belief-revision proposers and the association
+    pass each compute cosine(new, neighbour) for the same pair of lists. On a
+    91-item bulk that was ~17,000 pure-Python 768-dimension loops, seconds of
+    CPU for a few thousand distinct answers.
+
+    Bit-identical to the plain function, which is the point: the three sums
+    are the same float operations in the same order whether they share a loop
+    or not, so every threshold decision is unchanged. Keyed by `id()`, so it
+    holds a reference to every vector it has seen -- an id cannot be recycled
+    while the memo is alive -- and it only lives for one `similarity_memo()`
+    block.
+    """
+
+    __slots__ = ("held", "norms", "pairs")
+
+    def __init__(self) -> None:
+        self.norms: dict[int, float] = {}
+        self.pairs: dict[tuple[int, int], float] = {}
+        self.held: list[Sequence[float]] = []
+
+    def _norm(self, v: Sequence[float]) -> float:
+        key = id(v)
+        found = self.norms.get(key)
+        if found is None:
+            found = 0.0
+            for x in v:
+                found += x * x
+            self.norms[key] = found
+            self.held.append(v)
+        return found
+
+    def cosine(self, a: Sequence[float], b: Sequence[float]) -> float:
+        ia, ib = id(a), id(b)
+        key = (ia, ib) if ia <= ib else (ib, ia)
+        found = self.pairs.get(key)
+        if found is not None:
+            return found
+        na, nb = self._norm(a), self._norm(b)
+        dot = 0.0
+        for x, y in zip(a, b, strict=True):
+            dot += x * y
+        if na == 0.0 or nb == 0.0:
+            result = 0.0
+        else:
+            result = max(-1.0, min(1.0, dot / math.sqrt(na * nb)))
+        self.pairs[key] = result
+        return result
+
+
+_SIMILARITY_MEMO: ContextVar[_SimilarityMemo | None] = ContextVar(
+    "mapi_similarity_memo", default=None
+)
+
+
+@contextlib.contextmanager
+def similarity_memo() -> Iterator[None]:
+    """Remember every `cosine_similarity` answer inside this block.
+
+    For a bounded unit of work that compares the same vectors repeatedly --
+    one bulk write. Results are bit-identical to the unmemoized function;
+    see `_SimilarityMemo`.
+    """
+    token = _SIMILARITY_MEMO.set(_SimilarityMemo())
+    try:
+        yield
+    finally:
+        _SIMILARITY_MEMO.reset(token)
+
+
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
     """Cosine similarity, clamped to [-1, 1] against float drift."""
     if len(a) != len(b):
         raise ValueError(f"dimension mismatch: {len(a)} vs {len(b)}")
     if not a:
         raise ValueError("cannot compare empty vectors")
+    memo = _SIMILARITY_MEMO.get()
+    if memo is not None:
+        return memo.cosine(a, b)
     dot = na = nb = 0.0
     for x, y in zip(a, b, strict=True):
         dot += x * y
@@ -531,4 +609,5 @@ __all__ = [
     "cosine_similarity",
     "l2_normalize",
     "normalize_query",
+    "similarity_memo",
 ]

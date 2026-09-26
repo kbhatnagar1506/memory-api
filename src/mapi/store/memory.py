@@ -535,8 +535,14 @@ class InMemoryStore(MemoryStore):
         return None
 
     async def get_active_by_keys(
-        self, org_id: str, space_id: str, keys: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
+        del with_embeddings  # vectors are in process; nothing to save
         found: dict[str, Memory] = {}
         for key in dict.fromkeys(keys):
             memory = self._active_by_key_locked(org_id, space_id, key)

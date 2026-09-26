@@ -300,6 +300,8 @@ async def test_http_bulk_reports_each_item(client, space_id) -> None:
     assert items[1]["duplicate_of"] == items[0]["memory"]["id"]
     assert items[2]["memory"]["key"] == "k:1"
     assert all(i["error"] is None for i in items)
+    timing = response.headers["server-timing"].split(", ")
+    assert [part.split(";")[0] for part in timing] == ["db", "embed", "cpu", "total"]
 
 
 async def test_http_bulk_carries_per_item_errors(client, space_id, app_context) -> None:

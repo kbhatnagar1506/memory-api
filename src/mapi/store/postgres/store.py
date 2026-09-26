@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
@@ -68,6 +69,7 @@ from ..base import (
     TenantUsage,
     VectorHit,
 )
+from ..bulk import BulkSession
 from .models import (
     ApiKeyRow,
     Base,
@@ -418,6 +420,14 @@ class PostgresStore(MemoryStore):
 
     async def aclose(self) -> None:
         await self._engine.dispose()
+
+    def bulk_session(
+        self, org_id: str, space_id: str, *, neighbour_limit: int
+    ) -> AbstractAsyncContextManager[BulkSession]:
+        """A bulk write in one transaction; see `store/postgres/bulk.py`."""
+        from .bulk import postgres_bulk_session
+
+        return postgres_bulk_session(self, org_id, space_id, neighbour_limit=neighbour_limit)
 
     async def ping(self) -> bool:
         try:
@@ -1196,7 +1206,12 @@ class PostgresStore(MemoryStore):
         return found.get(digest)
 
     async def find_by_content_hashes(
-        self, org_id: str, space_id: str, digests: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        digests: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
         """One query for a whole bulk request's exact-duplicate gate.
 
@@ -1208,7 +1223,7 @@ class PostgresStore(MemoryStore):
             return {}
         async with self._session() as session:
             await self._scope(session, org_id)
-            rows = await session.scalars(
+            stmt = (
                 select(MemoryRow)
                 .where(
                     MemoryRow.org_id == org_id,
@@ -1219,6 +1234,9 @@ class PostgresStore(MemoryStore):
                 )
                 .order_by(MemoryRow.id)
             )
+            if not with_embeddings:
+                stmt = stmt.options(_CHUNKS_WITHOUT_VECTORS)
+            rows = await session.scalars(stmt)
             found: dict[str, Memory] = {}
             for row in rows:
                 found.setdefault(row.content_sha256, self._to_memory(row))
@@ -1227,21 +1245,27 @@ class PostgresStore(MemoryStore):
     # -- keyed memories --------------------------------------------------------
 
     async def get_active_by_keys(
-        self, org_id: str, space_id: str, keys: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
         wanted = list(dict.fromkeys(keys))
         if not wanted:
             return {}
         async with self._session() as session:
             await self._scope(session, org_id)
-            rows = await session.scalars(
-                select(MemoryRow).where(
-                    MemoryRow.org_id == org_id,
-                    MemoryRow.space_id == space_id,
-                    MemoryRow.memory_key.in_(wanted),
-                    MemoryRow.status == MemoryStatus.ACTIVE.value,
-                )
+            stmt = select(MemoryRow).where(
+                MemoryRow.org_id == org_id,
+                MemoryRow.space_id == space_id,
+                MemoryRow.memory_key.in_(wanted),
+                MemoryRow.status == MemoryStatus.ACTIVE.value,
             )
+            if not with_embeddings:
+                stmt = stmt.options(_CHUNKS_WITHOUT_VECTORS)
+            rows = await session.scalars(stmt)
             return {str(r.memory_key): self._to_memory(r) for r in rows}
 
     @staticmethod

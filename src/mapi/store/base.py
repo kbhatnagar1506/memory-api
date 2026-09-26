@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -35,6 +36,7 @@ from ..domain.models import (
     Space,
     User,
 )
+from .bulk import BulkSession, replay_session
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,13 +373,21 @@ class MemoryStore(abc.ABC):
         """
 
     async def find_by_content_hashes(
-        self, org_id: str, space_id: str, digests: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        digests: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
         """Batch form of `find_by_content_hash`, for bulk ingest.
 
         Concrete on the ABC as a loop so every backend has it; the Postgres
         backend overrides it with one query, which is the point of batching.
+        `with_embeddings=False` as for `get_memories`: bulk ingest's first
+        pass only asks WHETHER a digest is held.
         """
+        del with_embeddings
         found: dict[str, Memory] = {}
         for digest in dict.fromkeys(digests):
             memory = await self.find_by_content_hash(org_id, space_id, digest)
@@ -389,9 +399,16 @@ class MemoryStore(abc.ABC):
 
     @abc.abstractmethod
     async def get_active_by_keys(
-        self, org_id: str, space_id: str, keys: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
-        """The ACTIVE memory holding each key. Keys with none are absent."""
+        """The ACTIVE memory holding each key. Keys with none are absent.
+
+        `with_embeddings=False` as for `get_memories`."""
 
     @abc.abstractmethod
     async def write_keyed(
@@ -756,6 +773,22 @@ class MemoryStore(abc.ABC):
         self, org_id: str, space_id: str, *, limit: int
     ) -> list[tuple[str, Vector]]:
         """(memory_id, embedding) pairs, for dedup and supersession checks."""
+
+    # -- batched bulk writes -------------------------------------------------
+
+    def bulk_session(
+        self, org_id: str, space_id: str, *, neighbour_limit: int
+    ) -> AbstractAsyncContextManager[BulkSession]:
+        """One unit of work for a bulk write; see `store.bulk`.
+
+        The default replays the bulk's operations through this store's own
+        methods, which is correct for any backend and batches nothing. The
+        Postgres backend overrides it with one transaction and multi-row
+        statements. `neighbour_limit` is the per-query neighbour count the
+        caller will ask for, so a backend can size its ANN settings once.
+        """
+        del neighbour_limit
+        return replay_session(self, org_id, space_id)
 
     # -- listing and operator helpers ----------------------------------------
     #

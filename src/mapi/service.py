@@ -23,6 +23,14 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
+from .bulkwrite import (
+    BulkStats,
+    BulkView,
+    NeedsSequential,
+    TimedSession,
+    WriteStore,
+    timed_session,
+)
 from .config import Settings
 from .core.errors import (
     MapiError,
@@ -34,7 +42,7 @@ from .core.errors import (
 from .core.logging import get_logger
 from .core.metrics import EMBEDDINGS, INGESTED, SEARCH_LATENCY, SEARCH_STAGE_LATENCY
 from .core.quota import Quota, check_bytes, check_memories, check_writes
-from .domain.association import propose_associations
+from .domain.association import entity_memo, propose_associations
 from .domain.chunking import TextChunk, chunk_text, normalize
 from .domain.consolidation import (
     CONTRADICT_LOW,
@@ -43,13 +51,14 @@ from .domain.consolidation import (
     apply_supersession,
     dedupe_candidates,
     detect_near_duplicate,
+    distinctive_memo,
     keyed_unchanged,
     merge_duplicate,
     propose_contradictions,
     propose_supersessions,
     unexplained_pairs,
 )
-from .domain.embeddings.base import EmbeddingProvider
+from .domain.embeddings.base import EmbeddingProvider, similarity_memo
 from .domain.embeddings.context import build_header, for_embedding, wants_header
 from .domain.models import (
     Chunk,
@@ -192,6 +201,24 @@ class _Prepared:
             for piece, vector in zip(self.pieces, vectors, strict=True)
         ]
         return self.memory.model_copy(update={"chunks": chunks})
+
+
+@dataclass(slots=True)
+class _Stage3:
+    """What bulk ingest's write stage works from, shared by both its paths."""
+
+    prepared: dict[int, _Prepared]
+    vectors: dict[int, list[list[float]]]
+    #: Stage 1's snapshots: ACTIVE row per key, exact-duplicate holder per digest.
+    active: dict[str, Memory]
+    by_hash: dict[str, Memory]
+    repeated: set[int]
+    outcomes: list[BulkOutcome]
+    dedupe: bool
+    auto_supersede: bool
+    detect_conflicts: bool
+    extract: bool
+    stats: BulkStats
 
 
 class MemoryService:
@@ -485,6 +512,8 @@ class MemoryService:
         self,
         memory: Memory,
         shortlist: Sequence[Any],
+        *,
+        store: WriteStore | None = None,
     ) -> list[Any]:
         """Keep only the shortlisted supersessions the model agrees with."""
         if not shortlist:
@@ -495,7 +524,9 @@ class MemoryService:
             log.info("supersessions_unconfirmed", count=len(shortlist))
             return []
         by_id = {p.old_id: p for p in shortlist}
-        existing = await self.store.get_memories(memory.org_id, memory.space_id, list(by_id))
+        existing = await (store or self.store).get_memories(
+            memory.org_id, memory.space_id, list(by_id)
+        )
         pairs = [(mid, m.content) for mid, m in existing.items()]
         verdicts = await adjudicate_supersessions(memory.content, pairs, self.extractor)
         # Carry the ADJUDICATOR's reason onto the edge, not the cosine
@@ -539,6 +570,8 @@ class MemoryService:
         self,
         memory: Memory,
         shortlist: Sequence[ContradictionProposal],
+        *,
+        store: WriteStore | None = None,
     ) -> list[ContradictionProposal]:
         """Keep only the shortlisted conflicts the model agrees with.
 
@@ -553,7 +586,9 @@ class MemoryService:
             log.info("conflicts_unconfirmed", count=len(shortlist))
             return []
         by_id = {p.right_id: p for p in shortlist}
-        existing = await self.store.get_memories(memory.org_id, memory.space_id, list(by_id))
+        existing = await (store or self.store).get_memories(
+            memory.org_id, memory.space_id, list(by_id)
+        )
         verdicts = await adjudicate_contradictions(
             memory.content,
             [(mid, m.content) for mid, m in existing.items()],
@@ -784,20 +819,26 @@ class MemoryService:
             raise
         return result.vectors
 
-    async def _fold_exact_duplicate(self, prepared: _Prepared) -> IngestResult | None:
+    async def _fold_exact_duplicate(
+        self, prepared: _Prepared, *, store: WriteStore | None = None
+    ) -> IngestResult | None:
         """Merge an exact restatement into the memory already holding it.
 
         Looks the holder up at write time, always. Only ACTIVE unkeyed
         memories qualify -- see `consolidation.dedupe_eligible`.
+
+        `store` (here and on the other write stages) is the real store, or
+        a bulk request's `BulkView` over it; see `bulkwrite`.
         """
+        store = store or self.store
         memory = prepared.memory
-        existing = await self.store.find_by_content_hash(
+        existing = await store.find_by_content_hash(
             memory.org_id, memory.space_id, memory.content_sha256
         )
         if existing is None:
             return None
         merged = merge_duplicate(existing, memory)
-        await self.store.upsert_memory(merged)
+        await store.upsert_memory(merged)
         INGESTED.labels(outcome="duplicate_exact").inc()
         return IngestResult(
             memory=merged,
@@ -828,6 +869,7 @@ class MemoryService:
         *,
         known: Memory | None = None,
         looked_up: bool = False,
+        store: WriteStore | None = None,
     ) -> IngestResult:
         """Replace whatever holds this key, atomically; or do nothing at all.
 
@@ -836,22 +878,21 @@ class MemoryService:
         inside `store.write_keyed`, under the key's lock, because another
         writer may have moved the key in between.
         """
+        store = store or self.store
         memory = prepared.memory
         org_id, space_id, key = memory.org_id, memory.space_id, memory.key
         if key is None:  # pragma: no cover - callers route on the key
             raise ValidationError("a keyed write needs a key", field="key")
         active = known
         if not looked_up:
-            found = await self.store.get_active_by_keys(org_id, space_id, [key])
+            found = await store.get_active_by_keys(org_id, space_id, [key])
             active = found.get(key)
         if active is not None and keyed_unchanged(active, memory):
             return self._unchanged(active)
 
         if vectors is None:
             vectors = await self._embed_prepared(prepared)
-        outcome = await self.store.write_keyed(
-            prepared.with_vectors(vectors), mode=prepared.replace
-        )
+        outcome = await store.write_keyed(prepared.with_vectors(vectors), mode=prepared.replace)
         if outcome.unchanged:
             return self._unchanged(outcome.memory)
 
@@ -859,10 +900,15 @@ class MemoryService:
             # The replaced row still exists, so its derivation edges do too.
             for old_id in outcome.replaced:
                 await self._mark_derivations_stale(
-                    org_id, space_id, await self._direct_derivatives(org_id, space_id, old_id)
+                    org_id,
+                    space_id,
+                    await self._direct_derivatives(org_id, space_id, old_id, store=store),
+                    store=store,
                 )
         else:
-            await self._mark_derivations_stale(org_id, space_id, outcome.derivatives)
+            await self._mark_derivations_stale(
+                org_id, space_id, outcome.derivatives, store=store
+            )
         INGESTED.labels(outcome="created").inc()
         return IngestResult(
             memory=outcome.memory,
@@ -882,8 +928,10 @@ class MemoryService:
         detect_conflicts: bool = True,
         extract: bool = True,
         claims: Sequence[Claim] | None = None,
+        store: WriteStore | None = None,
     ) -> IngestResult:
         """The consolidation pipeline for a write with its vectors in hand."""
+        store = store or self.store
         memory = prepared.with_vectors(vectors)
         org_id, space_id = memory.org_id, memory.space_id
         cleaned = memory.content
@@ -898,7 +946,7 @@ class MemoryService:
         # compare vectors.
         pairs: list[tuple[Memory, list[float]]] = []
         if chunks:
-            pairs = await self.store.neighbours(
+            pairs = await store.neighbours(
                 org_id,
                 space_id,
                 chunks[0].embedding or [],
@@ -920,10 +968,10 @@ class MemoryService:
                 texts={m.id: m.content for m, _ in mergeable},
             )
             if verdict.is_duplicate and verdict.existing_id:
-                existing = await self.store.get_memory(org_id, space_id, verdict.existing_id)
+                existing = await store.get_memory(org_id, space_id, verdict.existing_id)
                 if existing is not None:
                     merged = merge_duplicate(existing, memory)
-                    await self.store.upsert_memory(merged)
+                    await store.upsert_memory(merged)
                     INGESTED.labels(outcome="duplicate_near").inc()
                     return IngestResult(
                         memory=merged,
@@ -994,7 +1042,7 @@ class MemoryService:
             floor = self.settings.supersede_min_confidence
             shortlist = [p for p in all_proposals if p.confidence >= floor]
             declined = [p.old_id for p in all_proposals if p.confidence < floor]
-            proposals = await self._confirm_supersessions(memory, shortlist)
+            proposals = await self._confirm_supersessions(memory, shortlist, store=store)
             # Compare by TARGET ID, not by proposal value.
             #
             # This was `[p.old_id for p in shortlist if p not in proposals]`,
@@ -1056,7 +1104,9 @@ class MemoryService:
                 conflict_shortlist += self._unexplained_conflicts(
                     memory, chunks[0].embedding or [], pairs
                 )
-                conflict_proposals = await self._confirm_conflicts(memory, conflict_shortlist)
+                conflict_proposals = await self._confirm_conflicts(
+                    memory, conflict_shortlist, store=store
+                )
                 # A pair cannot be BOTH revised and disputed. Supersession
                 # says time orders them; contradiction says nothing does, and
                 # they mean opposite things to a reader -- one hides the old
@@ -1073,7 +1123,7 @@ class MemoryService:
                 ]
             # The memory must exist before an edge can point at it: the edge
             # has a foreign key to both endpoints.
-            memory = await self.store.upsert_memory(memory)
+            memory = await store.upsert_memory(memory)
 
             for conflict in conflict_proposals:
                 # `contradicts` is symmetric, so both directions are written --
@@ -1084,7 +1134,7 @@ class MemoryService:
                     (memory.id, conflict.right_id),
                     (conflict.right_id, memory.id),
                 ):
-                    await self.store.create_relation(
+                    await store.create_relation(
                         RelationEdge(
                             org_id=org_id,
                             space_id=space_id,
@@ -1101,7 +1151,7 @@ class MemoryService:
                 # One direction only. `references` is read through
                 # `list_relations` in both directions anyway, and writing
                 # both would double an already-dense edge type.
-                await self.store.create_relation(
+                await store.create_relation(
                     RelationEdge(
                         org_id=org_id,
                         space_id=space_id,
@@ -1114,22 +1164,25 @@ class MemoryService:
                 )
 
             for proposal in proposals:
-                old = await self.store.get_memory(org_id, space_id, proposal.old_id)
+                old = await store.get_memory(org_id, space_id, proposal.old_id)
                 if old is None:
                     continue
                 edge, updated_old = apply_supersession(memory, old, proposal)
-                await self.store.create_relation(edge)
-                await self.store.upsert_memory(updated_old)
+                await store.create_relation(edge)
+                await store.upsert_memory(updated_old)
                 superseded.append(proposal.old_id)
                 # A superseded source invalidates what was computed from it:
                 # the derivation may now describe a replaced state of the world.
                 await self._mark_derivations_stale(
                     org_id,
                     space_id,
-                    await self._direct_derivatives(org_id, space_id, proposal.old_id),
+                    await self._direct_derivatives(
+                        org_id, space_id, proposal.old_id, store=store
+                    ),
+                    store=store,
                 )
 
-        stored = await self.store.upsert_memory(memory)
+        stored = await store.upsert_memory(memory)
         INGESTED.labels(outcome="created").inc()
 
         written_claims: list[str] = []
@@ -1164,6 +1217,7 @@ class MemoryService:
         auto_supersede: bool = True,
         detect_conflicts: bool = True,
         extract: bool = True,
+        stats: BulkStats | None = None,
     ) -> list[BulkOutcome]:
         """Write many memories with one embedding pass. Per-item outcomes.
 
@@ -1177,16 +1231,70 @@ class MemoryService:
              provider's batch size, `embedding_concurrency` at a time. A
              100-item bulk used to make ~100 sequential embedding calls; this
              makes ceil(chunks / batch_size).
-          3. WRITE sequentially, in request order, with the vectors in hand.
-             Sequential on purpose: dedupe, keys and supersession all compare
-             a write against what is already stored, so item 7 must see item
-             6. Each write re-checks what stage 1 assumed, which makes stage 1
-             an optimisation and never a correctness input.
+          3. WRITE in request order, with the vectors in hand. In order on
+             purpose: dedupe, keys and supersession all compare a write
+             against what is already stored, so item 7 must see item 6. Each
+             write re-checks what stage 1 assumed, which makes stage 1 an
+             optimisation and never a correctness input.
+
+        Stage 3 decides each item with the same methods a single write uses.
+        With `bulk_write_batching` (the default) they run against a
+        `BulkView` inside ONE store transaction, which answers their reads
+        from a single prefetch plus the earlier items' pending writes and
+        applies every write at the end in a few multi-row statements -- about
+        a dozen round trips for the request instead of ~35 per item. See
+        `bulkwrite`. The sequential path remains for write-time extraction
+        (a model call per item dominates anyway) and for the rare item the
+        view hands back (`NeedsSequential`).
 
         One bad item no longer loses the whole response: validation, a
         failed embedding batch or a write error is reported against the
         items it touched, and every other item proceeds.
+
+        `stats`, when given, is filled with where the time went.
         """
+        stats = stats if stats is not None else BulkStats()
+        started = time.perf_counter()
+        stats.items = len(items)
+        with similarity_memo(), entity_memo(), distinctive_memo():
+            outcomes = await self._ingest_many(
+                org_id=org_id,
+                space_id=space_id,
+                items=items,
+                dedupe=dedupe,
+                auto_supersede=auto_supersede,
+                detect_conflicts=detect_conflicts,
+                extract=extract,
+                stats=stats,
+            )
+        stats.total_ms = (time.perf_counter() - started) * 1000
+        log.info(
+            "bulk_ingest",
+            items=stats.items,
+            created=sum(1 for o in outcomes if o.result is not None and o.result.created),
+            failed=sum(1 for o in outcomes if o.error is not None),
+            segments=stats.segments,
+            sequential_items=stats.sequential_items,
+            total_ms=round(stats.total_ms, 1),
+            db_ms=round(stats.db_ms, 1),
+            embed_ms=round(stats.embed_ms, 1),
+            cpu_ms=round(stats.cpu_ms, 1),
+        )
+        return outcomes
+
+    async def _ingest_many(
+        self,
+        *,
+        org_id: str,
+        space_id: str,
+        items: Sequence[IngestItem],
+        dedupe: bool,
+        auto_supersede: bool,
+        detect_conflicts: bool,
+        extract: bool,
+        stats: BulkStats,
+    ) -> list[BulkOutcome]:
+        clock = time.perf_counter()
         await self.get_space_or_raise(org_id, space_id)
 
         outcomes = [BulkOutcome(index=i) for i in range(len(items))]
@@ -1215,14 +1323,29 @@ class MemoryService:
         await self._check_quota(org_id, sum(p.size for p in prepared.values()))
 
         # -- stage 1: what needs no vectors ---------------------------------
+        # Vectorless reads: this only asks WHETHER a key or digest is held.
         keys = [p.memory.key for p in prepared.values() if p.memory.key is not None]
-        active = await self.store.get_active_by_keys(org_id, space_id, keys) if keys else {}
         digests = [p.memory.content_sha256 for p in prepared.values() if p.memory.key is None]
-        by_hash = (
-            await self.store.find_by_content_hashes(org_id, space_id, digests)
-            if dedupe and digests
-            else {}
+        active_lookup = (
+            self.store.get_active_by_keys(org_id, space_id, keys, with_embeddings=False)
+            if keys
+            else None
         )
+        hash_lookup = (
+            self.store.find_by_content_hashes(org_id, space_id, digests, with_embeddings=False)
+            if dedupe and digests
+            else None
+        )
+        active: dict[str, Memory] = {}
+        by_hash: dict[str, Memory] = {}
+        if active_lookup is not None and hash_lookup is not None:
+            active, by_hash = await asyncio.gather(active_lookup, hash_lookup)
+        elif active_lookup is not None:
+            active = await active_lookup
+        elif hash_lookup is not None:
+            by_hash = await hash_lookup
+        stats.db_ms += (time.perf_counter() - clock) * 1000
+
         needs_vectors: list[int] = []
         #: Items whose key or content an EARLIER item in this request also
         #: carries. Stage 1's lookups predate that earlier write, so these
@@ -1247,47 +1370,185 @@ class MemoryService:
                 seen_hashes.add(digest)
 
         # -- stage 2: one embedding pass ------------------------------------
+        clock = time.perf_counter()
         vectors, failures = await self._embed_many({i: prepared[i] for i in needs_vectors})
+        stats.embed_ms += (time.perf_counter() - clock) * 1000
 
-        # -- stage 3: sequential writes -------------------------------------
-        for i, p in prepared.items():
-            if i in failures:
-                outcomes[i].error = failures[i]
-                continue
-            try:
-                if p.memory.key is not None:
-                    outcomes[i].result = await self._write_keyed(
-                        p,
-                        vectors.get(i),
-                        known=active.get(p.memory.key),
-                        looked_up=i not in repeated,
-                    )
-                    continue
-                digest = p.memory.content_sha256
-                if dedupe and (i in repeated or digest in by_hash):
-                    # Re-read, never fold into stage 1's snapshot: an earlier
-                    # item may have superseded that row since, and merging
-                    # into the stale copy would write it back ACTIVE. Stage 1
-                    # only decided that this item could skip the embed pass;
-                    # if the row is no longer eligible, it embeds below.
-                    duplicate = await self._fold_exact_duplicate(p)
-                    if duplicate is not None:
-                        outcomes[i].result = duplicate
-                        continue
-                item_vectors = vectors.get(i)
-                if item_vectors is None:
-                    item_vectors = await self._embed_prepared(p)
-                outcomes[i].result = await self._write_unkeyed(
-                    p,
-                    item_vectors,
-                    dedupe=dedupe,
-                    auto_supersede=auto_supersede,
-                    detect_conflicts=detect_conflicts,
-                    extract=extract,
-                )
-            except MapiError as exc:
-                outcomes[i].error = exc
+        # -- stage 3: writes, in request order ------------------------------
+        for i in failures:
+            outcomes[i].error = failures[i]
+        order = [i for i in prepared if i not in failures]
+        stage = _Stage3(
+            prepared=prepared,
+            vectors=vectors,
+            active=active,
+            by_hash=by_hash,
+            repeated=repeated,
+            outcomes=outcomes,
+            dedupe=dedupe,
+            auto_supersede=auto_supersede,
+            detect_conflicts=detect_conflicts,
+            extract=extract,
+            stats=stats,
+        )
+        if self.settings.bulk_write_batching and self.extractor is None:
+            await self._write_batched(org_id, space_id, order, stage)
+        else:
+            await self._write_sequential(order, stage)
         return outcomes
+
+    async def _write_item(
+        self, i: int, stage: _Stage3, *, store: WriteStore | None = None
+    ) -> None:
+        """Stage 3 for one item: exactly what a single write would do.
+
+        Against the real store, stage 1's snapshot says whether a key was
+        already looked up; against a bulk view the key is read again, which
+        costs nothing there and is fresher under the view's key locks.
+        """
+        p = stage.prepared[i]
+        in_view = store is not None
+        try:
+            if p.memory.key is not None:
+                stage.outcomes[i].result = await self._write_keyed(
+                    p,
+                    stage.vectors.get(i),
+                    known=stage.active.get(p.memory.key),
+                    looked_up=not in_view and i not in stage.repeated,
+                    store=store,
+                )
+                return
+            digest = p.memory.content_sha256
+            if stage.dedupe and (i in stage.repeated or digest in stage.by_hash):
+                # Re-read, never fold into stage 1's snapshot: an earlier
+                # item may have superseded that row since, and merging
+                # into the stale copy would write it back ACTIVE. Stage 1
+                # only decided that this item could skip the embed pass;
+                # if the row is no longer eligible, it embeds below.
+                duplicate = await self._fold_exact_duplicate(p, store=store)
+                if duplicate is not None:
+                    stage.outcomes[i].result = duplicate
+                    return
+            item_vectors = stage.vectors.get(i)
+            if item_vectors is None:
+                clock = time.perf_counter()
+                try:
+                    item_vectors = await self._embed_prepared(p)
+                finally:
+                    stage.stats.embed_ms += (time.perf_counter() - clock) * 1000
+                # Kept, so a batched segment that falls back to the
+                # sequential path does not embed this item twice.
+                stage.vectors[i] = item_vectors
+            stage.outcomes[i].result = await self._write_unkeyed(
+                p,
+                item_vectors,
+                dedupe=stage.dedupe,
+                auto_supersede=stage.auto_supersede,
+                detect_conflicts=stage.detect_conflicts,
+                extract=stage.extract,
+                store=store,
+            )
+        except MapiError as exc:
+            stage.outcomes[i].error = exc
+
+    async def _write_sequential(self, order: Sequence[int], stage: _Stage3) -> None:
+        """Stage 3 one store call at a time: the path before batching."""
+        clock = time.perf_counter()
+        embedded = stage.stats.embed_ms
+        for i in order:
+            await self._write_item(i, stage)
+        stage.stats.sequential_items += len(order)
+        elapsed = (time.perf_counter() - clock) * 1000
+        stage.stats.db_ms += max(0.0, elapsed - (stage.stats.embed_ms - embedded))
+
+    async def _write_batched(
+        self, org_id: str, space_id: str, order: list[int], stage: _Stage3
+    ) -> None:
+        """Stage 3 in as few transactions as the items allow -- usually one.
+
+        Each segment is one `BulkSession`: lock the keys it writes, prefetch
+        what its items will read, decide every item against a `BulkView`,
+        apply. An item the view cannot take (`must_go_sequential`) ends the
+        segment: what came before is applied and committed, that item is
+        written sequentially, and a new segment picks up after it -- so it
+        sees exactly the state the sequential path would have shown it.
+
+        If anything goes wrong below the view -- `NeedsSequential` from a
+        read it could not answer, or a failed `apply` -- the transaction
+        rolls back, nothing of the segment has been written, and the segment
+        is written sequentially instead. Vectors already computed are kept.
+        """
+        pos = 0
+        limit = self.settings.consolidation_candidates
+
+        def erases(i: int) -> bool:
+            p = stage.prepared[i]
+            return p.memory.key is not None and p.replace is ReplaceMode.ERASE
+
+        while pos < len(order):
+            # A keyed ERASE is always sequential (`BulkView.must_go_sequential`);
+            # a run of them goes straight there, without a segment to end.
+            run = pos
+            while run < len(order) and erases(order[run]):
+                run += 1
+            if run > pos:
+                await self._write_sequential(order[pos:run], stage)
+                pos = run
+                continue
+            segment = order[pos:]
+            stop: int | None = None
+            stage.stats.segments += 1
+            try:
+                async with timed_session(
+                    self.store.bulk_session(org_id, space_id, neighbour_limit=limit),
+                    stage.stats,
+                ) as raw:
+                    session = TimedSession(raw, stage.stats)
+                    view = BulkView(session, org_id, space_id, limit=limit)
+                    keys = [
+                        key
+                        for i in segment
+                        if (key := stage.prepared[i].memory.key) is not None
+                    ]
+                    unkeyed = [i for i in segment if stage.prepared[i].memory.key is None]
+                    await session.lock_keys(keys)
+                    await view.load(
+                        keys=keys,
+                        digests=(
+                            [stage.prepared[i].memory.content_sha256 for i in unkeyed]
+                            if stage.dedupe
+                            else []
+                        ),
+                        queries=[stage.vectors[i][0] for i in unkeyed if i in stage.vectors],
+                    )
+                    for n, i in enumerate(segment):
+                        p = stage.prepared[i]
+                        if await view.must_go_sequential(p.memory, p.replace):
+                            stop = pos + n
+                            break
+                        await self._write_item(i, stage, store=view)
+                    try:
+                        await session.apply(view.ops)
+                    except Exception as exc:
+                        raise NeedsSequential(
+                            f"bulk apply failed: {type(exc).__name__}"
+                        ) from exc
+            except NeedsSequential as exc:
+                log.warning(
+                    "bulk_segment_sequential",
+                    reason=str(exc)[:200],
+                    items=len(segment),
+                    cause=type(exc.__cause__).__name__ if exc.__cause__ else None,
+                )
+                for i in segment:
+                    stage.outcomes[i].result = None
+                    stage.outcomes[i].error = None
+                await self._write_sequential(segment, stage)
+                return
+            if stop is None:
+                return
+            await self._write_sequential([order[stop]], stage)
+            pos = stop + 1
 
     async def _embed_many(
         self, prepared: Mapping[int, _Prepared]
@@ -1444,7 +1705,12 @@ class MemoryService:
         return memory
 
     async def _mark_derivations_stale(
-        self, org_id: str, space_id: str, source_ids: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        source_ids: Sequence[str],
+        *,
+        store: WriteStore | None = None,
     ) -> list[str]:
         """Transitively mark every derivation of `source_ids` STALE.
 
@@ -1466,6 +1732,7 @@ class MemoryService:
         (its replacement is the current truth; do not resurrect it as merely
         stale). Returns the ids actually transitioned, for attestations.
         """
+        store = store or self.store
         staled: list[str] = []
         queue = list(dict.fromkeys(source_ids))
         visited: set[str] = set()
@@ -1474,11 +1741,11 @@ class MemoryService:
             if derived_id in visited:
                 continue
             visited.add(derived_id)
-            derived = await self.store.get_memory(org_id, space_id, derived_id)
+            derived = await store.get_memory(org_id, space_id, derived_id)
             if derived is None:
                 continue
             if derived.status is MemoryStatus.ACTIVE:
-                await self.store.upsert_memory(
+                await store.upsert_memory(
                     derived.model_copy(
                         update={
                             "status": MemoryStatus.STALE,
@@ -1488,17 +1755,26 @@ class MemoryService:
                     )
                 )
                 staled.append(derived_id)
-            incoming = await self.store.list_relations(
-                org_id, space_id, derived_id, direction="in"
+            # Filtered by the store, not after: the answer is the same, and a
+            # bulk request's view can answer exactly this question.
+            incoming = await store.list_relations(
+                org_id, space_id, derived_id, direction="in", type=RelationType.DERIVED_FROM
             )
             queue.extend(e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM)
         return staled
 
     async def _direct_derivatives(
-        self, org_id: str, space_id: str, memory_id: str
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        store: WriteStore | None = None,
     ) -> list[str]:
         """First-hop derivations of a memory, collected while its edges exist."""
-        incoming = await self.store.list_relations(org_id, space_id, memory_id, direction="in")
+        incoming = await (store or self.store).list_relations(
+            org_id, space_id, memory_id, direction="in", type=RelationType.DERIVED_FROM
+        )
         return sorted({e.source_id for e in incoming if e.type is RelationType.DERIVED_FROM})
 
     async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> None:

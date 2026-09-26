@@ -195,6 +195,18 @@ async def test_purge_after_delete_removes_the_history_delete_left(world) -> None
     assert await rows(service.store, org.id, space.id) == dict.fromkeys(TABLES, 0)
 
 
+async def test_a_purged_space_is_not_served_from_the_lookup_cache(world) -> None:
+    """Purge evicts the space cache, as DELETE does: no writes into a ghost."""
+    from mapi.core.errors import NotFoundError
+
+    service, org, space, *_ = world
+    service.settings = service.settings.model_copy(update={"space_cache_ttl_s": 3600})
+    assert (await service.get_space_or_raise(org.id, space.id)).id == space.id
+    await service.purge_space(org.id, space.id)
+    with pytest.raises(NotFoundError):
+        await service.get_space_or_raise(org.id, space.id)
+
+
 async def test_purge_touches_only_its_own_space(world) -> None:
     service, org, space, sibling, other_org, other = world
     for org_id, space_id in (

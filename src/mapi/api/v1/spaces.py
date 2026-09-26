@@ -4,19 +4,25 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
+from fastapi import Response as HttpResponse
 
-from ...core.errors import NotFoundError, ValidationError
+from ...core.errors import ConflictError, NotFoundError, ValidationError
 from ...core.ids import is_valid
 from ...domain.models import Scope, Space, utcnow
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, StoreDep, require_scope
 from ..schemas import (
     CreateSpaceRequest,
+    EnsureSpaceRequest,
     PurgeResponse,
     SpaceListResponse,
     SpaceResponse,
 )
+
+#: The slug rule from `Space`, restated for the path parameter so a malformed
+#: slug is a 422 at the edge rather than a validation error from the model.
+SlugPath = Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")]
 
 router = APIRouter(prefix="/spaces", tags=["spaces"])
 
@@ -59,12 +65,74 @@ async def list_spaces(
     store: StoreDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_READ))],
 ) -> SpaceListResponse:
+    # Two queries whatever the org's size. This was a count per space, which
+    # is fine for a team with five spaces and a thousand round trips for an
+    # event with one space per attendee.
     spaces = await store.list_spaces(principal.org_id)
-    items = []
-    for space in spaces:
-        count = await store.count_memories(space.org_id, space.id, filters=MemoryFilter())
-        items.append(_to_response(space, count))
-    return SpaceListResponse(items=items)
+    counts = await store.count_memories_by_space(principal.org_id)
+    return SpaceListResponse(items=[_to_response(s, counts.get(s.id, 0)) for s in spaces])
+
+
+@router.put(
+    "/by-slug/{slug}",
+    response_model=SpaceResponse,
+    responses={
+        200: {"description": "The space already existed"},
+        201: {"description": "Created"},
+    },
+    summary="Create a space by slug, or return the one that exists",
+)
+async def ensure_space(
+    slug: SlugPath,
+    response: HttpResponse,
+    service: ServiceDep,
+    store: StoreDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_WRITE))],
+    body: EnsureSpaceRequest | None = None,
+) -> SpaceResponse:
+    """Idempotent: the same PUT always ends with the same space, 201 the first time.
+
+    A client that keys its spaces by a stable name of its own (one space per
+    attendee, a `directory` space per event) needs "the space called X" and
+    had to list every space to find it, then race another worker to create
+    it. Here a concurrent create that loses the race on the unique slug reads
+    the winner back instead of failing, so N workers calling this at once get
+    one space and N-1 of them a 200.
+    """
+    existing = await store.get_space_by_slug(principal.org_id, slug)
+    if existing is None:
+        wanted = body or EnsureSpaceRequest()
+        try:
+            created = await service.create_space(
+                principal.org_id,
+                slug=slug,
+                name=wanted.name or slug,
+                description=wanted.description,
+                metadata=wanted.metadata,
+            )
+        except ConflictError:
+            existing = await store.get_space_by_slug(principal.org_id, slug)
+            if existing is None:
+                raise
+        else:
+            response.status_code = status.HTTP_201_CREATED
+            return _to_response(created, count=0)
+    count = await store.count_memories(existing.org_id, existing.id, filters=MemoryFilter())
+    return _to_response(existing, count)
+
+
+@router.get("/by-slug/{slug}", response_model=SpaceResponse, summary="Fetch a space by slug")
+async def get_space_by_slug(
+    slug: SlugPath,
+    store: StoreDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_READ))],
+) -> SpaceResponse:
+    space = await store.get_space_by_slug(principal.org_id, slug)
+    if space is None:
+        # Same 404 for "absent" and "another org's": the slug is not a probe.
+        raise NotFoundError(f"space {slug!r} not found", field="slug")
+    count = await store.count_memories(space.org_id, space.id, filters=MemoryFilter())
+    return _to_response(space, count)
 
 
 @router.get("/{space_id}", response_model=SpaceResponse, summary="Fetch a space")

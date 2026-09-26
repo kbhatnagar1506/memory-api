@@ -90,6 +90,24 @@ def build_header(
     return header[:MAX_HEADER_CHARS]
 
 
+def wants_header(content: str, *, min_chars: int) -> bool:
+    """Whether a memory this long should be embedded with a header at all.
+
+    The header is the right trade for a memory whose chunks never say when or
+    about what they were written. On a short, self-describing memory -- a
+    profile card, a one-line fact -- it is most of the embedding input, and
+    two unrelated short texts sharing a header come out looking alike:
+    measured on card-sized text, unrelated pairs rose from 0.745 to 0.895.
+
+    Decided per MEMORY, not per chunk. A long memory's last chunk is often
+    short, and it is the chunk that most needs the framing: a tail fragment
+    is exactly the "yeah, three of them" this module exists for. Whitespace
+    does not count toward the length. `min_chars=0` keeps the header on
+    everything, which is the behaviour before the setting existed.
+    """
+    return len(content.strip()) >= min_chars
+
+
 def for_embedding(text: str, header: str) -> str:
     """The string to embed. `text` is what gets stored, always.
 
@@ -102,4 +120,4 @@ def for_embedding(text: str, header: str) -> str:
     return f"<context>\n{header}\n</context>\n{text}"
 
 
-__all__ = ["MAX_HEADER_CHARS", "build_header", "for_embedding"]
+__all__ = ["MAX_HEADER_CHARS", "build_header", "for_embedding", "wants_header"]

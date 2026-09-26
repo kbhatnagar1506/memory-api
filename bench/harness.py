@@ -1055,7 +1055,14 @@ class AnthropicVertexJudge:
     REGION = "us-east5"
 
     def __init__(self, model: str, project: str | None) -> None:
-        from anthropic import AsyncAnthropicVertex
+        try:
+            from anthropic import AsyncAnthropicVertex
+        except ImportError as exc:  # pragma: no cover - depends on installed extras
+            # A bench-only dependency since it left the runtime set, so say
+            # which extra brings it back rather than failing on a bare import.
+            raise RuntimeError(
+                "the Claude judge needs the bench extra: pip install -e '.[bench]'"
+            ) from exc
 
         if not project:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for answer/judge")

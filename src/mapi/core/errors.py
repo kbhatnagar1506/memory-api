@@ -141,6 +141,20 @@ class StoreError(MapiError):
     title = "Storage backend unavailable"
 
 
+class RequestTimeoutError(MapiError):
+    """The request outlived `request_timeout_s` before a response began.
+
+    Distinct from `ProviderTimeoutError`: that one names the vendor that was
+    slow, this one is the server's own deadline, which fires whatever was slow
+    -- a vendor, a lock, a query plan. A client should treat both as
+    retryable, but only this one says the server gave up on it.
+    """
+
+    status_code = 504
+    slug = "request_timeout"
+    title = "Request timed out"
+
+
 class ConfigurationError(MapiError):
     status_code = 500
     slug = "configuration_error"
@@ -160,6 +174,7 @@ __all__ = [
     "ProviderError",
     "ProviderTimeoutError",
     "RateLimitedError",
+    "RequestTimeoutError",
     "StoreError",
     "UnauthorizedError",
     "UnsupportedMediaTypeError",

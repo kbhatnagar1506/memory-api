@@ -23,6 +23,16 @@ ENV PATH="/opt/venv/bin:$PATH" \
 RUN useradd --create-home --uid 10001 mapi
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
+# The migrations travel with the code that expects them. Without these the
+# image could not migrate its own database, so every schema change had to be
+# run from a laptop checkout that might not match the deployed build -- and
+# since staging and production now refuse to start on an unmigrated schema,
+# "the image" and "the migration it needs" must be one artifact:
+#   docker run --rm --env-file mapi.env <image> alembic upgrade head
+# Owned by root and read-only to the runtime user: nothing at runtime writes
+# to them.
+COPY alembic.ini ./
+COPY migrations ./migrations
 USER mapi
 
 EXPOSE 8000

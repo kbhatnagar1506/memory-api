@@ -46,6 +46,7 @@ from .base import (
     LexicalHit,
     MemoryFilter,
     MemoryStore,
+    OrgPurgeReport,
     Page,
     PurgeReport,
     TenantUsage,
@@ -1005,6 +1006,88 @@ class InMemoryStore(MemoryStore):
             if len(out) >= limit:
                 break
         return out
+
+    # -- listing and operator helpers ----------------------------------------
+
+    async def count_memories_by_space(self, org_id: str) -> dict[str, int]:
+        active = MemoryFilter()
+        counts: dict[str, int] = {}
+        for (owner, space_id), memory_ids in self._by_space.items():
+            if owner != org_id:
+                continue
+            counts[space_id] = sum(
+                1
+                for mid in memory_ids
+                if (m := self._memories.get(mid)) is not None and active.matches(m)
+            )
+        return counts
+
+    async def list_organizations(self) -> list[Organization]:
+        return sorted(self._orgs.values(), key=lambda o: o.id)
+
+    async def rename_organization(self, org_id: str, name: str) -> Organization | None:
+        async with self._lock:
+            org = self._orgs.get(org_id)
+            if org is None:
+                return None
+            renamed = org.model_copy(update={"name": name})
+            self._orgs[org_id] = renamed
+            return renamed
+
+    async def purge_org(
+        self, org_id: str, *, keep_space_ids: frozenset[str] = frozenset()
+    ) -> OrgPurgeReport:
+        async with self._lock:
+            doomed = {
+                sid
+                for sid, space in self._spaces.items()
+                if space.org_id == org_id and sid not in keep_space_ids
+            }
+            memories = chunks = 0
+            for space_id in doomed:
+                for memory_id in self._by_space.pop((org_id, space_id), []):
+                    memory = self._memories.pop(memory_id, None)
+                    if memory is not None:
+                        memories += 1
+                        chunks += len(memory.chunks)
+            # Edges by org and space, not by endpoint: the same sweep then
+            # catches any edge that outlived its memories.
+            edges = 0
+            for edge_id, edge in list(self._edges.items()):
+                if edge.org_id != org_id or edge.space_id in keep_space_ids:
+                    continue
+                del self._edges[edge_id]
+                edges += 1
+                for index, key in (
+                    (self._edges_by_source, (edge.space_id, edge.source_id)),
+                    (self._edges_by_target, (edge.space_id, edge.target_id)),
+                ):
+                    bucket = index.get(key)
+                    if bucket and edge_id in bucket:
+                        bucket.remove(edge_id)
+            # History by org, for every space not kept -- including spaces
+            # deleted earlier, whose versions `delete_space` left behind.
+            versions = 0
+            for memory_id in list(self._versions):
+                kept = [
+                    v
+                    for v in self._versions[memory_id]
+                    if v.org_id != org_id or v.space_id in keep_space_ids
+                ]
+                versions += len(self._versions[memory_id]) - len(kept)
+                if kept:
+                    self._versions[memory_id] = kept
+                else:
+                    del self._versions[memory_id]
+            for space_id in doomed:
+                del self._spaces[space_id]
+            return OrgPurgeReport(
+                spaces=len(doomed),
+                memories=memories,
+                chunks=chunks,
+                edges=edges,
+                versions=versions,
+            )
 
     # -- introspection, used by tests and the demo seeder ------------------
 

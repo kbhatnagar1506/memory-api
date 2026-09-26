@@ -45,7 +45,13 @@ from ..models import Memory, MemoryStatus, RelationEdge, RelationType, ScoredMem
 from ..synthesis.classify import QuestionKind, classify
 from ..synthesis.scope import extract_scope
 from ..synthesis.understand import QueryIntent, QueryUnderstanding
-from .confidence import RetrievalConfidence, assess, calibrated_score
+from .confidence import (
+    DEFAULT_BANDS,
+    ConfidenceBands,
+    RetrievalConfidence,
+    assess,
+    calibrated_score,
+)
 from .decay import apply_decay
 from .entities import salient_entities
 from .expansion import NoopExpander, QueryExpander
@@ -296,6 +302,7 @@ class RetrievalPipeline:
         reranker: Reranker,
         expander: QueryExpander | None = None,
         understanding: QueryUnderstanding | None = None,
+        confidence_bands: ConfidenceBands = DEFAULT_BANDS,
     ) -> None:
         self.store = store
         self.embedder = embedder
@@ -304,6 +311,9 @@ class RetrievalPipeline:
         # None means regex-only, which is the whole product minus this one
         # enhancement -- the pipeline never requires a model to answer.
         self.understanding = understanding
+        #: Absolute cosine floors for `confidence`; model-dependent, so set
+        #: from settings rather than fixed here.
+        self.confidence_bands = confidence_bands
 
     async def _intent(self, request: SearchRequest) -> QueryIntent:
         """What the question is asking for, and who decided.
@@ -800,7 +810,11 @@ class RetrievalPipeline:
             for hit in final:
                 hit.explain.append(f"coverage window {effective_limit} ({intent.source})")
         conflicts = self._find_conflicts(final, contradictions)
-        confidence = assess([calibrated_score(s) for s in final], has_conflicts=bool(conflicts))
+        confidence = assess(
+            [calibrated_score(s) for s in final],
+            has_conflicts=bool(conflicts),
+            bands=self.confidence_bands,
+        )
         return SearchResponse(
             results=final,
             query=request.query,

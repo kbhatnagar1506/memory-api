@@ -312,12 +312,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved
 
-    from .api.middleware import BodySizeLimitMiddleware, RequestContextMiddleware
+    from .api.middleware import (
+        BodySizeLimitMiddleware,
+        RequestContextMiddleware,
+        RequestDeadlineMiddleware,
+    )
     from .api.v1.health import router as health_router
     from .api.v1.router import api_router
 
     # Added last runs first: the size guard rejects oversized bodies before the
-    # context middleware allocates anything for them.
+    # context middleware allocates anything for them, and the deadline sits
+    # inside the context middleware so a 504 is logged, counted and carries a
+    # request id like any other response.
+    app.add_middleware(RequestDeadlineMiddleware, timeout_s=resolved.request_timeout_s)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.max_request_bytes)
 

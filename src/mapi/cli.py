@@ -1,4 +1,4 @@
-"""Operational CLI: serve, seed a demo corpus, run a query, check config."""
+"""Operational CLI: serve, seed a demo corpus, run a query, check config, admin."""
 
 from __future__ import annotations
 
@@ -6,11 +6,20 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+from typing import Any
 
 from .config import EmbeddingBackend, RerankBackend, Settings, StoreBackend, get_settings
+from .core.errors import MapiError
 from .core.security import build_api_key
 from .domain.models import Organization, Scope, Space
 from .domain.retrieval.pipeline import SearchRequest
+from .store.base import MemoryStore
+
+#: One admin subcommand: given the open store, the settings and the parsed
+#: arguments, produce the JSON document the command prints.
+AdminAction = Callable[[MemoryStore, Settings, argparse.Namespace], Awaitable[dict[str, Any]]]
 
 
 def _serve(args: argparse.Namespace) -> int:
@@ -320,6 +329,140 @@ def _demo_replay(args: argparse.Namespace) -> int:
     return asyncio.run(_demo_replay_async(args))
 
 
+# -- admin ---------------------------------------------------------------------
+
+
+async def _admin_async(args: argparse.Namespace, store: MemoryStore | None = None) -> int:
+    """Run one admin action. `store` is injectable so tests need no database."""
+    from . import admin
+
+    settings = get_settings()
+    owned = store is None
+    try:
+        if store is None:
+            store = admin.open_admin_store(settings)
+            await store.initialize()
+        action: AdminAction = args.admin_action
+        result = await action(store, settings, args)
+    except MapiError as exc:
+        # Errors to stderr as JSON too, so a script can branch on `error`.
+        print(json.dumps({"error": exc.slug, "detail": exc.detail}), file=sys.stderr)
+        return 1
+    finally:
+        if owned and store is not None:
+            await store.aclose()
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def _admin(args: argparse.Namespace) -> int:
+    return asyncio.run(_admin_async(args))
+
+
+def _add_admin(sub: Any) -> None:
+    from . import admin
+
+    parser = sub.add_parser(
+        "admin",
+        help="operator commands: organizations and API keys, straight to the database",
+        description=admin.__doc__.split("\n\n")[0] if admin.__doc__ else None,
+    )
+    groups = parser.add_subparsers(dest="admin_group", required=True)
+
+    def command(group: Any, name: str, help_text: str, action: AdminAction) -> Any:
+        p = group.add_parser(name, help=help_text)
+        p.set_defaults(func=_admin, admin_action=action)
+        return p
+
+    org = groups.add_parser("org", help="organizations").add_subparsers(
+        dest="org_command", required=True
+    )
+    p = command(
+        org,
+        "create",
+        "create an organization",
+        lambda store, _s, a: admin.create_org(store, a.name),
+    )
+    p.add_argument("--name", required=True)
+    command(org, "list", "list organizations", lambda store, _s, _a: admin.list_orgs(store))
+    p = command(
+        org,
+        "rename",
+        "rename an organization",
+        lambda store, _s, a: admin.rename_org(store, a.org, a.name),
+    )
+    p.add_argument("org", help="organization id, or its exact current name")
+    p.add_argument("--name", required=True)
+
+    async def _purge(store: MemoryStore, _s: Settings, a: argparse.Namespace) -> dict[str, Any]:
+        keep = admin.read_keep_list(a.keep_space, a.keep_spaces_file)
+        if not a.yes:
+            return await admin.plan_purge(store, a.org, keep_space_ids=keep)
+        return await admin.purge_org(store, a.org, keep_space_ids=keep)
+
+    p = command(
+        org,
+        "purge",
+        "destroy every space in an organization and all history (dry run without --yes)",
+        _purge,
+    )
+    p.add_argument("org", help="organization id, or its exact name")
+    p.add_argument(
+        "--keep-space", action="append", default=[], metavar="SPACE_ID", help="spare this space"
+    )
+    p.add_argument(
+        "--keep-spaces-file",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="PATH",
+        help="spare the space ids listed in this file, one per line",
+    )
+    p.add_argument("--yes", action="store_true", help="actually purge; otherwise only report")
+
+    key = groups.add_parser("key", help="API keys").add_subparsers(
+        dest="key_command", required=True
+    )
+    p = command(
+        key,
+        "mint",
+        "mint a key and write it to a new 0600 file; nothing secret is printed",
+        lambda store, s, a: admin.mint_key(
+            store,
+            s,
+            org_ref=a.org,
+            name=a.name,
+            scopes=admin.parse_scopes(a.scopes),
+            out=a.out,
+            expires_in_days=a.expires_in_days,
+            force=a.force,
+        ),
+    )
+    p.add_argument("--org", required=True, help="organization id, or its exact name")
+    p.add_argument("--name", required=True, help="what the key is for, e.g. facemash-server")
+    p.add_argument(
+        "--scopes", default="default", help="default, all, or a comma-separated scope list"
+    )
+    p.add_argument("--out", required=True, type=Path, help="file to create (mode 0600)")
+    p.add_argument("--expires-in-days", type=int, default=None)
+    p.add_argument("--force", action="store_true", help="replace --out if it exists")
+    p = command(
+        key,
+        "list",
+        "list an organization's keys (ids and names only)",
+        lambda store, _s, a: admin.list_keys(store, a.org),
+    )
+    p.add_argument("--org", required=True)
+    p = command(
+        key,
+        "revoke",
+        "revoke a key",
+        lambda store, _s, a: admin.revoke_key(store, a.org, a.key_id),
+    )
+    p.add_argument("--org", required=True)
+    p.add_argument("key_id")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mapi", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -346,6 +489,8 @@ def main(argv: list[str] | None = None) -> int:
         help="decision replay + provable erasure, no network needed",
     )
     replay.set_defaults(func=_demo_replay)
+
+    _add_admin(sub)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

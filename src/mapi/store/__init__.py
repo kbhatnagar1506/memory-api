@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..config import Settings, StoreBackend
+from ..config import Environment, Settings, StoreBackend
 from ..core.errors import ConfigurationError
 from .base import LexicalHit, MemoryFilter, MemoryStore, Page, VectorHit
 from .memory import InMemoryStore
@@ -26,6 +26,10 @@ def build_store(settings: Settings) -> MemoryStore:
             pool_recycle_s=settings.db_pool_recycle_s,
             pool_pre_ping=settings.db_pool_pre_ping,
             binary_vectors=settings.db_binary_vectors,
+            # Staging and production refuse an unmigrated schema instead of
+            # creating one without row-level security; see `initialize`.
+            require_migrated=settings.environment
+            in (Environment.STAGING, Environment.PRODUCTION),
         )
     raise ConfigurationError(f"unknown store backend: {settings.store_backend}")
 

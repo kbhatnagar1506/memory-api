@@ -28,6 +28,7 @@ from sqlalchemy.orm import selectinload
 
 from ...core.errors import (
     BadRequestError,
+    ConfigurationError,
     ConflictError,
     StoreError,
     ValidationError,
@@ -61,6 +62,7 @@ from ..base import (
     LexicalHit,
     MemoryFilter,
     MemoryStore,
+    OrgPurgeReport,
     Page,
     PurgeReport,
     TenantUsage,
@@ -107,6 +109,11 @@ _HNSW_EF_SEARCH_CEILING = 1_000
 #: deliberately -- the curve is flat past three and the ceiling is a real cost
 #: on the comprehensive path, where `wanted` reaches 600.
 _HNSW_EF_SEARCH_MULTIPLE = 3
+
+#: The alembic revision this build's schema is written against. Bump it with
+#: every migration; `tests/unit/test_migrations.py` fails when it disagrees
+#: with the head of migrations/versions, so a forgotten bump cannot ship.
+SCHEMA_REVISION = "0007"
 
 
 #: Most distinct words an OR-mode lexical query is built from. Each becomes a
@@ -189,6 +196,23 @@ def _to_membership(row: MembershipRow) -> Membership:
     )
 
 
+def _schema_state(revision: str | None) -> str:
+    """Place a database revision relative to SCHEMA_REVISION.
+
+    One of "current", "behind", "ahead", "absent", "unknown". Ordering is by
+    number because this repository's revisions are zero-padded integers --
+    `tests/unit/test_migrations.py` holds every revision to that, which is what
+    makes the comparison sound without shipping the migration scripts.
+    """
+    if revision is None:
+        return "absent"
+    if revision == SCHEMA_REVISION:
+        return "current"
+    if not (revision.isdigit() and len(revision) == len(SCHEMA_REVISION)):
+        return "unknown"
+    return "behind" if int(revision) < int(SCHEMA_REVISION) else "ahead"
+
+
 class PostgresStore(MemoryStore):
     def __init__(
         self,
@@ -205,8 +229,13 @@ class PostgresStore(MemoryStore):
         pool_pre_ping: bool = False,
         binary_vectors: bool = True,
         server_settings: dict[str, str] | None = None,
+        require_migrated: bool = False,
     ) -> None:
         self.dimensions = dimensions
+        #: Refuse to start unless alembic has the schema at SCHEMA_REVISION.
+        #: Set for staging and production, where boot-time DDL could only ever
+        #: create a schema without row-level security. See `initialize`.
+        self._require_migrated = require_migrated
         #: None = not probed yet; probed on first vector search. Two flags, not
         #: one, because the settings they gate arrived in different pgvector
         #: versions and must be able to fail independently.
@@ -277,6 +306,62 @@ class PostgresStore(MemoryStore):
         )
 
     async def initialize(self) -> None:
+        """Make sure the schema exists, without ever inventing one in production.
+
+        Boot used to run `create_all` and the HNSW `CREATE INDEX IF NOT EXISTS`
+        unconditionally. Two things were wrong with that. `create_all` builds
+        tables from the models, and the models carry no row-level security --
+        that lives in migration 0005 -- so a service pointed at an empty
+        database would quietly create a schema with no tenant backstop at all.
+        And the index DDL needs table OWNERSHIP even when the index exists, so
+        the app role had to own the tables just to boot.
+
+        Now alembic owns the schema. When `alembic_version` is at
+        SCHEMA_REVISION there is nothing to do and no DDL runs. When it is
+        absent or behind, `require_migrated` (staging, production) refuses to
+        start with the command that fixes it; otherwise, for local development
+        and tests, the old create-on-boot path still runs. A database AHEAD of
+        this build -- a rollback after an additive migration -- is left
+        untouched and boots with a warning, because refusing would turn every
+        image rollback into an outage.
+        """
+        revision = await self.schema_revision()
+        state = _schema_state(revision)
+        if state == "current":
+            return
+        if state == "ahead":
+            log.warning("schema_ahead_of_build", database=revision, expected=SCHEMA_REVISION)
+            return
+        if self._require_migrated:
+            found = "no alembic_version" if revision is None else f"revision {revision!r}"
+            raise ConfigurationError(
+                f"database schema is at {found}, this build needs {SCHEMA_REVISION}: "
+                "run `alembic upgrade head` as the table owner before starting"
+            )
+        if state == "unknown":
+            # Not ours to repair: DDL against a schema we cannot place could
+            # only make it harder to reason about.
+            log.warning("schema_revision_unknown", database=revision)
+            return
+        if revision is not None:
+            log.warning("schema_behind_build", database=revision, expected=SCHEMA_REVISION)
+        await self._create_schema()
+
+    async def schema_revision(self) -> str | None:
+        """The alembic revision the database reports, or None if unmigrated."""
+        async with self._engine.connect() as conn:
+            present = await conn.scalar(text("SELECT to_regclass('alembic_version')"))
+            if present is None:
+                return None
+            rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).all()
+        if len(rows) != 1:
+            # Zero rows is an unmigrated table; several is a branched history.
+            # Neither is a revision this build can be "at".
+            return None if not rows else ",".join(sorted(str(r[0]) for r in rows))
+        return str(rows[0][0])
+
+    async def _create_schema(self) -> None:
+        """Development and test boot DDL. Never reached with `require_migrated`."""
         async with self._engine.begin() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
@@ -1956,9 +2041,72 @@ class PostgresStore(MemoryStore):
                 .order_by(ChunkRow.memory_id)
                 .limit(limit)
             )
+            # `is not None` is already in the WHERE clause; restating it here
+            # narrows the column's Optional type, which SQLAlchemy 2.1 now
+            # reports and 2.0 did not.
             return [
-                (memory_id, list(vector)) for memory_id, vector in await session.execute(stmt)
+                (memory_id, list(vector))
+                for memory_id, vector in await session.execute(stmt)
+                if vector is not None
             ]
 
+    # -- listing and operator helpers ----------------------------------------
 
-__all__ = ["PostgresStore"]
+    async def count_memories_by_space(self, org_id: str) -> dict[str, int]:
+        # One grouped query instead of one count per space. The filter is
+        # `_apply_filters(MemoryFilter())` so the number is exactly what
+        # `count_memories` would have returned for each space.
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            stmt = self._apply_filters(
+                select(MemoryRow.space_id, func.count()).where(MemoryRow.org_id == org_id),
+                MemoryFilter(),
+            ).group_by(MemoryRow.space_id)
+            return {str(space_id): int(n) for space_id, n in await session.execute(stmt)}
+
+    async def list_organizations(self) -> list[Organization]:
+        async with self._session() as session:
+            rows = await session.scalars(select(OrganizationRow).order_by(OrganizationRow.id))
+            return [Organization(id=r.id, name=r.name, created_at=r.created_at) for r in rows]
+
+    async def rename_organization(self, org_id: str, name: str) -> Organization | None:
+        async with self._session() as session, session.begin():
+            row = await session.get(OrganizationRow, org_id)
+            if row is None:
+                return None
+            row.name = name
+            return Organization(id=row.id, name=row.name, created_at=row.created_at)
+
+    async def purge_org(
+        self, org_id: str, *, keep_space_ids: frozenset[str] = frozenset()
+    ) -> OrgPurgeReport:
+        # One transaction: a purge that stops halfway reports success for
+        # content that is still readable. Scoped like every other write, so the
+        # row-level policies bind it to this org even if a predicate below
+        # were wrong. Children first; `memory_versions` by org and space, not
+        # by memory, because it has no foreign key and outlives both.
+        keep = sorted(keep_space_ids)
+
+        def _doomed(model: Any) -> Any:
+            return (model.org_id == org_id) & model.space_id.not_in(keep)
+
+        async with self._session() as session, session.begin():
+            await self._scope(session, org_id)
+
+            async def _count(stmt: Any) -> int:
+                result = await session.execute(stmt)
+                return int(cast(CursorResult[Any], result).rowcount or 0)
+
+            versions = await _count(delete(MemoryVersionRow).where(_doomed(MemoryVersionRow)))
+            edges = await _count(delete(RelationEdgeRow).where(_doomed(RelationEdgeRow)))
+            chunks = await _count(delete(ChunkRow).where(_doomed(ChunkRow)))
+            memories = await _count(delete(MemoryRow).where(_doomed(MemoryRow)))
+            spaces = await _count(
+                delete(SpaceRow).where((SpaceRow.org_id == org_id) & SpaceRow.id.not_in(keep))
+            )
+        return OrgPurgeReport(
+            spaces=spaces, memories=memories, chunks=chunks, edges=edges, versions=versions
+        )
+
+
+__all__ = ["SCHEMA_REVISION", "PostgresStore"]

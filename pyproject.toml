@@ -8,7 +8,6 @@ license = { text = "MIT" }
 authors = [{ name = "Krishna Bhatnagar" }]
 
 dependencies = [
-    "anthropic[vertex]>=0.69",  # cross-family benchmark judge (Claude on Vertex)
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
@@ -31,6 +30,11 @@ dependencies = [
 [project.optional-dependencies]
 gemini = ["google-genai>=1.0"]
 openai = ["openai>=1.55"]
+# The cross-family benchmark judge (Claude on Vertex). Nothing under src/ imports
+# it -- only bench/harness.py, lazily -- so it is not a runtime dependency. As
+# one it cost every production image the Anthropic SDK and its transitive tree
+# for a code path the server never takes.
+bench = ["anthropic[vertex]>=0.69"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
@@ -104,8 +108,18 @@ disallow_untyped_decorators = false
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "google.*", "redis.*"]
+# `openai` and `google.genai` are optional extras. CI's type-check job installs
+# only `.[dev]`, so without this the result depended on which extras happened to
+# be installed: "Cannot find implementation" for openai, as it did in CI.
+module = ["pgvector.*", "google.*", "redis.*", "openai.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The google-genai stubs changed between releases: `contents=list(texts)` needs
+# an ignore on some versions and not others, so a strict unused-ignore warning
+# made the type check depend on the installed SDK version rather than on code.
+module = ["mapi.domain.embeddings.gemini"]
+warn_unused_ignores = false
 
 [tool.coverage.run]
 source = ["src/mapi"]

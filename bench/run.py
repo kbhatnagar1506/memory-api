@@ -186,6 +186,8 @@ async def run_one(name: str, args: argparse.Namespace, out: Path) -> dict[str, A
                 "google_cloud_project": os.getenv("GOOGLE_CLOUD_PROJECT"),
                 "extraction_model": args.extraction_model,
                 "extraction_max_output_tokens": args.extraction_max_tokens,
+                # Write-path model use is its own switch now, off by default.
+                "write_extraction": True,
             }
         )
         extractor = build_extractor(settings)

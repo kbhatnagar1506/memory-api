@@ -141,6 +141,23 @@ class PurgeReport:
 
 
 @dataclass(frozen=True, slots=True)
+class OrgPurgeReport:
+    """What `purge_org` destroyed, counted per table.
+
+    Counted rather than just done because the post-event purge is a promise to
+    attendees, and "the command exited 0" is not evidence that 0 rows remain.
+    `memory_versions` is its own count on purpose: it has no foreign key to
+    `memories`, so it is the table a naive purge leaves full of content.
+    """
+
+    spaces: int = 0
+    memories: int = 0
+    chunks: int = 0
+    edges: int = 0
+    versions: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryFilter:
     """Filters applied by every listing and search operation."""
 
@@ -740,6 +757,51 @@ class MemoryStore(abc.ABC):
     ) -> list[tuple[str, Vector]]:
         """(memory_id, embedding) pairs, for dedup and supersession checks."""
 
+    # -- listing and operator helpers ----------------------------------------
+    #
+    # Kept together at the end: listing counts for the spaces endpoint, and
+    # the organization-level operations behind `mapi admin`, which run from an
+    # operator's shell rather than from any request.
+
+    async def count_memories_by_space(self, org_id: str) -> dict[str, int]:
+        """Active-memory count for every space in an org, keyed by space id.
+
+        What `GET /v1/spaces` shows. It called `count_memories` once per space,
+        a query per row of the listing, so an org holding one space per
+        attendee paid a thousand round trips to list itself. Backends override
+        this with one grouped query; this default is the reference semantics
+        (`MemoryFilter()`: active memories only), and spaces holding nothing
+        may be absent from the map.
+        """
+        return {
+            space.id: await self.count_memories(org_id, space.id, filters=MemoryFilter())
+            for space in await self.list_spaces(org_id)
+        }
+
+    @abc.abstractmethod
+    async def list_organizations(self) -> list[Organization]:
+        """Every organization, oldest id first. Operator use only: this is the
+        one read in the interface that crosses tenants, and no route calls it."""
+
+    @abc.abstractmethod
+    async def rename_organization(self, org_id: str, name: str) -> Organization | None:
+        """Set an organization's display name. None when it does not exist."""
+
+    @abc.abstractmethod
+    async def purge_org(
+        self, org_id: str, *, keep_space_ids: frozenset[str] = frozenset()
+    ) -> OrgPurgeReport:
+        """Destroy every space in an org and everything in them, in one step.
+
+        Removes memories, chunks, relation edges and version history, then the
+        spaces themselves, except the spaces in `keep_space_ids`. History is
+        purged by org and space rather than by memory, so versions left behind
+        by earlier deletes (which preserve history by design) go too.
+
+        The organization row and its API keys survive: this erases what the
+        org stored, not the org. Idempotent -- a second run reports zeros.
+        """
+
 
 __all__ = [
     "BulkEraseReport",
@@ -748,6 +810,7 @@ __all__ = [
     "LexicalHit",
     "MemoryFilter",
     "MemoryStore",
+    "OrgPurgeReport",
     "Page",
     "PurgeReport",
     "TenantUsage",

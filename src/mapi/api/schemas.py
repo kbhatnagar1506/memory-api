@@ -59,6 +59,19 @@ class CreateSpaceRequest(Request):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class EnsureSpaceRequest(Request):
+    """Optional body for `PUT /v1/spaces/by-slug/{slug}`.
+
+    Used only when the space does not exist yet. An existing space is returned
+    as it is: a create-or-get that also updated would make two callers with
+    different names for one slug overwrite each other on every call.
+    """
+
+    name: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+    description: Annotated[str, StringConstraints(max_length=2000)] = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class SpaceResponse(Response):
     id: str
     slug: str

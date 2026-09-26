@@ -37,6 +37,7 @@ from .core.quota import Quota, check_bytes, check_memories, check_writes
 from .domain.association import propose_associations
 from .domain.chunking import TextChunk, chunk_text, normalize
 from .domain.consolidation import (
+    CONTRADICT_LOW,
     ContradictionProposal,
     DuplicateKind,
     apply_supersession,
@@ -49,7 +50,7 @@ from .domain.consolidation import (
     unexplained_pairs,
 )
 from .domain.embeddings.base import EmbeddingProvider
-from .domain.embeddings.context import build_header, for_embedding
+from .domain.embeddings.context import build_header, for_embedding, wants_header
 from .domain.models import (
     Chunk,
     Memory,
@@ -63,6 +64,7 @@ from .domain.models import (
     Space,
     utcnow,
 )
+from .domain.retrieval.confidence import ConfidenceBands
 from .domain.retrieval.expansion import CompletionExpander
 from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchResponse
 from .domain.retrieval.rerank import Reranker
@@ -236,6 +238,9 @@ class MemoryService:
             reranker,
             understanding=self.understanding,
             expander=expander,
+            confidence_bands=ConfidenceBands(
+                strong=settings.confidence_strong, weak=settings.confidence_weak
+            ),
         )
         #: (org_id, space_id) -> (monotonic time cached, space). Hits only;
         #: see `get_space_or_raise`.
@@ -314,6 +319,50 @@ class MemoryService:
             max_memories_per_org=self.settings.max_memories_per_org,
             max_bytes_per_org=self.settings.max_bytes_per_org,
             max_writes_per_day=self.settings.max_writes_per_day,
+        )
+
+    def _similarity_ceiling(self) -> float:
+        """Upper edge of the supersession and contradiction bands.
+
+        It was the constant SUPERSEDE_HIGH (0.97), which only coincided with
+        `dedupe_threshold` at its default. The band exists to hand everything
+        below the duplicate line to belief revision and everything above it to
+        dedupe; raise the dedupe threshold (0.995 on gemini-embedding-001,
+        where value changes like "moved to Austin" vs "moved to Boston" land
+        at 0.97-0.99) and a fixed 0.97 left a gap in which a changed fact was
+        neither merged nor ever considered for supersession.
+
+        Floored at CONTRADICT_LOW so a very low dedupe threshold cannot invert
+        a band -- pairs above the dedupe line never reach the proposers anyway,
+        because dedupe returns first.
+        """
+        return max(self.settings.dedupe_threshold, CONTRADICT_LOW)
+
+    def _chat_search_request(
+        self, org_id: str, space_id: str, message: str, k: int
+    ) -> SearchRequest:
+        """The search behind /chat, configured like the search endpoint's.
+
+        Chat built a bare `SearchRequest`, so it ran on the dataclass defaults
+        instead of the deployment's settings -- a tuned `max_per_source`,
+        `coverage_limit` or `route_by_kind` changed /search and silently not
+        the answers built on it -- and with no `asked_at`, which leaves the
+        temporal stage dead: "what did I do last week" could not prefer last
+        week. Mirrors api/v1/search.py; the question is asked now.
+        """
+        s = self.settings
+        return SearchRequest(
+            query=message,
+            org_id=org_id,
+            space_id=space_id,
+            limit=k,
+            candidate_multiplier=s.candidate_multiplier,
+            rerank_candidates=s.rerank_candidates,
+            rrf_k=s.rrf_k,
+            coverage_limit=s.coverage_limit,
+            max_per_source=s.max_per_source,
+            route_by_kind=s.route_by_kind,
+            asked_at=utcnow(),
         )
 
     async def _check_quota(self, org_id: str, incoming_bytes: int) -> None:
@@ -466,8 +515,8 @@ class MemoryService:
             if v.memory_id in by_id
         ]
 
-    @staticmethod
     def _unexplained_conflicts(
+        self,
         memory: Memory,
         embedding: list[float],
         pairs: Sequence[tuple[Memory, list[float]]],
@@ -481,7 +530,9 @@ class MemoryService:
                 reason="",
                 confidence=0.0,
             )
-            for other, score in unexplained_pairs(memory, embedding, pairs)
+            for other, score in unexplained_pairs(
+                memory, embedding, pairs, high=self._similarity_ceiling()
+            )
         ]
 
     async def _confirm_conflicts(
@@ -541,7 +592,7 @@ class MemoryService:
         """
         if self.extractor is None:
             return []
-        remaining = unexplained_pairs(memory, embedding, pairs)
+        remaining = unexplained_pairs(memory, embedding, pairs, high=self._similarity_ceiling())
         if not remaining:
             return []
         verdicts = await adjudicate_contradictions(
@@ -709,6 +760,8 @@ class MemoryService:
                 metadata=metadata or {},
             )
             if self.settings.contextual_embedding
+            # A short memory is embedded bare; see `wants_header`.
+            and wants_header(cleaned, min_chars=self.settings.contextual_min_chars)
             else ""
         )
         return _Prepared(
@@ -908,7 +961,12 @@ class MemoryService:
             # it is never a supersession target for an unkeyed write.
             revisable = [(m, v) for m, v in pairs if m.key is None]
             all_proposals = (
-                propose_supersessions(memory, chunks[0].embedding or [], revisable)
+                propose_supersessions(
+                    memory,
+                    chunks[0].embedding or [],
+                    revisable,
+                    high=self._similarity_ceiling(),
+                )
                 if auto_supersede
                 else []
             )
@@ -974,7 +1032,12 @@ class MemoryService:
             # date. Any corpus containing dates or quantities is mostly those
             # pairs.
             conflict_shortlist = (
-                propose_contradictions(memory, chunks[0].embedding or [], pairs)
+                propose_contradictions(
+                    memory,
+                    chunks[0].embedding or [],
+                    pairs,
+                    high=self._similarity_ceiling(),
+                )
                 if detect_conflicts
                 else []
             )
@@ -1869,6 +1932,8 @@ class MemoryService:
         behind), and a retry must succeed with zeros rather than 404.
         """
         report = await self.store.purge_space(org_id, space_id)
+        # The space lookup cache must never outlive the row it caches.
+        self.forget_space(org_id, space_id)
         log.info(
             "space_purged",
             space_id=space_id,
@@ -1904,9 +1969,7 @@ class MemoryService:
             raise ProviderError("no synthesis backend configured; set synthesis_backend=gemini")
         # No space check of its own: `search` below makes it, and making it
         # twice was a second DB session per chat for the same answer.
-        response = await self.search(
-            SearchRequest(query=message, org_id=org_id, space_id=space_id, limit=k)
-        )
+        response = await self.search(self._chat_search_request(org_id, space_id, message, k))
         answer = await chat_answer(message, response.results, self.completer, history=history)
         if remember:
             await self.ingest(org_id=org_id, space_id=space_id, content=message)

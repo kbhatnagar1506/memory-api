@@ -23,6 +23,12 @@ ENV PATH="/opt/venv/bin:$PATH" \
 RUN useradd --create-home --uid 10001 mapi
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
+# The migrations ship with the code that expects them. RLS exists only in the
+# alembic history (0005), never in create_all, so `alembic upgrade head` must be
+# runnable from this exact image: no source checkout, no second copy to drift.
+# Root-owned and read-only to the app user, like the venv.
+COPY alembic.ini ./
+COPY migrations ./migrations
 USER mapi
 
 EXPOSE 8000

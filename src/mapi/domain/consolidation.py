@@ -93,11 +93,53 @@ class ContradictionProposal:
     confidence: float
 
 
+def dedupe_eligible(memory: Memory) -> bool:
+    """Whether a new write may be folded into `memory` as its duplicate.
+
+    Only ACTIVE, unkeyed memories qualify.
+
+      * SUPERSEDED and STALE rows are history. Folding a write into one
+        returned the old row, still hidden -- so A -> B -> A left B current and
+        the restated A invisible, the value the user just gave lost.
+      * A KEYED memory changes only through its key. Merging someone else's
+        write into it grafts foreign metadata onto a row whose owner will
+        replace or erase it wholesale -- and two people writing the same
+        sentence under their own keys are two facts, not one.
+    """
+    return memory.status is MemoryStatus.ACTIVE and memory.key is None
+
+
+def dedupe_candidates(
+    pairs: Sequence[tuple[Memory, Vector]],
+) -> list[tuple[Memory, Vector]]:
+    """The neighbours a near-duplicate check may merge into. See `dedupe_eligible`."""
+    return [(memory, vector) for memory, vector in pairs if dedupe_eligible(memory)]
+
+
+def keyed_unchanged(existing: Memory, incoming: Memory) -> bool:
+    """A keyed write that would change nothing, and so writes nothing.
+
+    Content by hash (whitespace and case are not meaning), plus every field a
+    caller can see and filter on. `occurred_at` is left out on purpose:
+    callers stamp writes with "now", and a re-sync of an unchanged snapshot
+    must cost zero writes, zero versions and zero embeddings -- that is the
+    whole contract that makes keyed sync cheap.
+    """
+    return (
+        existing.content_sha256 == incoming.content_sha256
+        and existing.summary == incoming.summary
+        and existing.source == incoming.source
+        and existing.kind is incoming.kind
+        and sorted(existing.tags) == sorted(incoming.tags)
+        and existing.metadata == incoming.metadata
+    )
+
+
 def detect_exact_duplicate(content: str, existing: Sequence[Memory]) -> DuplicateVerdict:
     """Match on normalized content hash: whitespace and case are not meaning."""
     digest = content_hash(content)
     for memory in existing:
-        if memory.status is MemoryStatus.ARCHIVED:
+        if not dedupe_eligible(memory):
             continue
         if memory.content_sha256 == digest:
             return DuplicateVerdict(DuplicateKind.EXACT, memory.id, 1.0)
@@ -379,9 +421,12 @@ __all__ = [
     "DuplicateVerdict",
     "SupersessionProposal",
     "apply_supersession",
+    "dedupe_candidates",
+    "dedupe_eligible",
     "detect_exact_duplicate",
     "detect_near_duplicate",
     "differs_materially",
+    "keyed_unchanged",
     "merge_duplicate",
     "propose_contradictions",
     "propose_supersessions",

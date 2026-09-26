@@ -173,6 +173,25 @@ class MemoryRow(Base):
             postgresql_using="gin",
         ),
         Index("ix_memories_metadata", "meta", postgresql_using="gin"),
+        # One ACTIVE memory per key per space: the invariant keyed writes
+        # exist to keep, held by the database rather than by every writer
+        # agreeing. Partial, so superseded history under the key is free to
+        # accumulate beside it. Migration 0006.
+        Index(
+            "uq_memories_space_key_active",
+            "space_id",
+            "memory_key",
+            unique=True,
+            postgresql_where=text("status = 'active' AND memory_key IS NOT NULL"),
+        ),
+        # Every row under a key, in any status: what erase-by-key walks.
+        Index(
+            "ix_memories_key",
+            "org_id",
+            "space_id",
+            "memory_key",
+            postgresql_where=text("memory_key IS NOT NULL"),
+        ),
         CheckConstraint("version >= 1", name="ck_memories_version_positive"),
         CheckConstraint(
             "status in ('active','superseded','archived','stale')",
@@ -209,6 +228,8 @@ class MemoryRow(Base):
     )
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    #: Caller-chosen fact name. NULL for ordinary memories. Migration 0006.
+    memory_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     chunks: Mapped[list[ChunkRow]] = relationship(
         back_populates="memory",
@@ -322,6 +343,14 @@ class MemoryVersionRow(Base):
             postgresql_where=text("valid_to IS NULL"),
         ),
         UniqueConstraint("memory_id", "version", name="uq_versions_memory_version"),
+        # Erasing a key must reach history whose live row is already gone.
+        Index(
+            "ix_versions_key",
+            "org_id",
+            "space_id",
+            "memory_key",
+            postgresql_where=text("memory_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
@@ -343,6 +372,7 @@ class MemoryVersionRow(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    memory_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 #: Created out-of-band in the migration: SQLAlchemy cannot express HNSW options.

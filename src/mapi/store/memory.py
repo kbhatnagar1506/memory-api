@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from ..core.errors import ConflictError, ValidationError
+from ..domain.consolidation import dedupe_eligible, keyed_unchanged
 from ..domain.embeddings.base import Vector, cosine_similarity
 from ..domain.models import (
     ApiKey,
@@ -32,17 +33,21 @@ from ..domain.models import (
     Organization,
     RelationEdge,
     RelationType,
+    ReplaceMode,
     Space,
     User,
     utcnow,
 )
 from ..domain.text import analyze, analyze_query
 from .base import (
+    BulkEraseReport,
     EraseReport,
+    KeyedWrite,
     LexicalHit,
     MemoryFilter,
     MemoryStore,
     Page,
+    PurgeReport,
     TenantUsage,
     VectorHit,
 )
@@ -251,28 +256,51 @@ class InMemoryStore(MemoryStore):
 
     async def upsert_memory(self, memory: Memory, *, now: datetime | None = None) -> Memory:
         async with self._lock:
-            bucket = self._by_space.setdefault((memory.org_id, memory.space_id), [])
-            if memory.id not in self._memories:
-                bucket.append(memory.id)
-                bucket.sort()
-            self._memories[memory.id] = memory
+            self._check_key_free_locked(memory)
+            return self._upsert_locked(memory, now or utcnow())
 
-            # See PostgresStore.upsert_memory: a write that does not bump
-            # `version` is an in-place correction and overwrites the open
-            # snapshot; only a version bump opens a new one. Both backends
-            # apply this rule, and the conformance suite pins it.
-            versions = self._versions[memory.id]
-            when = now or utcnow()
-            open_version = versions[-1] if versions and versions[-1].valid_to is None else None
-            if open_version is not None and open_version.version == memory.version:
-                versions[-1] = MemoryVersion.snapshot(
-                    memory, valid_from=open_version.valid_from
-                ).model_copy(update={"id": open_version.id})
-            else:
-                if open_version is not None:
-                    versions[-1] = open_version.model_copy(update={"valid_to": when})
-                versions.append(MemoryVersion.snapshot(memory, valid_from=when))
-            return memory
+    def _check_key_free_locked(self, memory: Memory) -> None:
+        """The partial unique index on (space, key) WHERE active, in Python.
+
+        Postgres refuses a second ACTIVE row under one key at the index;
+        this backend must refuse it too, or the two disagree about the one
+        invariant keyed writes exist to keep.
+        """
+        if memory.key is None or memory.status is not MemoryStatus.ACTIVE:
+            return
+        for other in self._space_memories(memory.org_id, memory.space_id):
+            if (
+                other.id != memory.id
+                and other.key == memory.key
+                and other.status is MemoryStatus.ACTIVE
+            ):
+                raise ConflictError(
+                    f"key {memory.key!r} is already held by an active memory", field="key"
+                )
+
+    def _upsert_locked(self, memory: Memory, when: datetime) -> Memory:
+        """`upsert_memory`'s body, for callers already holding the lock."""
+        bucket = self._by_space.setdefault((memory.org_id, memory.space_id), [])
+        if memory.id not in self._memories:
+            bucket.append(memory.id)
+            bucket.sort()
+        self._memories[memory.id] = memory
+
+        # See PostgresStore.upsert_memory: a write that does not bump
+        # `version` is an in-place correction and overwrites the open
+        # snapshot; only a version bump opens a new one. Both backends
+        # apply this rule, and the conformance suite pins it.
+        versions = self._versions[memory.id]
+        open_version = versions[-1] if versions and versions[-1].valid_to is None else None
+        if open_version is not None and open_version.version == memory.version:
+            versions[-1] = MemoryVersion.snapshot(
+                memory, valid_from=open_version.valid_from
+            ).model_copy(update={"id": open_version.id})
+        else:
+            if open_version is not None:
+                versions[-1] = open_version.model_copy(update={"valid_to": when})
+            versions.append(MemoryVersion.snapshot(memory, valid_from=when))
+        return memory
 
     async def get_memory(self, org_id: str, space_id: str, memory_id: str) -> Memory | None:
         memory = self._memories.get(memory_id)
@@ -392,51 +420,53 @@ class InMemoryStore(MemoryStore):
 
     async def erase_memory(self, org_id: str, space_id: str, memory_id: str) -> EraseReport:
         async with self._lock:
-            memory = self._memories.get(memory_id)
-            live = (
-                memory is not None and memory.org_id == org_id and memory.space_id == space_id
-            )
-            # History may exist even when the live row is gone (delete_memory
-            # preserves it). Erasure must purge that residue too, or a
-            # point-in-time read resurrects content the caller was told is gone.
-            residual = [
+            return self._erase_locked(org_id, space_id, memory_id)
+
+    def _erase_locked(self, org_id: str, space_id: str, memory_id: str) -> EraseReport:
+        """`erase_memory`'s body, for callers already holding the lock."""
+        memory = self._memories.get(memory_id)
+        live = memory is not None and memory.org_id == org_id and memory.space_id == space_id
+        # History may exist even when the live row is gone (delete_memory
+        # preserves it). Erasure must purge that residue too, or a
+        # point-in-time read resurrects content the caller was told is gone.
+        residual = [
+            v
+            for v in self._versions.get(memory_id, [])
+            if v.org_id == org_id and v.space_id == space_id
+        ]
+        if not live and not residual:
+            return EraseReport(existed=False)
+
+        chunks = len(memory.chunks) if live and memory is not None else 0
+        edges = 0
+        bridged = 0
+        if live:
+            del self._memories[memory_id]
+            bucket = self._by_space.get((org_id, space_id))
+            if bucket and memory_id in bucket:
+                bucket.remove(memory_id)
+            bridged = self._bridge_supersession_locked(space_id, memory_id)
+            edges = self._remove_edges_touching(space_id, memory_id)
+
+        versions = len(residual)
+        if memory_id in self._versions:
+            remaining = [
                 v
-                for v in self._versions.get(memory_id, [])
-                if v.org_id == org_id and v.space_id == space_id
+                for v in self._versions[memory_id]
+                if not (v.org_id == org_id and v.space_id == space_id)
             ]
-            if not live and not residual:
-                return EraseReport(existed=False)
+            if remaining:
+                self._versions[memory_id] = remaining
+            else:
+                del self._versions[memory_id]
 
-            chunks = len(memory.chunks) if live and memory is not None else 0
-            edges = 0
-            bridged = 0
-            if live:
-                del self._memories[memory_id]
-                bucket = self._by_space.get((org_id, space_id))
-                if bucket and memory_id in bucket:
-                    bucket.remove(memory_id)
-                bridged = self._bridge_supersession_locked(space_id, memory_id)
-                edges = self._remove_edges_touching(space_id, memory_id)
-
-            versions = len(residual)
-            if memory_id in self._versions:
-                remaining = [
-                    v
-                    for v in self._versions[memory_id]
-                    if not (v.org_id == org_id and v.space_id == space_id)
-                ]
-                if remaining:
-                    self._versions[memory_id] = remaining
-                else:
-                    del self._versions[memory_id]
-
-            return EraseReport(
-                existed=True,
-                chunks_removed=chunks,
-                edges_removed=edges,
-                versions_purged=versions,
-                edges_bridged=bridged,
-            )
+        return EraseReport(
+            existed=True,
+            chunks_removed=chunks,
+            edges_removed=edges,
+            versions_purged=versions,
+            edges_bridged=bridged,
+        )
 
     def _space_memories(self, org_id: str, space_id: str) -> list[Memory]:
         return [
@@ -480,10 +510,244 @@ class InMemoryStore(MemoryStore):
     async def find_by_content_hash(
         self, org_id: str, space_id: str, digest: str
     ) -> Memory | None:
-        for memory in self._space_memories(org_id, space_id):
-            if memory.content_sha256 == digest and memory.status is not MemoryStatus.ARCHIVED:
+        # Lowest id first, matching the Postgres ORDER BY, so both backends
+        # pick the same row when history left more than one candidate.
+        for memory in sorted(self._space_memories(org_id, space_id), key=lambda m: m.id):
+            if memory.content_sha256 == digest and dedupe_eligible(memory):
                 return memory
         return None
+
+    # -- keyed memories ------------------------------------------------------
+
+    def _active_by_key_locked(self, org_id: str, space_id: str, key: str) -> Memory | None:
+        for memory in self._space_memories(org_id, space_id):
+            if memory.key == key and memory.status is MemoryStatus.ACTIVE:
+                return memory
+        return None
+
+    async def get_active_by_keys(
+        self, org_id: str, space_id: str, keys: Sequence[str]
+    ) -> dict[str, Memory]:
+        found: dict[str, Memory] = {}
+        for key in dict.fromkeys(keys):
+            memory = self._active_by_key_locked(org_id, space_id, key)
+            if memory is not None:
+                found[key] = memory
+        return found
+
+    def _key_holders_locked(self, org_id: str, space_id: str, key: str) -> list[str]:
+        """Every memory id under `key`: live rows in any status, plus history."""
+        ids = {m.id for m in self._space_memories(org_id, space_id) if m.key == key}
+        for memory_id, versions in self._versions.items():
+            if any(
+                v.org_id == org_id and v.space_id == space_id and v.key == key for v in versions
+            ):
+                ids.add(memory_id)
+        return sorted(ids)
+
+    def _derivatives_locked(self, space_id: str, memory_ids: Sequence[str]) -> list[str]:
+        """First-hop DERIVED_FROM sources of `memory_ids` outside that set."""
+        targets = set(memory_ids)
+        found: set[str] = set()
+        for memory_id in targets:
+            for edge_id in self._edges_by_target.get((space_id, memory_id), []):
+                edge = self._edges[edge_id]
+                if edge.type is RelationType.DERIVED_FROM and edge.source_id not in targets:
+                    found.add(edge.source_id)
+        return sorted(found)
+
+    def _set_status_locked(
+        self, memory: Memory, status: MemoryStatus, when: datetime
+    ) -> Memory:
+        return self._upsert_locked(
+            memory.model_copy(
+                update={"status": status, "version": memory.version + 1, "updated_at": when}
+            ),
+            when,
+        )
+
+    async def write_keyed(
+        self,
+        memory: Memory,
+        *,
+        mode: ReplaceMode,
+        reason: str = "replaced under the same key",
+        now: datetime | None = None,
+    ) -> KeyedWrite:
+        if memory.key is None:
+            raise ValidationError("write_keyed needs a memory with a key", field="key")
+        when = now or utcnow()
+        # One lock for the whole replace: the reference backend's version of
+        # the advisory lock plus transaction the Postgres backend takes.
+        async with self._lock:
+            active = self._active_by_key_locked(memory.org_id, memory.space_id, memory.key)
+            if active is not None and keyed_unchanged(active, memory):
+                return KeyedWrite(memory=active, unchanged=True, mode=mode)
+            # The Postgres backend's guards, so the two refuse the same writes:
+            # the new row must be NEW (its primary key would refuse a reused
+            # id), and never the very row it replaces.
+            if active is not None and active.id == memory.id:
+                raise ValidationError(
+                    "a keyed write replaces the active row with a NEW memory; "
+                    f"{memory.id} is the row it would replace",
+                    field="id",
+                )
+            # Checked before anything moves -- this backend has no rollback.
+            # An id about to be erased under the key is free by write time,
+            # as it is inside the Postgres transaction.
+            holders = (
+                self._key_holders_locked(memory.org_id, memory.space_id, memory.key)
+                if mode is ReplaceMode.ERASE
+                else []
+            )
+            if memory.id in self._memories and memory.id not in holders:
+                raise ConflictError(
+                    f"memory {memory.id} already exists; a keyed write creates a new one",
+                    field="id",
+                )
+
+            replaced: list[str] = []
+            derivatives: list[str] = []
+            if mode is ReplaceMode.ERASE:
+                derivatives = self._derivatives_locked(memory.space_id, holders)
+                for holder in holders:
+                    if self._erase_locked(memory.org_id, memory.space_id, holder).existed:
+                        replaced.append(holder)
+            elif active is not None:
+                self._set_status_locked(active, MemoryStatus.SUPERSEDED, when)
+                replaced.append(active.id)
+
+            stored = self._upsert_locked(memory, when)
+            if mode is ReplaceMode.SUPERSEDE and active is not None:
+                edge = RelationEdge(
+                    org_id=memory.org_id,
+                    space_id=memory.space_id,
+                    source_id=stored.id,
+                    target_id=active.id,
+                    type=RelationType.SUPERSEDES,
+                    reason=reason,
+                    confidence=1.0,
+                )
+                self._edges[edge.id] = edge
+                self._edges_by_source[(edge.space_id, edge.source_id)].append(edge.id)
+                self._edges_by_target[(edge.space_id, edge.target_id)].append(edge.id)
+            return KeyedWrite(
+                memory=stored,
+                unchanged=False,
+                mode=mode,
+                replaced=replaced,
+                derivatives=derivatives,
+            )
+
+    async def retire_keys(
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        status: MemoryStatus = MemoryStatus.ARCHIVED,
+        now: datetime | None = None,
+    ) -> list[Memory]:
+        when = now or utcnow()
+        retired: list[Memory] = []
+        async with self._lock:
+            for key in dict.fromkeys(keys):
+                active = self._active_by_key_locked(org_id, space_id, key)
+                if active is not None:
+                    retired.append(self._set_status_locked(active, status, when))
+        return retired
+
+    async def erase_by_key(self, org_id: str, space_id: str, key: str) -> BulkEraseReport:
+        async with self._lock:
+            return self._erase_many_locked(
+                org_id, space_id, self._key_holders_locked(org_id, space_id, key)
+            )
+
+    # -- bulk erasure and purge ----------------------------------------------
+
+    def _erase_many_locked(
+        self, org_id: str, space_id: str, memory_ids: Sequence[str]
+    ) -> BulkEraseReport:
+        derivatives = self._derivatives_locked(space_id, memory_ids)
+        erased: list[str] = []
+        chunks = edges = bridged = versions = 0
+        for memory_id in memory_ids:
+            report = self._erase_locked(org_id, space_id, memory_id)
+            if not report.existed:
+                continue
+            erased.append(memory_id)
+            chunks += report.chunks_removed
+            edges += report.edges_removed
+            bridged += report.edges_bridged
+            versions += report.versions_purged
+        return BulkEraseReport(
+            memory_ids=erased,
+            chunks_removed=chunks,
+            edges_removed=edges,
+            edges_bridged=bridged,
+            versions_purged=versions,
+            derivatives=[d for d in derivatives if d not in erased],
+        )
+
+    async def erase_by_tag(self, org_id: str, space_id: str, tag: str) -> BulkEraseReport:
+        async with self._lock:
+            ids = {m.id for m in self._space_memories(org_id, space_id) if tag in m.tags}
+            for memory_id, versions in self._versions.items():
+                if any(
+                    v.org_id == org_id and v.space_id == space_id and tag in v.tags
+                    for v in versions
+                ):
+                    ids.add(memory_id)
+            return self._erase_many_locked(org_id, space_id, sorted(ids))
+
+    async def purge_space(self, org_id: str, space_id: str) -> PurgeReport:
+        async with self._lock:
+            space = self._spaces.get(space_id)
+            owned = space is not None and space.org_id == org_id
+            memory_ids = self._by_space.pop((org_id, space_id), []) if owned else []
+            memories = chunks = 0
+            for memory_id in memory_ids:
+                memory = self._memories.pop(memory_id, None)
+                if memory is not None:
+                    memories += 1
+                    chunks += len(memory.chunks)
+            edge_ids = [
+                eid
+                for eid, edge in self._edges.items()
+                if edge.org_id == org_id and edge.space_id == space_id
+            ]
+            for eid in edge_ids:
+                edge = self._edges.pop(eid)
+                for index, end in (
+                    (self._edges_by_source, edge.source_id),
+                    (self._edges_by_target, edge.target_id),
+                ):
+                    bucket = index.get((space_id, end))
+                    if bucket and eid in bucket:
+                        bucket.remove(eid)
+            # History is purged even when the space row is already gone:
+            # that residue is exactly what `delete_space` leaves behind.
+            purged = 0
+            for memory_id in list(self._versions):
+                kept = [
+                    v
+                    for v in self._versions[memory_id]
+                    if not (v.org_id == org_id and v.space_id == space_id)
+                ]
+                purged += len(self._versions[memory_id]) - len(kept)
+                if kept:
+                    self._versions[memory_id] = kept
+                else:
+                    del self._versions[memory_id]
+            if owned:
+                del self._spaces[space_id]
+            return PurgeReport(
+                spaces=1 if owned else 0,
+                memories=memories,
+                chunks=chunks,
+                relation_edges=len(edge_ids),
+                memory_versions=purged,
+            )
 
     # -- relations: a typed, indexed graph ----------------------------------
 
@@ -572,6 +836,7 @@ class InMemoryStore(MemoryStore):
                     status=version.status,
                     occurred_at=version.occurred_at,
                     version=version.version,
+                    key=version.key,
                     chunks=[],
                 )
         return None

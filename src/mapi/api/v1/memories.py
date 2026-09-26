@@ -7,18 +7,22 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from ...core.errors import ValidationError
+from ...core.errors import ProviderError, ValidationError
 from ...core.ids import is_valid
-from ...domain.models import MemoryKind, MemoryStatus, RelationType, Scope
-from ...service import IngestResult
+from ...domain.models import MAX_KEY_CHARS, MemoryKind, MemoryStatus, RelationType, Scope
+from ...service import BulkOutcome, IngestItem, IngestResult
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import (
     BulkCreateMemoryRequest,
     BulkCreateMemoryResponse,
+    BulkEraseResponse,
+    BulkItemResponse,
     CreateMemoryRequest,
     CreateMemoryResponse,
     EraseAttestation,
+    EraseByTagRequest,
+    ItemError,
     LineageResponse,
     LinkRequest,
     MemoryContextResponse,
@@ -28,6 +32,9 @@ from ..schemas import (
     MemoryVersionResponse,
     RelationListResponse,
     RelationResponse,
+    RetiredKey,
+    RetireRequest,
+    RetireResponse,
 )
 
 router = APIRouter(prefix="/spaces/{space_id}/memories", tags=["memories"])
@@ -55,7 +62,30 @@ def _to_response(result: IngestResult) -> CreateMemoryResponse:
         superseded=result.superseded,
         contradicts=result.contradicts,
         chunk_count=result.chunk_count,
+        erased=result.erased,
     )
+
+
+def _to_bulk_item(outcome: BulkOutcome, *, expose_detail: bool) -> BulkItemResponse:
+    if outcome.error is not None or outcome.result is None:
+        error = outcome.error or ValidationError("item produced no result")
+        return BulkItemResponse(
+            index=outcome.index,
+            status=error.status_code,
+            error=ItemError.from_error(error, expose_detail=expose_detail),
+        )
+    single = _to_response(outcome.result)
+    return BulkItemResponse(
+        index=outcome.index,
+        status=status.HTTP_201_CREATED if single.created else status.HTTP_200_OK,
+        **single.model_dump(),
+    )
+
+
+def _validate_key(key: str) -> str:
+    if not key or len(key) > MAX_KEY_CHARS or any(ord(c) < 32 or ord(c) == 127 for c in key):
+        raise ValidationError(f"{key[:40]!r} is not a valid memory key", field="key")
+    return key
 
 
 @router.post(
@@ -82,6 +112,8 @@ async def create_memory(
         tags=body.tags,
         source=body.source,
         occurred_at=body.occurred_at,
+        key=body.key,
+        replace=body.replace,
     )
     # A deduplicated write did not create anything; 200 says so honestly.
     if not result.created:
@@ -100,29 +132,115 @@ async def bulk_create(
     space_id: str,
     body: BulkCreateMemoryRequest,
     service: ServiceDep,
+    settings: SettingsDep,
+    response: Response,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
 ) -> BulkCreateMemoryResponse:
+    """Every item's chunks are embedded in one batched pass, then the items
+    are written in order. Each item carries its own `status` and, if it
+    failed, its own `error`: one bad item no longer fails the request.
+
+    201 when anything was created, 200 when nothing was. If EVERY item
+    failed and a provider was among the causes, the request fails as a whole
+    with that provider error, so a client's backoff sees the upstream
+    trouble instead of a 200 full of item errors.
+    """
     _validate_space_id(space_id)
-    items: list[CreateMemoryResponse] = []
-    # Sequential rather than gathered: concurrent ingest of a batch containing
-    # duplicates of each other would race the dedup check and store both.
-    for item in body.items:
-        result = await service.ingest(
-            org_id=principal.org_id,
-            space_id=space_id,
-            content=item.content,
-            summary=item.summary,
-            metadata=item.metadata,
-            tags=item.tags,
-            source=item.source,
-            occurred_at=item.occurred_at,
-        )
-        items.append(_to_response(result))
+    outcomes = await service.ingest_many(
+        org_id=principal.org_id,
+        space_id=space_id,
+        items=[
+            IngestItem(
+                content=item.content,
+                summary=item.summary,
+                metadata=item.metadata,
+                tags=item.tags,
+                source=item.source,
+                occurred_at=item.occurred_at,
+                key=item.key,
+                replace=item.replace,
+            )
+            for item in body.items
+        ],
+    )
+    if outcomes and all(o.error is not None for o in outcomes):
+        upstream = next((o.error for o in outcomes if isinstance(o.error, ProviderError)), None)
+        if upstream is not None:
+            raise upstream
+    items = [_to_bulk_item(o, expose_detail=settings.debug_errors) for o in outcomes]
+    created = sum(1 for i in items if i.created)
+    if not created:
+        response.status_code = status.HTTP_200_OK
     return BulkCreateMemoryResponse(
         items=items,
-        created=sum(1 for i in items if i.created),
-        duplicates=sum(1 for i in items if not i.created),
+        created=created,
+        duplicates=sum(1 for i in items if i.error is None and not i.created),
+        failed=sum(1 for i in items if i.error is not None),
     )
+
+
+@router.post(
+    "/erase-by-tag",
+    response_model=BulkEraseResponse,
+    summary="Erase every memory a tag has ever been on",
+)
+async def erase_by_tag(
+    space_id: str,
+    body: EraseByTagRequest,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
+) -> BulkEraseResponse:
+    """Right-to-erasure over a tag, in one transaction: every status and
+    kind, live rows and version history alike. Idempotent -- a retry
+    reports zeros. The tag is matched as stored (trimmed, case-folded)."""
+    _validate_space_id(space_id)
+    report = await service.erase_by_tag(principal.org_id, space_id, body.tag)
+    return BulkEraseResponse(**report)  # type: ignore[arg-type]
+
+
+@router.post(
+    "/retire",
+    response_model=RetireResponse,
+    summary="Archive the memories held under some keys",
+)
+async def retire_keys(
+    space_id: str,
+    body: RetireRequest,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
+) -> RetireResponse:
+    """For a sync client whose source dropped these facts: they stop being
+    searchable but stay in history. Use DELETE .../by-key/{key} to erase."""
+    _validate_space_id(space_id)
+    retired, missing = await service.retire_keys(
+        principal.org_id, space_id, body.keys, status=MemoryStatus(body.status)
+    )
+    return RetireResponse(
+        retired=[
+            RetiredKey(key=m.key or "", memory_id=m.id, version=m.version) for m in retired
+        ],
+        missing=missing,
+    )
+
+
+@router.delete(
+    "/by-key/{key:path}",
+    response_model=BulkEraseResponse,
+    summary="Erase everything ever held under a key",
+)
+async def erase_by_key(
+    space_id: str,
+    key: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_WRITE))],
+) -> BulkEraseResponse:
+    """Erasure, not the audit-preserving delete: the ACTIVE memory, every
+    superseded or archived one before it, and all their version history.
+    `{key:path}` so keys containing '/' survive routing; percent-encode the
+    rest. Idempotent -- a retry reports zeros."""
+    _validate_space_id(space_id)
+    report = await service.erase_by_key(principal.org_id, space_id, _validate_key(key))
+    return BulkEraseResponse(**report)  # type: ignore[arg-type]
 
 
 @router.get("", response_model=MemoryListResponse, summary="List memories")
@@ -354,7 +472,8 @@ async def erase_memory(
     """Destroys the memory everywhere it can be reached: live row, chunks,
     edges, and the full version history — point-in-time reads included. This
     is the compliance path; plain DELETE preserves the audit trail instead.
-    Returns proof of what was destroyed."""
+    Returns proof of what was destroyed. Idempotent: an id with nothing left
+    to erase returns 200 with `already_erased: true`, never 404."""
     _validate_space_id(space_id)
     _validate_memory_id(memory_id)
     attestation = await service.erase_memory(principal.org_id, space_id, memory_id)

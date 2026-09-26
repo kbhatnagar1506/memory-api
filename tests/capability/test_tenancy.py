@@ -541,9 +541,11 @@ async def test_erasure_does_not_leak_across_tenants(geometry: tuple) -> None:
     An erase names a memory id. If the tenant predicate were missing, an attacker
     with any valid key could destroy another org's data by guessing an id -- and
     unlike a read leak, that one is not recoverable.
-    """
-    from mapi.core.errors import NotFoundError
 
+    Erase is idempotent, so the foreign id reads as "already erased" -- exactly
+    what a genuinely absent id reads as, which is what keeps the answer from
+    confirming that the id exists somewhere else.
+    """
     service, _org, _space, _embedder = geometry
     alpha_org, _alpha_space, _beta_org, beta_space = await _two_tenants(geometry)
     listing = await service.list_memories(
@@ -551,8 +553,14 @@ async def test_erasure_does_not_leak_across_tenants(geometry: tuple) -> None:
     )
     victim = listing.items[0].id
 
-    with pytest.raises(NotFoundError):
-        await service.erase_memory(alpha_org.id, beta_space.id, victim)
+    attestation = await service.erase_memory(alpha_org.id, beta_space.id, victim)
+    absent = await service.erase_memory(
+        alpha_org.id, beta_space.id, "mem_00000000000000000000000000"
+    )
+    assert attestation["already_erased"] is True
+    assert {k: v for k, v in attestation.items() if k not in ("memory_id", "erased_at")} == {
+        k: v for k, v in absent.items() if k not in ("memory_id", "erased_at")
+    }
 
     survivor = await service.get_memory(beta_space.org_id, beta_space.id, victim)
     assert survivor is not None, "a cross-tenant erase destroyed the memory anyway"

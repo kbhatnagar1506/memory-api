@@ -86,6 +86,43 @@ class MemoryKind(StrEnum):
     DERIVED = "derived"
 
 
+class ReplaceMode(StrEnum):
+    """What a keyed write does to the memory it replaces.
+
+    A key names one fact ("card:stuck_on", "muse:user:projects"), and a new
+    write under the key replaces the old one -- the question is what happens
+    to the old row. SUPERSEDE keeps it as history (status SUPERSEDED, an
+    edge, a version row), which is what point-in-time reads need. ERASE
+    destroys it the way `erase` does, which is what a personal memory whose
+    old text should not linger needs.
+    """
+
+    SUPERSEDE = "supersede"
+    ERASE = "erase"
+
+
+#: Longest caller-supplied memory key. Keys are names, not content.
+MAX_KEY_CHARS = 200
+
+
+def _valid_key(value: str | None) -> str | None:
+    """Keys are exact identifiers: never blank, never control characters.
+
+    Control characters are refused rather than stripped because a key is
+    matched byte for byte -- a key that silently lost a character would be a
+    different key, and writes under it would stop replacing anything.
+    """
+    if value is None:
+        return None
+    if not value:
+        raise ValueError("key must not be empty")
+    if len(value) > MAX_KEY_CHARS:
+        raise ValueError(f"key is longer than {MAX_KEY_CHARS} characters")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        raise ValueError("key must not contain control characters")
+    return value
+
+
 class RelationType(StrEnum):
     SUPERSEDES = "supersedes"
     CONTRADICTS = "contradicts"
@@ -311,6 +348,11 @@ class Memory(Base):
     #: relation to a memory does NOT bump this: an edge is a fact about the
     #: graph, not a change to the memory's own content.
     version: int = Field(default=1, ge=1)
+    #: Caller-chosen name for the fact this memory states, unique among the
+    #: space's ACTIVE memories. A write under an existing key replaces the
+    #: memory holding it (see `ReplaceMode`) instead of piling up beside it.
+    #: None for ordinary memories, which dedupe by content instead.
+    key: str | None = None
 
     @field_validator("id")
     @classmethod
@@ -318,6 +360,11 @@ class Memory(Base):
         if not is_valid(v, "memory"):
             raise ValueError(f"invalid memory id: {v!r}")
         return v
+
+    @field_validator("key")
+    @classmethod
+    def _key_shape(cls, v: str | None) -> str | None:
+        return _valid_key(v)
 
     @field_validator("tags")
     @classmethod
@@ -409,6 +456,9 @@ class MemoryVersion(Base):
     occurred_at: datetime
     valid_from: datetime
     valid_to: datetime | None = None
+    #: The memory's key at the time, so erasing a key can reach history
+    #: whose live row is already gone (delete keeps versions by design).
+    key: str | None = None
 
     @field_validator("id")
     @classmethod
@@ -434,6 +484,7 @@ class MemoryVersion(Base):
             status=memory.status,
             occurred_at=memory.occurred_at,
             valid_from=valid_from,
+            key=memory.key,
         )
 
 
@@ -483,6 +534,7 @@ class ScoredMemory(Base):
 
 
 __all__ = [
+    "MAX_KEY_CHARS",
     "ApiKey",
     "Base",
     "Chunk",
@@ -494,6 +546,7 @@ __all__ = [
     "Organization",
     "RelationEdge",
     "RelationType",
+    "ReplaceMode",
     "Scope",
     "ScoredMemory",
     "Space",

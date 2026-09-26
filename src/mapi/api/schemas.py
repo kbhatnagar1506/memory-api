@@ -12,16 +12,26 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_core.core_schema import ValidationInfo
 
+from ..core.errors import MapiError
 from ..domain.models import (
+    MAX_KEY_CHARS,
     Memory,
     MemoryKind,
     MemoryStatus,
     MemoryVersion,
     RelationEdge,
     RelationType,
+    ReplaceMode,
     Scope,
     ScoredMemory,
 )
@@ -65,6 +75,13 @@ class SpaceListResponse(Response):
 
 # -- memories -----------------------------------------------------------------
 
+#: A caller's name for one fact. No control characters: keys travel in URL
+#: paths (DELETE .../by-key/{key}) and are matched byte for byte.
+MemoryKey = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=MAX_KEY_CHARS, pattern=r"^[^\x00-\x1f\x7f]+$"),
+]
+
 
 class CreateMemoryRequest(Request):
     content: Annotated[str, StringConstraints(min_length=1)]
@@ -93,6 +110,23 @@ class CreateMemoryRequest(Request):
     # Cost control belongs at the account level, metered on what a tenant
     # actually consumes -- not as a per-request flag that makes the product
     # worse for everyone who leaves it alone.
+
+    #: Names the fact this memory states. A later write with the same key
+    #: REPLACES the memory holding it -- atomically, one ACTIVE row per key
+    #: -- instead of being judged a duplicate or a revision by cosine. That
+    #: is not a consolidation flag: it is the caller saying which fact this
+    #: is, which no similarity threshold can infer. Resending an unchanged
+    #: payload under its key is a no-op: no version, no embedding.
+    key: MemoryKey | None = None
+    #: What happens to the memory a keyed write replaces: kept as SUPERSEDED
+    #: history (default) or erased outright, history and all.
+    replace: ReplaceMode = ReplaceMode.SUPERSEDE
+
+    @model_validator(mode="after")
+    def _replace_needs_key(self) -> CreateMemoryRequest:
+        if "replace" in self.model_fields_set and self.key is None:
+            raise ValueError("replace applies only to a keyed write; set key")
+        return self
 
     @field_validator("metadata")
     @classmethod
@@ -171,10 +205,13 @@ class MemoryVersionResponse(Response):
     #: System time: when our database believed this.
     valid_from: datetime
     valid_to: datetime | None
+    #: The memory's key at the time (keyed memories only).
+    key: str | None = None
 
     @classmethod
     def from_domain(cls, version: MemoryVersion) -> MemoryVersionResponse:
         return cls(
+            key=version.key,
             version=version.version,
             content=version.content,
             summary=version.summary,
@@ -331,6 +368,10 @@ class EraseAttestation(Response):
     versions_purged: int
     derived_memories_affected: list[str]
     erased_at: str
+    #: Nothing was there to erase: never existed, already erased, or not
+    #: this tenant's -- deliberately indistinguishable. 200, not 404, so a
+    #: retried erasure succeeds.
+    already_erased: bool = False
 
 
 class MemoryResponse(Response):
@@ -348,10 +389,12 @@ class MemoryResponse(Response):
     updated_at: datetime
     version: int
     chunk_count: int
+    key: str | None = None
 
     @classmethod
     def from_domain(cls, memory: Memory) -> MemoryResponse:
         return cls(
+            key=memory.key,
             id=memory.id,
             space_id=memory.space_id,
             content=memory.content,
@@ -380,12 +423,115 @@ class CreateMemoryResponse(Response):
     #: reported; neither side is hidden, because either may be the true one.
     contradicts: list[str] = Field(default_factory=list)
     chunk_count: int = 0
+    #: Memories this keyed write destroyed (replace="erase").
+    erased: list[str] = Field(default_factory=list)
+
+
+class ItemError(Response):
+    """Why one bulk item failed: the problem document it would have been alone."""
+
+    code: str
+    title: str
+    status: int
+    detail: str
+    field: str | None = None
+    #: Seconds to wait before retrying, when the failure was a provider quota.
+    retry_after: float | None = None
+
+    @classmethod
+    def from_error(cls, exc: MapiError, *, expose_detail: bool) -> ItemError:
+        retry_after = exc.extra.get("retry_after")
+        return cls(
+            code=exc.slug,
+            title=exc.title,
+            status=exc.status_code,
+            # Same rule as the top-level handler: 5xx detail stays server-side
+            # unless debug_errors is on.
+            detail=exc.detail if expose_detail or exc.status_code < 500 else exc.title,
+            field=exc.field,
+            retry_after=float(retry_after) if isinstance(retry_after, int | float) else None,
+        )
+
+
+class BulkItemResponse(Response):
+    """One item of a bulk write. `status` is what this item alone would have got.
+
+    201 created, 200 not created (an exact restatement, or an unchanged
+    keyed payload -- `duplicate_of` names the memory that holds it), or the
+    error's own status with `error` set and `memory` null. A client
+    deciding whether an item landed checks `status < 300`.
+    """
+
+    index: int
+    status: int
+    created: bool = False
+    memory: MemoryResponse | None = None
+    duplicate_of: str | None = None
+    duplicate_kind: str = "none"
+    similarity: float = 0.0
+    superseded: list[str] = Field(default_factory=list)
+    erased: list[str] = Field(default_factory=list)
+    contradicts: list[str] = Field(default_factory=list)
+    chunk_count: int = 0
+    error: ItemError | None = None
 
 
 class BulkCreateMemoryResponse(Response):
-    items: list[CreateMemoryResponse]
+    items: list[BulkItemResponse]
     created: int
     duplicates: int
+    failed: int = 0
+
+
+class EraseByTagRequest(Request):
+    tag: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+
+
+class RetireRequest(Request):
+    keys: list[MemoryKey] = Field(min_length=1, max_length=1000)
+    #: The only status a key retires to. A field rather than an implied
+    #: constant so the request states what it does.
+    status: Literal["archived"] = "archived"
+
+
+class RetiredKey(Response):
+    key: str
+    memory_id: str
+    version: int
+
+
+class RetireResponse(Response):
+    retired: list[RetiredKey]
+    #: Keys with no ACTIVE memory. Not an error: a retried retire lands here.
+    missing: list[str]
+
+
+class BulkEraseResponse(Response):
+    """What an erase over many memories destroyed. Zeros on a retry."""
+
+    space_id: str
+    tag: str | None = None
+    key: str | None = None
+    memory_ids: list[str]
+    memories_erased: int
+    chunks_removed: int
+    edges_removed: int
+    edges_bridged: int
+    versions_purged: int
+    derived_memories_affected: list[str]
+    erased_at: str
+
+
+class PurgeResponse(Response):
+    """Rows a space purge removed, per table. All zero when repeated."""
+
+    space_id: str
+    spaces: int
+    memories: int
+    chunks: int
+    relation_edges: int
+    memory_versions: int
+    purged_at: str
 
 
 class MemoryListResponse(Response):
@@ -715,21 +861,29 @@ __all__ = [
     "ApiKeyResponse",
     "BulkCreateMemoryRequest",
     "BulkCreateMemoryResponse",
+    "BulkEraseResponse",
+    "BulkItemResponse",
     "CreateApiKeyRequest",
     "CreateApiKeyResponse",
     "CreateMemoryRequest",
     "CreateMemoryResponse",
     "CreateSpaceRequest",
     "EraseAttestation",
+    "EraseByTagRequest",
     "HealthResponse",
+    "ItemError",
     "LineageResponse",
     "LinkRequest",
     "MemoryListResponse",
     "MemoryResponse",
     "MemoryVersionListResponse",
     "MemoryVersionResponse",
+    "PurgeResponse",
     "RelationListResponse",
     "RelationResponse",
+    "RetireRequest",
+    "RetireResponse",
+    "RetiredKey",
     "SearchHit",
     "SearchRequestBody",
     "SearchResponseBody",

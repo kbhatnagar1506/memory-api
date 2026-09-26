@@ -31,6 +31,7 @@ from ..domain.models import (
     Organization,
     RelationEdge,
     RelationType,
+    ReplaceMode,
     Space,
     User,
 )
@@ -89,6 +90,54 @@ class EraseReport:
     #: current. The bridge (A->C) carries only the two surviving ids, never the
     #: removed memory's content, so erasure compliance is unaffected.
     edges_bridged: int = 0
+
+
+# -- write-side reports (keyed writes, bulk erasure, purge) ----------------
+
+
+@dataclass(frozen=True, slots=True)
+class KeyedWrite:
+    """What `write_keyed` did, atomically.
+
+    `unchanged` means the key already held this exact payload: nothing was
+    written, no version was opened, no chunk was rewritten, and `memory` is
+    the row that was already there. Otherwise `memory` is the new ACTIVE row
+    and `replaced` lists what it displaced -- superseded or erased per
+    `mode`.
+    """
+
+    memory: Memory
+    unchanged: bool
+    mode: ReplaceMode
+    replaced: list[str] = field(default_factory=list)
+    #: First-hop DERIVED_FROM sources of erased rows, collected inside the
+    #: transaction before their edges died. The service marks them STALE.
+    derivatives: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkEraseReport:
+    """What an erase over many memories (by tag, by key) destroyed."""
+
+    memory_ids: list[str] = field(default_factory=list)
+    chunks_removed: int = 0
+    edges_removed: int = 0
+    edges_bridged: int = 0
+    versions_purged: int = 0
+    #: Memories derived from an erased one that were not erased themselves,
+    #: collected before the edges naming them were removed.
+    derivatives: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class PurgeReport:
+    """Row counts a space purge removed, per table. All zero on a retry."""
+
+    spaces: int = 0
+    memories: int = 0
+    chunks: int = 0
+    relation_edges: int = 0
+    memory_versions: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,7 +315,108 @@ class MemoryStore(abc.ABC):
     @abc.abstractmethod
     async def find_by_content_hash(
         self, org_id: str, space_id: str, digest: str
-    ) -> Memory | None: ...
+    ) -> Memory | None:
+        """The ACTIVE, unkeyed memory with this content hash, if any.
+
+        This is the exact-duplicate gate, so it answers "what may this write
+        be folded into" -- see `consolidation.dedupe_eligible` for why
+        superseded, stale and keyed rows are not candidates.
+        """
+
+    async def find_by_content_hashes(
+        self, org_id: str, space_id: str, digests: Sequence[str]
+    ) -> dict[str, Memory]:
+        """Batch form of `find_by_content_hash`, for bulk ingest.
+
+        Concrete on the ABC as a loop so every backend has it; the Postgres
+        backend overrides it with one query, which is the point of batching.
+        """
+        found: dict[str, Memory] = {}
+        for digest in dict.fromkeys(digests):
+            memory = await self.find_by_content_hash(org_id, space_id, digest)
+            if memory is not None:
+                found[digest] = memory
+        return found
+
+    # -- keyed memories ----------------------------------------------------
+
+    @abc.abstractmethod
+    async def get_active_by_keys(
+        self, org_id: str, space_id: str, keys: Sequence[str]
+    ) -> dict[str, Memory]:
+        """The ACTIVE memory holding each key. Keys with none are absent."""
+
+    @abc.abstractmethod
+    async def write_keyed(
+        self,
+        memory: Memory,
+        *,
+        mode: ReplaceMode,
+        reason: str = "replaced under the same key",
+        now: datetime | None = None,
+    ) -> KeyedWrite:
+        """Make `memory` the one ACTIVE row for its key, in one transaction.
+
+        Same-key writers are serialized, so two concurrent writes leave
+        exactly one ACTIVE row -- the later one's. Inside the transaction:
+
+          * the ACTIVE row already holding this payload (`keyed_unchanged`)
+            makes the whole call a no-op;
+          * SUPERSEDE demotes that row to SUPERSEDED (version bump, version
+            row) and writes a `supersedes` edge from the new row to it;
+          * ERASE destroys EVERY row under the key, in every status, as
+            `erase_memory` would -- history included -- so the key holds one
+            row afterwards and nothing of the old text survives.
+
+        `memory.key` must be set; its chunks must already carry embeddings.
+        """
+
+    @abc.abstractmethod
+    async def retire_keys(
+        self,
+        org_id: str,
+        space_id: str,
+        keys: Sequence[str],
+        *,
+        status: MemoryStatus = MemoryStatus.ARCHIVED,
+        now: datetime | None = None,
+    ) -> list[Memory]:
+        """Move the ACTIVE row of each key to `status`, with a version bump.
+
+        Returns the rows as they now are. Keys with no ACTIVE row are
+        skipped, so a retried retire is a no-op rather than an error.
+        """
+
+    @abc.abstractmethod
+    async def erase_by_key(self, org_id: str, space_id: str, key: str) -> BulkEraseReport:
+        """Erase every memory that holds or ever held `key`, in any status,
+        including version history whose live row is already gone."""
+
+    # -- bulk erasure and purge --------------------------------------------
+
+    @abc.abstractmethod
+    async def erase_by_tag(self, org_id: str, space_id: str, tag: str) -> BulkEraseReport:
+        """Erase every memory carrying `tag` now or in any retained version.
+
+        Every status and kind, in one transaction, each one as thoroughly as
+        `erase_memory`. History counts: a memory retagged after the fact is
+        still erased, because its old snapshots carry the tag -- and whatever
+        text the tag marked -- and an erasure that leaves that behind in
+        `?as_of=` reads is not one.
+        """
+
+    @abc.abstractmethod
+    async def purge_space(self, org_id: str, space_id: str) -> PurgeReport:
+        """Destroy a space and everything in it, history included.
+
+        `delete_space` removes the live rows and -- by the audit-trail design
+        -- leaves `memory_versions` behind, which has no foreign key. So a
+        deleted space's full content stayed readable through `/versions`.
+        This is the right-to-erasure form: versions, edges, chunks, memories
+        and the space row, in ONE transaction. Idempotent -- residual history
+        of an already-deleted space is still purged, and a second call
+        reports zeros.
+        """
 
     # -- relations: a typed, indexed graph ----------------------------------
 
@@ -520,11 +670,14 @@ class MemoryStore(abc.ABC):
 
 
 __all__ = [
+    "BulkEraseReport",
     "EraseReport",
+    "KeyedWrite",
     "LexicalHit",
     "MemoryFilter",
     "MemoryStore",
     "Page",
+    "PurgeReport",
     "TenantUsage",
     "VectorHit",
 ]

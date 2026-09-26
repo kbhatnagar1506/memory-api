@@ -6,6 +6,9 @@ over a WAN link costs seconds) and skipped cleanly without
 `MAPI_TEST_DATABASE_URL`. Tenants never collide because every test creates
 its own organization.
 
+`MAPI_TEST_SCHEMA`, when set, pins the Postgres store to that (migrated)
+schema, as for every other lane; see `tests/support/postgres.py`.
+
 `MAPI_TEST_DIMENSIONS` must match the database's vector column (768 for a
 database migrated by this repo); the in-memory backend accepts anything.
 """
@@ -36,13 +39,14 @@ async def make_store(kind: str) -> MemoryStore:
     global _POSTGRES
     if kind == "memory":
         return InMemoryStore()
-    url = os.getenv("MAPI_TEST_DATABASE_URL")
-    if not url:
+    if not os.getenv("MAPI_TEST_DATABASE_URL"):
         pytest.skip("MAPI_TEST_DATABASE_URL is not set")
     if _POSTGRES is None:
-        from mapi.store.postgres.store import PostgresStore
+        # Through the shared lane plumbing, so `MAPI_TEST_SCHEMA` pins these
+        # stores to the same migrated schema as the conformance lanes.
+        from tests.support import postgres as pg_support
 
-        _POSTGRES = PostgresStore(url, dimensions=DIMENSIONS)
+        _POSTGRES = pg_support.make_store(dimensions=DIMENSIONS)
         await _POSTGRES.initialize()
     store: MemoryStore = _POSTGRES
     return store

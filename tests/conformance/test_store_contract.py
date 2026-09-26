@@ -19,10 +19,10 @@ as a production bug that no test reproduces.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from tests.support import postgres as pg_support
 
 from mapi.core.errors import BadRequestError, ConflictError
 from mapi.domain.embeddings import DeterministicEmbedder
@@ -43,8 +43,9 @@ from mapi.store.memory import InMemoryStore
 
 #: Must match the vector width of the database under test. The in-memory
 #: backend does not care; a real one has a fixed-width column, and a mismatch
-#: fails as an opaque type error rather than a useful assertion.
-DIMENSIONS = int(os.getenv("MAPI_TEST_DIMENSIONS", "128"))
+#: fails as an opaque type error rather than a useful assertion. Read through
+#: tests/support/postgres.py with every other lane's settings.
+DIMENSIONS = pg_support.dimensions()
 NOW = datetime.now(UTC)
 
 
@@ -73,13 +74,10 @@ async def _make_store(kind: str):
         # Fresh per test: cheap, and a shared dict would make these tests
         # order-dependent in a way the Postgres path is not.
         return InMemoryStore(), None
-    url = os.getenv("MAPI_TEST_DATABASE_URL")
-    if not url:
+    if not pg_support.database_url():
         pytest.skip("MAPI_TEST_DATABASE_URL is not set")
     if _POSTGRES_STORE is None:
-        from mapi.store.postgres.store import PostgresStore
-
-        _POSTGRES_STORE = PostgresStore(url, dimensions=DIMENSIONS)
+        _POSTGRES_STORE = pg_support.make_store(dimensions=DIMENSIONS)
         await _POSTGRES_STORE.initialize()
     # Not closed per test -- the pool outlives any one of them and the
     # process exit disposes it.
@@ -1166,3 +1164,88 @@ async def test_neighbours_on_an_empty_space_is_empty(tenant) -> None:
     embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
     probe = await embedder.embed_one("nothing here")
     assert await store.neighbours(org.id, space.id, probe, limit=10) == []
+
+
+# -- listing counts and operator purge ---------------------------------------------
+#
+# `count_memories_by_space` replaces a count per space in the spaces listing,
+# so it must agree with `count_memories` exactly. `purge_org` is the post-event
+# erasure: every table, memory_versions included, and nothing outside the org
+# or inside a kept space.
+
+
+async def test_grouped_counts_agree_with_per_space_counts(tenant, backend) -> None:
+    store, org, space = tenant
+    second = await backend.create_space(
+        Space(org_id=org.id, slug=f"g{org.id[-8:]}", name="Second")
+    )
+    empty = await backend.create_space(Space(org_id=org.id, slug=f"e{org.id[-8:]}", name="E"))
+    await _add(store, org, space, "counted one")
+    await _add(store, org, space, "counted two")
+    await _add(store, org, space, "not counted", status=MemoryStatus.ARCHIVED)
+    await _add(store, org, second, "counted three")
+
+    grouped = await store.count_memories_by_space(org.id)
+    for s in (space, second, empty):
+        expected = await store.count_memories(org.id, s.id, filters=MemoryFilter())
+        assert grouped.get(s.id, 0) == expected
+    assert grouped.get(space.id) == 2
+    assert grouped.get(second.id) == 1
+
+
+async def test_grouped_counts_never_cross_a_tenant(tenant, backend) -> None:
+    store, org, _ = tenant
+    other_org = await backend.create_organization(Organization(name="Other"))
+    other_space = await backend.create_space(
+        Space(org_id=other_org.id, slug=f"o{other_org.id[-8:]}", name="Other")
+    )
+    await _add(store, other_org, other_space, "theirs")
+    assert other_space.id not in await store.count_memories_by_space(org.id)
+
+
+async def test_organizations_can_be_listed_and_renamed(tenant) -> None:
+    store, org, _ = tenant
+    assert org.id in {o.id for o in await store.list_organizations()}
+    renamed = await store.rename_organization(org.id, "Renamed")
+    assert renamed is not None and renamed.name == "Renamed"
+    fetched = await store.get_organization(org.id)
+    assert fetched is not None and fetched.name == "Renamed"
+    assert await store.rename_organization("org_" + "0" * 26, "x") is None
+
+
+async def test_purge_org_removes_every_table_and_spares_what_it_must(tenant, backend) -> None:
+    store, org, space = tenant
+    kept = await backend.create_space(Space(org_id=org.id, slug=f"k{org.id[-8:]}", name="K"))
+    other_org = await backend.create_organization(Organization(name="Bystander"))
+    other_space = await backend.create_space(
+        Space(org_id=other_org.id, slug=f"b{other_org.id[-8:]}", name="B")
+    )
+
+    old = await _add(store, org, space, "the old value")
+    new = await _add(store, org, space, "the new value")
+    await _edge(store, org, space, new, old)
+    gone = await _add(store, org, space, "deleted, history kept")
+    await store.delete_memory(org.id, space.id, gone.id)
+    survivor = await _add(store, org, kept, "opted to keep this")
+    bystander = await _add(store, other_org, other_space, "another org entirely")
+
+    report = await store.purge_org(org.id, keep_space_ids=frozenset({kept.id}))
+    assert report.spaces == 1
+    assert report.memories == 2
+    assert report.chunks == 2
+    assert report.edges == 1
+    # One version per write, including the deleted memory's: the history
+    # `delete_memory` preserves by design is exactly what a purge must take.
+    assert report.versions == 3
+
+    assert await store.get_space(org.id, space.id) is None
+    for memory in (old, new, gone):
+        assert await store.get_memory(org.id, space.id, memory.id) is None
+        assert await store.list_memory_versions(org.id, space.id, memory.id) == []
+    assert await store.get_memory(org.id, kept.id, survivor.id) is not None
+    assert await store.list_memory_versions(org.id, kept.id, survivor.id) != []
+    assert await store.get_memory(other_org.id, other_space.id, bystander.id) is not None
+    assert await store.get_organization(org.id) is not None, "the org itself survives"
+
+    again = await store.purge_org(org.id, keep_space_ids=frozenset({kept.id}))
+    assert (again.spaces, again.memories, again.versions) == (0, 0, 0)

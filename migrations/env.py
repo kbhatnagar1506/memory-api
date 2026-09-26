@@ -62,5 +62,12 @@ async def run_migrations_online() -> None:
 
 if context.is_offline_mode():
     run_migrations_offline()
+elif (shared := config.attributes.get("connection")) is not None:
+    # A caller that already holds a connection -- a test migrating a scratch
+    # schema, a runner pinning search_path -- passes it in `attributes` and
+    # the migrations run on it, inside its transaction, instead of on a new
+    # engine built from settings. This is alembic's documented pattern for
+    # programmatic use; the command line never sets it.
+    _do_run(shared)
 else:
     asyncio.run(run_migrations_online())

@@ -313,7 +313,50 @@ class Settings(BaseSettings):
 
     # -- request handling --------------------------------------------------
     max_request_bytes: int = Field(default=8_000_000, ge=1024)
-    request_timeout_s: float = Field(default=30.0, gt=0)
+    #: Off by default, and deliberately so. The field used to say 30 and be
+    #: read by nothing, so every deployment has only ever run WITHOUT a
+    #: deadline; enforcing 30 s on upgrade would start cutting off whatever
+    #: runs longer today -- a slow-model /chat or /derive, a 100-item bulk
+    #: under provider back-pressure. A deployment picks its own budget:
+    #: facemash runs 2 on its read process and 60 on its write process.
+    request_timeout_s: float = Field(
+        default=0.0,
+        ge=0,
+        description=(
+            "Seconds a request may run before it is answered 504 request_timeout. "
+            "Covers the time until the response starts. 0 (the default) disables it."
+        ),
+    )
+
+    # -- calibration (score bands that depend on the embedding model) --------
+    #: The confidence bands in retrieval/confidence.py, which were constants.
+    #: They are absolute cosines, so they belong to the embedding model rather
+    #: than to the code: tuned on text-embedding-004, where unrelated text
+    #: scored well under 0.30. On gemini-embedding-001 unrelated text scores
+    #: about 0.50-0.53, so WEAK never fires and nearly everything grades HIGH.
+    #: The defaults keep the old behaviour; a deployment on a different model
+    #: sets fitted values (facemash starts at 0.64 / 0.57).
+    confidence_strong: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Top cosine at or above which a clearly separated result grades HIGH.",
+    )
+    confidence_weak: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description="Top cosine below which a result set grades LOW / weak_evidence.",
+    )
+    #: Memories shorter than this are embedded WITHOUT the contextual header.
+    #: The header helps a long memory whose chunks never state their own date
+    #: or subject; on a short one it dominates the embedding input, and two
+    #: unrelated short texts sharing a header drift together (measured on
+    #: card-sized text: 0.745 -> 0.895 for unrelated pairs). Per memory, not
+    #: per chunk, so a long memory's short last chunk keeps its framing. 0
+    #: keeps the header on everything, which is the old behaviour; facemash's
+    #: eval arm H compares 200 against a self-describing first line.
+    contextual_min_chars: int = Field(default=0, ge=0, le=100_000)
 
     @field_validator("chunk_overlap_tokens")
     @classmethod
@@ -366,6 +409,12 @@ class Settings(BaseSettings):
     def _coherent(self) -> Settings:
         if self.max_limit < self.default_limit:
             raise ValueError("max_limit must be >= default_limit")
+        if self.confidence_weak >= self.confidence_strong:
+            raise ValueError(
+                f"confidence_weak ({self.confidence_weak}) must be below "
+                f"confidence_strong ({self.confidence_strong}); inverted bands would "
+                "grade a match both weak and strong"
+            )
         if self.store_backend is StoreBackend.POSTGRES and not self.database_url:
             raise ValueError("store_backend=postgres requires database_url")
         return self

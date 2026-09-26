@@ -27,6 +27,11 @@ ratio, result count, conflicts) are scale-free and carry most of the weight
 for exactly that reason. Fitting the absolute floors needs a labelled
 score-distribution study; until then, treat HIGH/LOW as ordering, not as
 probability.
+
+Because they belong to the model, a deployment overrides them with
+`ConfidenceBands` (settings `confidence_strong` / `confidence_weak`) rather
+than by editing this file. The constants remain the defaults, so nothing that
+does not ask for different bands behaves differently.
 """
 
 from __future__ import annotations
@@ -66,6 +71,32 @@ _WEAK_SCORE = 0.30
 #: neighbourhood, not an answer. Expressed as a RATIO of the top score so it
 #: stays meaningful across embedding models and score scales.
 _CLEAR_MARGIN_RATIO = 0.12
+
+
+@dataclass(frozen=True, slots=True)
+class ConfidenceBands:
+    """The two absolute cosine floors, as one value a deployment can set.
+
+    `strong` is where a clearly separated top hit grades HIGH; below `weak` a
+    result set grades LOW / weak_evidence however well separated it is. Kept
+    together because they are only meaningful as a pair on one model's scale:
+    moving one without the other can invert them, which `__post_init__`
+    refuses rather than grading a match weak and strong at once.
+    """
+
+    strong: float = _STRONG_SCORE
+    weak: float = _WEAK_SCORE
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.weak < self.strong <= 1.0:
+            raise ValueError(
+                f"confidence bands need 0 <= weak < strong <= 1, "
+                f"got weak={self.weak} strong={self.strong}"
+            )
+
+
+#: The bands every caller gets unless it asks for others.
+DEFAULT_BANDS = ConfidenceBands()
 
 
 class ConfidenceLevel(StrEnum):
@@ -142,11 +173,17 @@ def calibrated_score(hit: ScoredMemory) -> float:
     return hit.vector_score if hit.vector_score is not None else hit.score
 
 
-def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConfidence:
+def assess(
+    scores: list[float],
+    *,
+    has_conflicts: bool = False,
+    bands: ConfidenceBands = DEFAULT_BANDS,
+) -> RetrievalConfidence:
     """Grade a result set from its score distribution.
 
     `scores` must be ordered best-first, as the pipeline returns them, and must
     be on the COSINE scale -- pass `calibrated_score(hit)`, not `hit.score`.
+    `bands` are the absolute floors for the embedding model in use.
     """
     if not scores:
         return RetrievalConfidence(
@@ -175,7 +212,7 @@ def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConf
             refusal_reason=RefusalReason.CONFLICTING_EVIDENCE,
         )
 
-    if top < _WEAK_SCORE:
+    if top < bands.weak:
         return RetrievalConfidence(
             level=ConfidenceLevel.LOW,
             top_score=top,
@@ -200,7 +237,7 @@ def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConf
             refusal_reason=RefusalReason.WEAK_EVIDENCE,
         )
 
-    if top >= _STRONG_SCORE:
+    if top >= bands.strong:
         return RetrievalConfidence(
             level=ConfidenceLevel.HIGH,
             top_score=top,
@@ -221,6 +258,8 @@ def assess(scores: list[float], *, has_conflicts: bool = False) -> RetrievalConf
 
 
 __all__ = [
+    "DEFAULT_BANDS",
+    "ConfidenceBands",
     "ConfidenceLevel",
     "RefusalReason",
     "RetrievalConfidence",

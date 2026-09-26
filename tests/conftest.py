@@ -8,11 +8,11 @@ genuinely need Postgres are marked `postgres` and skip cleanly when
 
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
 
 import httpx
 import pytest
+from tests.support import postgres as pg_support
 
 from mapi.config import Settings
 from mapi.core.security import build_api_key
@@ -144,20 +144,20 @@ def anon_client(app_context) -> httpx.AsyncClient:
 
 
 # -- Postgres ------------------------------------------------------------------
+#
+# Width, schema and URL come from tests/support/postgres.py, so every lane
+# agrees on them. The width is `MAPI_TEST_DIMENSIONS`, not TEST_DIMENSIONS
+# above: a real database's column is fixed at 768 by the migrations, and this
+# fixture hard-coding 128 was one of the ways CI's Postgres lane went red.
 
 
 def postgres_url() -> str | None:
-    return os.getenv("MAPI_TEST_DATABASE_URL")
+    return pg_support.database_url()
 
 
 @pytest.fixture
 async def postgres_store():
-    url = postgres_url()
-    if not url:
-        pytest.skip("MAPI_TEST_DATABASE_URL is not set")
-    from mapi.store.postgres.store import PostgresStore
-
-    s = PostgresStore(url, dimensions=TEST_DIMENSIONS)
+    s = pg_support.make_store()
     await s.initialize()
     yield s
     await s.aclose()

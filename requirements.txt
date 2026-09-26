@@ -1,7 +1,6 @@
 # Heroku's Python buildpack installs from here. Kept in step with
 # pyproject.toml's [project.dependencies] -- the package itself is installed
 # by the trailing "." so `mapi` is importable without a src-layout PYTHONPATH.
-anthropic[vertex]>=0.69
 fastapi>=0.115
 uvicorn[standard]>=0.32
 pydantic>=2.9

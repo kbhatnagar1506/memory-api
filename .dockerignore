@@ -1,0 +1,16 @@
+# An allowlist, not a denylist. The build context used to be the whole
+# checkout: bench/data alone is 4 GB of benchmark corpora, .venv another half
+# gigabyte, and a stray .env or key file would have been sent to the builder
+# too. Only what the Dockerfile COPYs is let through.
+*
+!pyproject.toml
+!README.md
+!src/
+!alembic.ini
+!migrations/
+
+# Never ship bytecode or caches from a developer's tree.
+**/__pycache__
+**/*.pyc
+**/.mypy_cache
+**/.ruff_cache

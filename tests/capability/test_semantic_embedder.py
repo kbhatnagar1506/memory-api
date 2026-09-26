@@ -29,14 +29,22 @@ import pytest
 
 pytestmark = pytest.mark.live_llm
 
+#: The model under test, from the environment the service itself reads. The
+#: question this file asks belongs to one model, and the hard-coded default
+#: (text-embedding-004) was retired underneath it -- it now answers 404 on the
+#: Developer API, so the lane failed on the provider rather than on semantics.
+MODEL = os.getenv("MAPI_EMBEDDING_MODEL") or "gemini-embedding-001"
+#: The service's own key variable first, then the SDK's conventional one.
+_API_KEY = os.getenv("MAPI_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or None
+
 #: Skipped rather than failed: absent credentials are the normal case for anyone
 #: who is not deliberately running this lane.
-_HAS_CREDENTIALS = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_CLOUD_PROJECT"))
+_HAS_CREDENTIALS = bool(_API_KEY or os.getenv("GOOGLE_CLOUD_PROJECT"))
 pytestmark = [
     pytest.mark.live_llm,
     pytest.mark.skipif(
         not _HAS_CREDENTIALS,
-        reason="needs GEMINI_API_KEY or GOOGLE_CLOUD_PROJECT for Vertex AI with ADC",
+        reason="needs MAPI_GEMINI_API_KEY / GEMINI_API_KEY, or GOOGLE_CLOUD_PROJECT for Vertex",
     ),
 ]
 
@@ -46,7 +54,7 @@ DIMENSIONS = 768
 def _embedder() -> object:
     from mapi.domain.embeddings.gemini import GeminiEmbedder
 
-    return GeminiEmbedder(dimensions=DIMENSIONS)
+    return GeminiEmbedder(model=MODEL, dimensions=DIMENSIONS, api_key=_API_KEY)
 
 
 async def test_a_real_embedder_prefers_meaning_over_spelling() -> None:

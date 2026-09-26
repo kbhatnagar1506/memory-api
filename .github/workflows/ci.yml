@@ -35,21 +35,43 @@ jobs:
         # skips locally, so CI is where the Postgres backend is actually proven.
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: mapi
-          POSTGRES_PASSWORD: mapi
-          POSTGRES_DB: mapi_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U mapi"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # The lane connects as a role shaped like production's: it OWNS the
+      # database (so migrations run) but is neither superuser nor BYPASSRLS,
+      # so FORCE ROW LEVEL SECURITY binds it. As the image's superuser every
+      # RLS test either failed or proved nothing.
+      MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi_app:mapi_app@localhost:5432/mapi_test
+      # The width of `chunks.embedding` in any migrated database. At the old
+      # default of 128, 67 tests failed with "expected 768 dimensions, not 128".
+      MAPI_TEST_DIMENSIONS: "768"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "${{ matrix.python }}", cache: pip}
       - run: pip install -e ".[dev]"
-      - name: Test
+      - name: Create the application role and its database
+        env: {PGPASSWORD: postgres}
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE mapi_app LOGIN PASSWORD 'mapi_app' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE" \
+            -c "CREATE DATABASE mapi_test OWNER mapi_app"
+          # Extensions are created by a superuser once, as in production.
+          psql -h localhost -U postgres -d mapi_test -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION vector"
+      - name: Migrate as the application role
         env:
-          MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi:mapi@localhost:5432/mapi_test
+          MAPI_DATABASE_URL: ${{ env.MAPI_TEST_DATABASE_URL }}
+        # The row-level-security policies exist only in the migrations, so the
+        # lanes run on a database alembic built, never one create_all built.
+        run: alembic upgrade head
+      - name: Test
         run: pytest --cov=mapi --cov-report=term-missing --cov-report=xml
       - name: Enforce coverage floor
         run: coverage report --fail-under=80
@@ -60,6 +82,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t mapi:ci .
+      - name: Image carries its migrations and stays small
+        run: |
+          docker run --rm mapi:ci alembic heads | tee heads.txt
+          grep -q "(head)" heads.txt
+          docker run --rm mapi:ci ls migrations/versions
+          size=$(docker image inspect mapi:ci --format '{{.Size}}')
+          echo "image size: $size bytes"
+          test "$size" -lt 400000000
       - name: Boot and probe
         run: |
           docker run -d --name sm -p 8000:8000 \

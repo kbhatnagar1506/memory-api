@@ -79,6 +79,10 @@ MAX_MEMORY_CHARS = 4_000
 #: some of this" into "this is all there is".
 TRUNCATION_MARKER = " […truncated]"
 
+#: Prefixed when an over-long memory is shown by the passage that matched
+#: rather than from its start, so the reader knows text precedes it.
+EXCERPT_PREFIX = "[…] "
+
 CHAT_PROMPT = """\
 You are answering from a memory store. The numbered memories below are \
 everything you know; you have no other knowledge of this subject.
@@ -233,15 +237,34 @@ def format_memories(hits: Sequence[ScoredMemory]) -> str:
     lines = []
     for i, hit in enumerate(hits, start=1):
         memory = hit.memory
-        text = (memory.content or "").strip()
-        if len(text) > MAX_MEMORY_CHARS:
-            text = text[:MAX_MEMORY_CHARS] + TRUNCATION_MARKER
+        text = _visible_text(hit)
         stamp = ""
         if isinstance(memory.occurred_at, datetime):
             stamp = f" ({memory.occurred_at:%d %b %Y})"
         flag = " [UNVERIFIED]" if _is_unverified(memory.metadata) else ""
         lines.append(f"{i}.{stamp}{flag} {text}")
     return "\n".join(lines)
+
+
+def _visible_text(hit: ScoredMemory) -> str:
+    """What of one memory reaches the prompt.
+
+    Whole, when it fits. When it does not, the chunk that MATCHED the
+    question rather than the first MAX_MEMORY_CHARS: search ranked this
+    memory for one passage, and on a long document that passage is often
+    nowhere near the start, so the old clip handed the model 4,000
+    characters that did not contain the thing it was retrieved for. The
+    opening is still the fallback when no chunk is known -- a lexical-only
+    hit, or a caller that built the hit by hand.
+    """
+    content = (hit.memory.content or "").strip()
+    if len(content) <= MAX_MEMORY_CHARS:
+        return content
+    excerpt = (hit.matched_text or "").strip()
+    if excerpt:
+        clipped = excerpt[:MAX_MEMORY_CHARS]
+        return f"{EXCERPT_PREFIX}{clipped}{TRUNCATION_MARKER}"
+    return content[:MAX_MEMORY_CHARS] + TRUNCATION_MARKER
 
 
 def format_history(turns: Sequence[Turn]) -> str:
@@ -343,6 +366,7 @@ async def answer(
 __all__ = [
     "ADVICE_CHAT_PROMPT",
     "CHAT_PROMPT",
+    "EXCERPT_PREFIX",
     "ChatAnswer",
     "Turn",
     "answer",

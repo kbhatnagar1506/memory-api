@@ -237,6 +237,33 @@ class MemoryService:
         """
         return max(self.settings.dedupe_threshold, CONTRADICT_LOW)
 
+    def _chat_search_request(
+        self, org_id: str, space_id: str, message: str, k: int
+    ) -> SearchRequest:
+        """The search behind /chat, configured like the search endpoint's.
+
+        Chat built a bare `SearchRequest`, so it ran on the dataclass defaults
+        instead of the deployment's settings -- a tuned `max_per_source`,
+        `coverage_limit` or `route_by_kind` changed /search and silently not
+        the answers built on it -- and with no `asked_at`, which leaves the
+        temporal stage dead: "what did I do last week" could not prefer last
+        week. Mirrors api/v1/search.py; the question is asked now.
+        """
+        s = self.settings
+        return SearchRequest(
+            query=message,
+            org_id=org_id,
+            space_id=space_id,
+            limit=k,
+            candidate_multiplier=s.candidate_multiplier,
+            rerank_candidates=s.rerank_candidates,
+            rrf_k=s.rrf_k,
+            coverage_limit=s.coverage_limit,
+            max_per_source=s.max_per_source,
+            route_by_kind=s.route_by_kind,
+            asked_at=utcnow(),
+        )
+
     async def _check_quota(self, org_id: str, incoming_bytes: int) -> None:
         """Refuse a write that would take a tenant past its limits.
 
@@ -1381,9 +1408,7 @@ class MemoryService:
             raise ProviderError("no synthesis backend configured; set synthesis_backend=gemini")
         await self.get_space_or_raise(org_id, space_id)
 
-        response = await self.search(
-            SearchRequest(query=message, org_id=org_id, space_id=space_id, limit=k)
-        )
+        response = await self.search(self._chat_search_request(org_id, space_id, message, k))
         answer = await chat_answer(message, response.results, self.completer, history=history)
         if remember:
             await self.ingest(org_id=org_id, space_id=space_id, content=message)

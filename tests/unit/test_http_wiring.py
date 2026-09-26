@@ -55,6 +55,10 @@ FROM_BODY = frozenset(
         "entity_budget",
         "entity_weight",
         "known_speakers",
+        # Per request since B9, falling back to the server setting when the
+        # body leaves it unset. Bounded (<= 100) and it only ever SHRINKS a
+        # result set, so unlike the knobs below it cannot buy extra work.
+        "max_per_source",
     }
 )
 
@@ -67,7 +71,6 @@ FROM_SETTINGS = frozenset(
         "rerank_candidates",
         "rrf_k",
         "coverage_limit",
-        "max_per_source",
         "route_by_kind",
     }
 )
@@ -75,6 +78,11 @@ FROM_SETTINGS = frozenset(
 #: From the principal and the path, never from the body -- `org_id` comes off the
 #: authenticated key so a caller cannot name another tenant's.
 FROM_CONTEXT = frozenset({"org_id", "space_id"})
+
+#: Set by server code, never from any body. `query_vector` is how multi-search
+#: hands every target the one embedding it paid for; accepting a vector off the
+#: wire would let a caller steer the ANN scan with an arbitrary point.
+FROM_SERVER = frozenset({"query_vector"})
 
 
 def test_every_search_request_field_is_accounted_for() -> None:
@@ -84,11 +92,11 @@ def test_every_search_request_field_is_accounted_for() -> None:
     belonged to no category and nothing said so.
     """
     known = {f.name for f in dataclass_fields(SearchRequest)}
-    classified = FROM_BODY | FROM_SETTINGS | FROM_CONTEXT
+    classified = FROM_BODY | FROM_SETTINGS | FROM_CONTEXT | FROM_SERVER
     assert known - classified == set(), (
         f"unclassified SearchRequest fields: {sorted(known - classified)}. "
-        "Add each to FROM_BODY, FROM_SETTINGS or FROM_CONTEXT -- an unclassified "
-        "field is one nothing can set."
+        "Add each to FROM_BODY, FROM_SETTINGS, FROM_CONTEXT or FROM_SERVER -- an "
+        "unclassified field is one nothing can set."
     )
     assert classified - known == set(), (
         f"classified fields that no longer exist: {sorted(classified - known)}"
@@ -109,6 +117,12 @@ def test_the_three_categories_are_disjoint() -> None:
     assert not (FROM_BODY & FROM_SETTINGS)
     assert not (FROM_BODY & FROM_CONTEXT)
     assert not (FROM_SETTINGS & FROM_CONTEXT)
+    assert not (FROM_SERVER & (FROM_BODY | FROM_SETTINGS | FROM_CONTEXT))
+
+
+def test_the_body_cannot_carry_a_query_vector() -> None:
+    """Internal means internal: the schema forbids extra fields, so this 422s."""
+    assert "query_vector" not in SearchRequestBody.model_fields
 
 
 # -- defaults that must agree across the boundary --------------------------

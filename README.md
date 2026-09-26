@@ -182,6 +182,8 @@ Or `GEMINI_API_KEY` / `OPENAI_API_KEY` for the key-based APIs.
 | `POST` | `/v1/spaces/{id}/memories` | Ingest (chunk, embed, dedupe) |
 | `POST` | `/v1/spaces/{id}/memories/bulk` | Up to 100 at once |
 | `POST` | `/v1/spaces/{id}/search` | Hybrid search |
+| `POST` | `/v1/multi-search` | One question, up to 4 spaces, one embedding |
+| `POST` | `/v1/spaces/{id}/similar` | Neighbours of a stored memory, no embedding |
 | `GET` | `/v1/spaces/{id}/memories` | Cursor-paginated listing |
 | `GET` | `/v1/spaces/{id}/memories/{id}?as_of=…` | Point-in-time read |
 | `POST` | `/v1/spaces/{id}/memories/{id}/relations` | Supersede, contradict, link |
@@ -213,7 +215,10 @@ Full OpenAPI at `/docs`.
 - **Auth** — API keys are never stored; only a peppered SHA-256 is, and lookup
   is a single indexed read. Scopes are enforced per route. Unknown, revoked and
   expired keys return identical responses, because the difference is
-  information an attacker can use.
+  information an attacker can use. A resolved key is reused for
+  `MAPI_AUTH_CACHE_TTL_S` (30 s) and `last_used_at` is written at most once a
+  minute; a revoke through the API evicts at once, one made by another process
+  is honoured within the TTL.
 - **Errors** — RFC 9457 `application/problem+json` with a stable machine slug,
   the offending field, and a request id. Internal detail never reaches a client.
 - **Rate limiting** — token bucket, Redis-backed and atomic via Lua so replicas

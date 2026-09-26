@@ -22,7 +22,7 @@ from typing import Any
 
 from ...core.errors import ConfigurationError, ProviderError
 from ...core.logging import get_logger
-from .base import EmbeddingProvider, Vector
+from .base import EmbeddingProvider, Vector, normalize_query
 
 log = get_logger(__name__)
 
@@ -39,6 +39,7 @@ class GeminiEmbedder(EmbeddingProvider):
         batch_size: int = 32,
         timeout_s: float = 20.0,
         cache_size: int = 0,
+        query_cache_size: int = 0,
         project: str | None = None,
         location: str = "global",
         api_key: str | None = None,
@@ -51,6 +52,7 @@ class GeminiEmbedder(EmbeddingProvider):
             timeout_s=timeout_s,
             max_attempts=3,
             cache_size=cache_size,
+            query_cache_size=query_cache_size,
         )
         try:
             from google import genai
@@ -138,14 +140,18 @@ class GeminiEmbedder(EmbeddingProvider):
         Retrieval embeddings are asymmetric: matching a RETRIEVAL_QUERY vector
         against RETRIEVAL_DOCUMENT vectors is what the model was trained for.
         """
-        if not text.strip():
+        # Normalized once, and the NORMALIZED text is what gets embedded: the
+        # cache key and the vector then always describe the same string, so a
+        # hit can never serve one spelling's vector for another's question.
+        query = normalize_query(text)
+        if not query:
             raise ValueError("query is empty or whitespace-only")
-        cached = self._cache_get(f"__query__{text}")
+        cached = self._query_cache_get(query)
         if cached is not None:
             return cached
-        raw = await self._call([text], TASK_QUERY)
+        raw = await self._call([query], TASK_QUERY)
         vec = self._validate(raw, 1)[0]
-        self._cache_put(f"__query__{text}", vec)
+        self._query_cache_put(query, vec)
         return vec
 
 

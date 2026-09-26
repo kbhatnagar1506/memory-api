@@ -10,6 +10,7 @@ from .base import (
     Vector,
     cosine_similarity,
     l2_normalize,
+    normalize_query,
 )
 from .deterministic import DeterministicEmbedder
 
@@ -33,6 +34,7 @@ def build_embedder(settings: Settings) -> EmbeddingProvider:
             project=settings.google_cloud_project,
             location=settings.google_cloud_location,
             api_key=settings.gemini_api_key,
+            query_cache_size=settings.query_embedding_cache_size,
             **common,  # type: ignore[arg-type]
         )
     if backend is EmbeddingBackend.OPENAI:
@@ -50,4 +52,5 @@ __all__ = [
     "build_embedder",
     "cosine_similarity",
     "l2_normalize",
+    "normalize_query",
 ]

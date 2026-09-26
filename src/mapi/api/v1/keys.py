@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from ...core.errors import NotFoundError
 from ...core.security import build_api_key, default_scopes
 from ...domain.models import ApiKey, Scope
-from ..deps import Principal, SettingsDep, StoreDep, require_scope
+from ..deps import Principal, SettingsDep, StoreDep, auth_cache, require_scope
 from ..schemas import (
     ApiKeyListResponse,
     ApiKeyResponse,
@@ -73,10 +73,17 @@ async def list_keys(
 )
 async def revoke_key(
     key_id: str,
+    request: Request,
     store: StoreDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.ADMIN))],
 ) -> None:
-    if not await store.revoke_api_key(principal.org_id, key_id):
+    revoked = await store.revoke_api_key(principal.org_id, key_id)
+    # Evict even when the store reports nothing to revoke: a key revoked by
+    # another process is exactly the entry this process may still be serving.
+    # No ownership check is needed first -- evicting some other org's key id
+    # only costs that key one store lookup on its next request.
+    auth_cache(request.app).invalidate_key(key_id)
+    if not revoked:
         raise NotFoundError(f"api key {key_id} not found or already revoked")
 
 

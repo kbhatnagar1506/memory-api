@@ -284,8 +284,16 @@ class InMemoryStore(MemoryStore):
         return memory
 
     async def get_memories(
-        self, org_id: str, space_id: str, memory_ids: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
+        # `with_embeddings` is a transfer optimisation; vectors here are
+        # already in process, so there is nothing to save by dropping them.
+        del with_embeddings
         out: dict[str, Memory] = {}
         for memory_id in memory_ids:
             memory = await self.get_memory(org_id, space_id, memory_id)

@@ -12,7 +12,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_core.core_schema import ValidationInfo
 
 from ..domain.models import (
@@ -544,6 +551,26 @@ class SearchRequestBody(Request):
     #: discriminating.
     known_speakers: list[str] = Field(default_factory=list, max_length=16)
 
+    # -- per-request shaping (B9) ----------------------------------------------
+    #
+    # Settings that used to be server-wide, or did not exist, for callers that
+    # share one server between very different questions -- a person's own
+    # memory and an event directory want opposite answers to all four.
+
+    #: Most results any one source document may contribute; 0 is off. Unset
+    #: keeps the server's `max_per_source`. With directory entries carrying
+    #: `doc_id=<person>`, 1 turns "closest entries" into "closest people".
+    max_per_source: int | None = Field(default=None, ge=0, le=100)
+    #: Drop memories whose metadata contains every pair here -- `NOT (metadata
+    #: @> this)`. `{"user_id": "<me>"}` keeps the asker out of their own results.
+    exclude_metadata: dict[str, Any] = Field(default_factory=dict)
+    #: False returns each hit's `memory.content` as "" and leaves
+    #: `matched_text` -- the passage that actually matched -- as the payload. A
+    #: caller showing snippets was downloading every full memory to cut it.
+    include_content: bool = True
+    #: Cap `matched_text` at this many characters. Unset returns it whole.
+    snippet_chars: int | None = Field(default=None, ge=1, le=20_000)
+
     @field_validator("occurred_before")
     @classmethod
     def _range_is_ordered(cls, v: datetime | None, info: ValidationInfo) -> datetime | None:
@@ -551,6 +578,28 @@ class SearchRequestBody(Request):
         if v is not None and after is not None and v < after:
             raise ValueError("occurred_before must not precede occurred_after")
         return v
+
+    @field_validator("exclude_metadata")
+    @classmethod
+    def _exclusion_is_scalar(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _scalar_map(v)
+
+
+def _scalar_map(v: dict[str, Any]) -> dict[str, Any]:
+    """A small map of scalar values, for metadata exclusion.
+
+    Scalars only because a negative filter must mean the same thing in both
+    backends: for scalars JSONB containment and Python equality agree, and
+    for nested values they do not (containment is a recursive subset).
+    """
+    if len(v) > 16:
+        raise ValueError("at most 16 exclude_metadata keys")
+    for key, value in v.items():
+        if len(key) > 128:
+            raise ValueError(f"exclude_metadata key too long: {key[:32]}...")
+        if isinstance(value, (dict, list)):
+            raise ValueError(f"exclude_metadata[{key!r}] must be a scalar")
+    return v
 
 
 class IntentBlock(Response):
@@ -577,11 +626,25 @@ class SearchHit(Response):
     explain: list[str] | None = None
 
     @classmethod
-    def from_domain(cls, scored: ScoredMemory, *, explain: bool) -> SearchHit:
+    def from_domain(
+        cls,
+        scored: ScoredMemory,
+        *,
+        explain: bool,
+        include_content: bool = True,
+        snippet_chars: int | None = None,
+    ) -> SearchHit:
+        memory = MemoryResponse.from_domain(scored.memory)
+        if not include_content:
+            # "" is unambiguous: stored content is never empty.
+            memory = memory.model_copy(update={"content": ""})
+        matched = scored.matched_text
+        if snippet_chars is not None:
+            matched = matched[:snippet_chars]
         return cls(
-            memory=MemoryResponse.from_domain(scored.memory),
+            memory=memory,
             score=round(scored.score, 6),
-            matched_text=scored.matched_text,
+            matched_text=matched,
             vector_score=scored.vector_score,
             lexical_score=scored.lexical_score,
             fusion_score=scored.fusion_score,
@@ -621,6 +684,110 @@ class SearchResponseBody(Response):
     confidence: ConfidenceBlock | None = None
     #: How the question was read. Present whenever a search ran.
     intent: IntentBlock | None = None
+
+
+# -- multi-search and similar (B9) ---------------------------------------------
+
+
+class MultiSearchTarget(Request):
+    """One space to search, with the options that shape its answer.
+
+    The expensive stages are deliberately absent -- rerank, MMR, HyDE, entity
+    bridging -- and not for tidiness. Multi-search exists to answer several
+    questions for the price of one embedding; HyDE would re-embed per target,
+    and the others were each measured as a latency multiple for no recall.
+    `/search` keeps them for callers who want them.
+    """
+
+    space_id: str
+    limit: int = Field(default=10, ge=1, le=100)
+    tags: list[str] = Field(default_factory=list, max_length=32)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    exclude_metadata: dict[str, Any] = Field(default_factory=dict)
+    source: str | None = None
+    occurred_after: datetime | None = None
+    occurred_before: datetime | None = None
+    statuses: list[MemoryStatus] = Field(default_factory=lambda: [MemoryStatus.ACTIVE])
+    kinds: list[MemoryKind] = Field(default_factory=list, max_length=4)
+    include_superseded: bool = False
+    use_decay: bool = True
+    half_life_days: float = Field(default=180.0, gt=0, le=36500)
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    vector_weight: float = Field(default=1.0, ge=0.0, le=10.0)
+    lexical_weight: float = Field(default=1.0, ge=0.0, le=10.0)
+    max_per_source: int | None = Field(default=None, ge=0, le=100)
+    coverage: bool | None = None
+    include_content: bool = True
+    snippet_chars: int | None = Field(default=None, ge=1, le=20_000)
+    explain: bool = False
+
+    @field_validator("exclude_metadata")
+    @classmethod
+    def _exclusion_is_scalar(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _scalar_map(v)
+
+
+class MultiSearchRequest(Request):
+    query: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+    #: 1-4 targets. The same space may appear twice with different filters --
+    #: two facets of one directory is the case this was built for.
+    targets: list[MultiSearchTarget] = Field(min_length=1, max_length=4)
+    #: As on `/search`: when the question was asked. Defaults to now.
+    asked_at: datetime | None = None
+
+
+class MultiSearchTargetResult(SearchResponseBody):
+    space_id: str
+
+
+class MultiSearchResponse(Response):
+    query: str
+    #: One entry per target, in request order.
+    targets: list[MultiSearchTargetResult]
+    #: True when the query embedding failed and every target ran lexical-only.
+    #: Results are still returned; the caller decides whether they are enough.
+    degraded: bool = False
+    timings_ms: dict[str, float] = Field(default_factory=dict)
+
+
+class SimilarRequest(Request):
+    """Find neighbours of a STORED memory -- no query text, no embedding call.
+
+    Name the source by id or by key (keyed memories), not both.
+    """
+
+    source_space_id: str
+    source_memory_id: str | None = None
+    source_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+    limit: int = Field(default=10, ge=1, le=100)
+    tags: list[str] = Field(default_factory=list, max_length=32)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    exclude_metadata: dict[str, Any] = Field(default_factory=dict)
+    max_per_source: int = Field(default=0, ge=0, le=100)
+    #: Floor on cosine similarity to the source.
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    include_content: bool = True
+    snippet_chars: int | None = Field(default=None, ge=1, le=20_000)
+    explain: bool = False
+
+    @field_validator("exclude_metadata")
+    @classmethod
+    def _exclusion_is_scalar(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _scalar_map(v)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> SimilarRequest:
+        if (self.source_memory_id is None) == (self.source_key is None):
+            raise ValueError("pass exactly one of source_memory_id or source_key")
+        return self
+
+
+class SimilarResponse(Response):
+    source_space_id: str
+    source_memory_id: str
+    results: list[SearchHit]
+    count: int
+    timings_ms: dict[str, float] = Field(default_factory=dict)
 
 
 # -- chat ---------------------------------------------------------------------
@@ -728,11 +895,17 @@ __all__ = [
     "MemoryResponse",
     "MemoryVersionListResponse",
     "MemoryVersionResponse",
+    "MultiSearchRequest",
+    "MultiSearchResponse",
+    "MultiSearchTarget",
+    "MultiSearchTargetResult",
     "RelationListResponse",
     "RelationResponse",
     "SearchHit",
     "SearchRequestBody",
     "SearchResponseBody",
+    "SimilarRequest",
+    "SimilarResponse",
     "SpaceListResponse",
     "SpaceResponse",
 ]

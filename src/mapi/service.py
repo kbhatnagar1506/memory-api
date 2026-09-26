@@ -17,6 +17,7 @@ is the single most common write a memory system sees.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -65,6 +66,7 @@ from .domain.models import (
 from .domain.retrieval.expansion import CompletionExpander
 from .domain.retrieval.pipeline import RetrievalPipeline, SearchRequest, SearchResponse
 from .domain.retrieval.rerank import Reranker
+from .domain.retrieval.similar import SimilarRequest, SimilarResponse, find_similar
 from .domain.synthesis import classify
 from .domain.synthesis.adjudicate import (
     adjudicate_contradictions,
@@ -235,6 +237,9 @@ class MemoryService:
             understanding=self.understanding,
             expander=expander,
         )
+        #: (org_id, space_id) -> (monotonic time cached, space). Hits only;
+        #: see `get_space_or_raise`.
+        self._space_cache: dict[tuple[str, str], tuple[float, Space]] = {}
 
     # -- spaces ------------------------------------------------------------
 
@@ -260,13 +265,47 @@ class MemoryService:
         )
         return await self.store.create_space(space)
 
+    #: Bound on cached spaces, so a caller cycling through ids cannot grow the
+    #: process. Far above one event's per-person spaces.
+    _SPACE_CACHE_MAX = 50_000
+
     async def get_space_or_raise(self, org_id: str, space_id: str) -> Space:
+        """The space, or 404 -- from a short-lived cache when it has been seen.
+
+        Every read and write starts here, so an uncached lookup was one DB
+        session on every request for a row that essentially never changes.
+        Keyed by (org, space), so the cache cannot cross a tenant boundary any
+        more than the query could. Only hits are cached: a space created a
+        moment ago -- possibly by another process -- is never reported
+        missing. A space deleted through this process is evicted at once
+        (`forget_space`); one deleted elsewhere can still be found here for up
+        to `space_cache_ttl_s`, and then reads find it empty, not someone
+        else's.
+        """
+        ttl = self.settings.space_cache_ttl_s
+        key = (org_id, space_id)
+        if ttl > 0:
+            hit = self._space_cache.get(key)
+            if hit is not None and time.monotonic() - hit[0] < ttl:
+                return hit[1]
         space = await self.store.get_space(org_id, space_id)
         if space is None:
+            self._space_cache.pop(key, None)
             # A space in another org must be indistinguishable from one that
             # does not exist, or the 404/403 difference leaks its existence.
             raise NotFoundError(f"space {space_id} not found", field="space_id")
+        if ttl > 0:
+            self._space_cache.pop(key, None)
+            while len(self._space_cache) >= self._SPACE_CACHE_MAX:
+                # Oldest first: dicts iterate in insertion order, and a
+                # refreshed entry was re-inserted at the end just above.
+                del self._space_cache[next(iter(self._space_cache))]
+            self._space_cache[key] = (time.monotonic(), space)
         return space
+
+    def forget_space(self, org_id: str, space_id: str) -> None:
+        """Evict one space from the lookup cache. Call on delete and purge."""
+        self._space_cache.pop((org_id, space_id), None)
 
     # -- ingestion ---------------------------------------------------------
 
@@ -1863,8 +1902,8 @@ class MemoryService:
         """
         if self.completer is None:
             raise ProviderError("no synthesis backend configured; set synthesis_backend=gemini")
-        await self.get_space_or_raise(org_id, space_id)
-
+        # No space check of its own: `search` below makes it, and making it
+        # twice was a second DB session per chat for the same answer.
         response = await self.search(
             SearchRequest(query=message, org_id=org_id, space_id=space_id, limit=k)
         )
@@ -2121,12 +2160,136 @@ class MemoryService:
     # -- search ------------------------------------------------------------
 
     async def search(self, request: SearchRequest) -> SearchResponse:
+        started = time.perf_counter()
         await self.get_space_or_raise(request.org_id, request.space_id)
+        space_ms = (time.perf_counter() - started) * 1000
         with SEARCH_LATENCY.time():
             response = await self.pipeline.search(request)
+        response.timings_ms["space_ms"] = round(space_ms, 2)
         for stage, ms in response.timings_ms.items():
             SEARCH_STAGE_LATENCY.labels(stage=stage.removesuffix("_ms")).observe(ms / 1000.0)
         return response
+
+    # -- read path: one question, several spaces (B9) ---------------------------
+
+    async def multi_search(
+        self, query: str, requests: Sequence[SearchRequest]
+    ) -> tuple[list[SearchResponse], bool, dict[str, float]]:
+        """Run one question against several spaces, embedding it ONCE.
+
+        Returns (per-request responses in order, whether the embedding
+        failed, timings). Every space is checked against its request's org
+        BEFORE anything is spent, so one foreign or missing id fails the whole
+        call with the same 404 a single search gives -- partial answers would
+        let a caller probe which ids exist elsewhere, target by target.
+
+        The targets then run concurrently. Each is an ordinary `search` with
+        the vector handed in, so everything a search does -- fusion, decay,
+        supersession, caps, the score floor -- applies per target unchanged.
+        """
+        loop = asyncio.get_running_loop()
+        timings: dict[str, float] = {}
+        started = loop.time()
+        for request in requests:
+            await self.get_space_or_raise(request.org_id, request.space_id)
+        timings["space_ms"] = round((loop.time() - started) * 1000, 2)
+
+        t0 = loop.time()
+        vector = await self.pipeline.embed_query(query)
+        timings["embed_ms"] = round((loop.time() - t0) * 1000, 2)
+        # Empty, not None, on failure: "tried and failed, go lexical" rather
+        # than "not embedded yet", which would retry the provider per target.
+        for request in requests:
+            request.query_vector = vector if vector is not None else []
+
+        responses = await asyncio.gather(*(self.search(r) for r in requests))
+        timings["total_ms"] = round((loop.time() - started) * 1000, 2)
+        return list(responses), vector is None, timings
+
+    async def similar(
+        self,
+        org_id: str,
+        space_id: str,
+        *,
+        source_space_id: str,
+        source_memory_id: str | None = None,
+        source_key: str | None = None,
+        limit: int = 10,
+        filters: MemoryFilter | None = None,
+        max_per_source: int = 0,
+        min_score: float = 0.0,
+    ) -> tuple[str, SimilarResponse]:
+        """Neighbours in `space_id` of a memory stored in `source_space_id`.
+
+        Returns (the source memory's id, the response). BOTH spaces are checked
+        against `org_id`, and the source is looked up only inside its own
+        space, so neither side can reach across a tenant: a source in another
+        org is a 404, indistinguishable from one that does not exist.
+
+        No embedding call: the source's first chunk already has a vector.
+        """
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        await self.get_space_or_raise(org_id, space_id)
+        await self.get_space_or_raise(org_id, source_space_id)
+
+        if source_key is not None:
+            # Keyed memories are the write-path workstream's (migration 0006,
+            # `MemoryStore.get_active_by_keys`). Looked up by name so this
+            # route works the moment a backend has them, and says so plainly
+            # until then instead of guessing at a key from metadata.
+            lookup = getattr(self.store, "get_active_by_keys", None)
+            if lookup is None:
+                raise ValidationError(
+                    "source_key needs keyed memories, which this server does not "
+                    "have yet; pass source_memory_id",
+                    field="source_key",
+                )
+            found: dict[str, Memory] = await lookup(org_id, source_space_id, [source_key])
+            source = found.get(source_key)
+            if source is None:
+                raise NotFoundError(
+                    f"no active memory with key {source_key!r} in space {source_space_id}",
+                    field="source_key",
+                )
+            memory_id = source.id
+        elif source_memory_id is not None:
+            memory_id = source_memory_id
+        else:  # pragma: no cover - the request schema requires exactly one
+            raise ValidationError(
+                "pass source_memory_id or source_key", field="source_memory_id"
+            )
+
+        vector = await self.store.chunk_embedding(org_id, source_space_id, memory_id)
+        if vector is None:
+            # Missing memory, or one stored without a vector: either way
+            # there is nothing to look with, and the caller named it.
+            raise NotFoundError(
+                f"memory {memory_id} not found in space {source_space_id}",
+                field="source_memory_id",
+            )
+        source_ms = (loop.time() - started) * 1000
+
+        response = await find_similar(
+            self.store,
+            SimilarRequest(
+                org_id=org_id,
+                space_id=space_id,
+                vector=vector,
+                # Ids are global, so excluding it is a no-op unless the two
+                # spaces coincide -- where it is its own nearest neighbour.
+                source_memory_id=memory_id,
+                limit=limit,
+                filters=filters or MemoryFilter(),
+                max_per_source=max_per_source,
+                min_score=min_score,
+                candidate_multiplier=self.settings.candidate_multiplier,
+            ),
+        )
+        response.timings_ms["source_ms"] = source_ms
+        response.timings_ms["total_ms"] = (loop.time() - started) * 1000
+        response.timings_ms = {k: round(v, 2) for k, v in response.timings_ms.items()}
+        return memory_id, response
 
 
 __all__ = ["IngestResult", "MemoryService"]

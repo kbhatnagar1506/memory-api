@@ -161,6 +161,15 @@ class MemoryFilter:
     occurred_after: datetime | None = None
     occurred_before: datetime | None = None
     source: str | None = None
+    #: Drop memories whose metadata contains EVERY one of these pairs -- the
+    #: negation of `metadata`, and in SQL literally `NOT (meta @> {...})`.
+    #:
+    #: Measured need: "who here should I meet" searches a directory in which
+    #: the asker has an entry of their own, and it is usually the closest
+    #: match there is. Without a negative filter the caller over-fetches and
+    #: drops itself afterwards, which shrinks the window it asked for by one
+    #: and leaks its own card through any caller that forgets the step.
+    exclude_metadata: tuple[tuple[str, Any], ...] = ()
 
     def matches(self, memory: Memory) -> bool:
         """Reference semantics. SQL backends must reproduce this exactly."""
@@ -173,6 +182,13 @@ class MemoryFilter:
         for key, value in self.metadata:
             if memory.metadata.get(key) != value:
                 return False
+        if self.exclude_metadata and all(
+            # Presence, not `.get`: JSONB containment needs the key to exist,
+            # so a filter on {"k": None} must not match a memory without "k".
+            key in memory.metadata and memory.metadata[key] == value
+            for key, value in self.exclude_metadata
+        ):
+            return False
         occurred = _epoch(memory.occurred_at)
         if self.occurred_after is not None and occurred < _epoch(self.occurred_after):
             return False
@@ -289,9 +305,23 @@ class MemoryStore(abc.ABC):
 
     @abc.abstractmethod
     async def get_memories(
-        self, org_id: str, space_id: str, memory_ids: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
-        """Batch fetch. Missing ids are simply absent from the result."""
+        """Batch fetch. Missing ids are simply absent from the result.
+
+        `with_embeddings=False` lets a backend return chunks without their
+        vectors (`Chunk.embedding is None`). The search hydrate uses it: it
+        needs chunk text and count, and a pool of 32 memories otherwise hauls
+        every 768-float vector across the wire to be thrown away. A memory
+        fetched this way must never be written back with `upsert_memory`,
+        which replaces chunks wholesale and would store them vectorless.
+        Backends that keep vectors in process may ignore the flag.
+        """
 
     @abc.abstractmethod
     async def delete_memory(self, org_id: str, space_id: str, memory_id: str) -> bool: ...
@@ -555,6 +585,48 @@ class MemoryStore(abc.ABC):
                         nxt.append(edge.source_id)
             frontier = nxt
         return seen
+
+    async def reachable_superseders_many(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        max_depth: int = 20,
+    ) -> dict[str, set[str]]:
+        """`reachable_superseders` for a whole candidate pool at once.
+
+        Every requested id is a key, mapped to an empty set when nothing
+        supersedes it. The search pipeline asks this question of every pooled
+        candidate; asked one id at a time it cost a session per hop per
+        candidate, sequentially -- on a remote database, the largest single
+        cost in a search, and one nothing timed. Postgres answers the whole
+        pool with one recursive CTE; this default is the reference semantics,
+        and is what the CTE is property-tested against.
+        """
+        out: dict[str, set[str]] = {}
+        for memory_id in dict.fromkeys(memory_ids):
+            out[memory_id] = await self.reachable_superseders(
+                org_id, space_id, memory_id, max_depth=max_depth
+            )
+        return out
+
+    async def chunk_embedding(
+        self, org_id: str, space_id: str, memory_id: str, *, ordinal: int = 0
+    ) -> Vector | None:
+        """The stored vector of one chunk, or None if the memory or chunk is absent.
+
+        The source side of `/similar`: a card already has an embedding, and
+        re-embedding its text to search with it would spend a provider call to
+        reproduce a vector sitting in the table.
+        """
+        memory = await self.get_memory(org_id, space_id, memory_id)
+        if memory is None:
+            return None
+        for chunk in memory.chunks:
+            if chunk.ordinal == ordinal:
+                return list(chunk.embedding) if chunk.embedding is not None else None
+        return None
 
     # -- bitemporal history --------------------------------------------------
 

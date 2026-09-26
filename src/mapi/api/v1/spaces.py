@@ -90,11 +90,15 @@ async def get_space(
 async def delete_space(
     space_id: str,
     store: StoreDep,
+    service: ServiceDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_WRITE))],
 ) -> None:
     if not is_valid(space_id, "space"):
         raise ValidationError(f"{space_id!r} is not a valid space id", field="space_id")
-    if not await store.delete_space(principal.org_id, space_id):
+    deleted = await store.delete_space(principal.org_id, space_id)
+    # Evicted either way: the space lookup cache must never outlive the row.
+    service.forget_space(principal.org_id, space_id)
+    if not deleted:
         raise NotFoundError(f"space {space_id} not found", field="space_id")
 
 

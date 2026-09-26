@@ -19,10 +19,12 @@ from __future__ import annotations
 import base64
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
-from sqlalchemy import CursorResult, delete, func, select, text
+from sqlalchemy import CursorResult, delete, event, func, select, text
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from ...core.errors import (
     BadRequestError,
@@ -76,6 +78,7 @@ from .models import (
     SpaceRow,
     UserRow,
 )
+from .vector import BINARY_VECTORS_FLAG, register_vector_codec
 
 log = get_logger(__name__)
 
@@ -104,6 +107,41 @@ _HNSW_EF_SEARCH_CEILING = 1_000
 #: deliberately -- the curve is flat past three and the ceiling is a real cost
 #: on the comprehensive path, where `wanted` reaches 600.
 _HNSW_EF_SEARCH_MULTIPLE = 3
+
+
+#: Most distinct words an OR-mode lexical query is built from. Each becomes a
+#: branch of the tsquery; past a few dozen the query is a paragraph, the rank
+#: is dominated by stopword-adjacent noise, and the planner still has to
+#: evaluate every branch against every candidate row.
+_OR_QUERY_MAX_TERMS = 64
+
+#: Load a memory's chunks WITHOUT their vectors. `raiseload` rather than a
+#: plain defer: touching a vector that was deliberately not fetched must fail
+#: loudly, not trigger a lazy load (which under asyncio is itself an error,
+#: just a far more confusing one).
+_CHUNKS_WITHOUT_VECTORS = selectinload(MemoryRow.chunks).defer(
+    ChunkRow.embedding, raiseload=True
+)
+
+
+def _or_tsquery_text(query: str) -> str | None:
+    """`to_tsquery` input matching ANY word of `query`, or None if it has none.
+
+    Each whitespace-separated word is passed QUOTED, so nothing a user types
+    is read as tsquery syntax -- `&`, `!`, `(`, `:*` are just characters -- and
+    Postgres still runs every word through the same parser and dictionaries
+    that built the stored `to_tsvector('english', ...)` column. A word the
+    parser splits ("e-mail", "can't") comes back as a phrase, which is what
+    the document side holds too. Stopwords drop out server-side.
+    """
+    words = list(dict.fromkeys(query.split()))[:_OR_QUERY_MAX_TERMS]
+    if not words:
+        return None
+    # Inside a quoted tsquery lexeme, backslash escapes the next character and
+    # a doubled quote is a literal quote. Backslashes first, or the escape
+    # added for a quote would itself be escaped.
+    quoted = ("'" + w.replace("\\", "\\\\").replace("'", "''") + "'" for w in words)
+    return " | ".join(quoted)
 
 
 def _encode_cursor(value: str) -> str:
@@ -162,6 +200,11 @@ class PostgresStore(MemoryStore):
         statement_timeout_ms: int = 15_000,
         echo: bool = False,
         max_scan_tuples: int = 20_000,
+        lexical_mode: Literal["and", "or"] = "and",
+        pool_recycle_s: int = 1800,
+        pool_pre_ping: bool = False,
+        binary_vectors: bool = True,
+        server_settings: dict[str, str] | None = None,
     ) -> None:
         self.dimensions = dimensions
         #: None = not probed yet; probed on first vector search. Two flags, not
@@ -170,15 +213,44 @@ class PostgresStore(MemoryStore):
         self._iterative_scan_supported: bool | None = None
         self._ef_search_supported: bool | None = None
         self._max_scan_tuples = max_scan_tuples
+        if lexical_mode not in ("and", "or"):
+            raise ValueError(f"lexical_mode must be 'and' or 'or', got {lexical_mode!r}")
+        self.lexical_mode = lexical_mode
+        # `server_settings` is for session GUCs a deployment or a test lane
+        # needs on every connection (application_name, a schema-isolated
+        # search_path); the statement timeout is ours and always wins.
+        settings = {**(server_settings or {}), "statement_timeout": str(statement_timeout_ms)}
+        #: What every connection is opened with. Read-only; kept for inspection.
+        self.server_settings: dict[str, str] = dict(settings)
         self._engine = create_async_engine(
             database_url,
             pool_size=pool_size,
             max_overflow=max_overflow,
-            pool_pre_ping=True,
+            # Recycle rather than pre-ping. Pre-ping spent a round trip on
+            # EVERY checkout -- on a search that opens four or five sessions,
+            # four or five extra round trips to catch a dead connection that
+            # recycling retires before it can die of old age.
+            pool_pre_ping=pool_pre_ping,
+            pool_recycle=pool_recycle_s,
             echo=echo,
-            connect_args={"server_settings": {"statement_timeout": str(statement_timeout_ms)}},
+            connect_args={"server_settings": settings},
         )
+        self.binary_vectors = binary_vectors
+        #: Set when a connection opened before the `vector` extension existed,
+        #: and so could not take the binary codec. `initialize()` recycles the
+        #: pool once the extension is there.
+        self._codec_pending = False
+        if binary_vectors:
+            # Before anything compiles: bind processors are memoized per
+            # dialect, so the flag must be in place for the first statement.
+            setattr(self._engine.sync_engine.dialect, BINARY_VECTORS_FLAG, True)
+            event.listen(self._engine.sync_engine, "connect", self._on_connect)
         self._session = async_sessionmaker(self._engine, expire_on_commit=False)
+
+    def _on_connect(self, dbapi_connection: Any, _record: Any) -> None:
+        """Engine hook: give each new connection the binary `vector` codec."""
+        if not dbapi_connection.run_async(register_vector_codec):
+            self._codec_pending = True
 
     @staticmethod
     async def _scope(session: Any, org_id: str) -> None:
@@ -211,6 +283,53 @@ class PostgresStore(MemoryStore):
             from .models import HNSW_INDEX_DDL
 
             await conn.execute(text(HNSW_INDEX_DDL))
+        if self._codec_pending:
+            # Some connection predates the extension and has no codec; with the
+            # dialect in binary mode it would fail on its first vector. Start
+            # the pool over now that the type exists.
+            self._codec_pending = False
+            await self._engine.dispose()
+
+    async def _scope_for_ann(self, session: Any, org_id: str, wanted: int) -> None:
+        """Tenant scope plus the HNSW settings, in ONE round trip once probed.
+
+        `_scope` and `_enable_iterative_scan` issue four statements between
+        them -- the tenant GUC and three SET LOCALs -- and a hybrid search pays
+        that on each ANN session. `set_config(name, value, true)` is exactly
+        `SET LOCAL`, so after the first search has probed what this pgvector
+        supports, every later one sends a single SELECT carrying all four.
+
+        Unprobed, the old path runs, with the scope set AFTER the probes: a
+        failed probe rolls the transaction back, and a scope set before it
+        would be rolled back with it -- leaving a session that RLS shows an
+        empty database.
+        """
+        if self._ef_search_supported is None or self._iterative_scan_supported is None:
+            await self._enable_iterative_scan(session, wanted=wanted)
+            await self._scope(session, org_id)
+            return
+        values: dict[str, str] = {"app.org_id": org_id}
+        if wanted > 0 and self._ef_search_supported:
+            ef = max(
+                _HNSW_EF_SEARCH_FLOOR,
+                min(_HNSW_EF_SEARCH_CEILING, wanted * _HNSW_EF_SEARCH_MULTIPLE),
+            )
+            values["hnsw.ef_search"] = str(ef)
+        if self._iterative_scan_supported:
+            values["hnsw.iterative_scan"] = "relaxed_order"
+            values["hnsw.max_scan_tuples"] = str(int(self._max_scan_tuples))
+        await self._set_local(session, values)
+
+    @staticmethod
+    async def _set_local(session: Any, values: dict[str, str]) -> None:
+        """Transaction-local GUCs, all in one statement."""
+        names = list(values)
+        columns = ", ".join(f"set_config(:n{i}, :v{i}, true)" for i in range(len(names)))
+        params: dict[str, str] = {}
+        for i, name in enumerate(names):
+            params[f"n{i}"] = name
+            params[f"v{i}"] = values[name]
+        await session.execute(text(f"SELECT {columns}"), params)
 
     async def aclose(self) -> None:
         await self._engine.dispose()
@@ -225,6 +344,13 @@ class PostgresStore(MemoryStore):
             return False
 
     # -- mapping ------------------------------------------------------------
+
+    @staticmethod
+    def _chunk_vector(chunk: ChunkRow) -> list[float] | None:
+        """A chunk's vector, or None when this load chose not to fetch it."""
+        if "embedding" in sa_inspect(chunk).unloaded:
+            return None
+        return list(chunk.embedding) if chunk.embedding is not None else None
 
     @staticmethod
     def _to_memory(row: MemoryRow) -> Memory:
@@ -252,7 +378,7 @@ class PostgresStore(MemoryStore):
                     ordinal=c.ordinal,
                     text=c.text,
                     token_estimate=c.token_estimate,
-                    embedding=list(c.embedding) if c.embedding is not None else None,
+                    embedding=PostgresStore._chunk_vector(c),
                 )
                 for c in row.chunks
             ],
@@ -364,6 +490,10 @@ class PostgresStore(MemoryStore):
             # `@>` containment matches Python equality for every JSON type,
             # compares numbers as numbers, and uses the GIN index on `meta`.
             stmt = stmt.where(model.meta.contains({key: value}))
+        if filters.exclude_metadata:
+            # NOT containment of the whole map, mirroring `MemoryFilter.matches`
+            # (`meta` is NOT NULL, so there is no three-valued surprise here).
+            stmt = stmt.where(~model.meta.contains(dict(filters.exclude_metadata)))
         if filters.occurred_after is not None:
             stmt = stmt.where(model.occurred_at >= _aware(filters.occurred_after))
         if filters.occurred_before is not None:
@@ -755,19 +885,25 @@ class PostgresStore(MemoryStore):
             return self._to_memory(row) if row else None
 
     async def get_memories(
-        self, org_id: str, space_id: str, memory_ids: Sequence[str]
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        with_embeddings: bool = True,
     ) -> dict[str, Memory]:
         if not memory_ids:
             return {}
         async with self._session() as session:
             await self._scope(session, org_id)
-            rows = await session.scalars(
-                select(MemoryRow).where(
-                    MemoryRow.id.in_(list(memory_ids)),
-                    MemoryRow.org_id == org_id,
-                    MemoryRow.space_id == space_id,
-                )
+            stmt = select(MemoryRow).where(
+                MemoryRow.id.in_(list(memory_ids)),
+                MemoryRow.org_id == org_id,
+                MemoryRow.space_id == space_id,
             )
+            if not with_embeddings:
+                stmt = stmt.options(_CHUNKS_WITHOUT_VECTORS)
+            rows = await session.scalars(stmt)
             return {r.id: self._to_memory(r) for r in rows}
 
     async def _bridge_supersession(
@@ -1446,6 +1582,90 @@ class PostgresStore(MemoryStore):
             stmt = stmt.order_by(RelationEdgeRow.created_at, RelationEdgeRow.id)
             return [self._to_edge(r) for r in await session.scalars(stmt)]
 
+    #: Transitive superseders of a whole pool, in one statement.
+    #:
+    #: `walk(origin, node, depth)`: `node` supersedes `origin`, `depth` hops
+    #: up. UNION rather than UNION ALL, and bounded by depth, so a cyclic edge
+    #: set (never written by this code, but not impossible to write) still
+    #: terminates. The hop bound matches the breadth-first walk it replaces:
+    #: a node is reported when SOME path to it is within `max_depth`, which is
+    #: the same as its shortest path being within it.
+    _SUPERSEDERS_CTE = text(
+        """
+        WITH RECURSIVE walk(origin, node, depth) AS (
+            SELECT e.target_id, e.source_id, 1
+            FROM relation_edges e
+            WHERE e.org_id = :org
+              AND e.space_id = :space
+              AND e.type = 'supersedes'
+              AND e.target_id = ANY(:ids)
+          UNION
+            SELECT w.origin, e.source_id, w.depth + 1
+            FROM walk w
+            JOIN relation_edges e
+              ON e.target_id = w.node
+             AND e.org_id = :org
+             AND e.space_id = :space
+             AND e.type = 'supersedes'
+            WHERE w.depth < :max_depth
+        )
+        SELECT DISTINCT origin, node FROM walk WHERE node <> origin
+        """
+    )
+
+    async def reachable_superseders_many(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_ids: Sequence[str],
+        *,
+        max_depth: int = 20,
+    ) -> dict[str, set[str]]:
+        if max_depth < 1:
+            raise ValueError("max_depth must be at least 1")
+        ids = list(dict.fromkeys(memory_ids))
+        out: dict[str, set[str]] = {memory_id: set() for memory_id in ids}
+        if not ids:
+            return out
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            rows = await session.execute(
+                self._SUPERSEDERS_CTE,
+                {"org": org_id, "space": space_id, "ids": ids, "max_depth": max_depth},
+            )
+            for origin, node in rows:
+                out[origin].add(node)
+        return out
+
+    async def reachable_superseders(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        max_depth: int = 20,
+    ) -> set[str]:
+        # The same CTE for one id: a statement instead of a session per hop.
+        found = await self.reachable_superseders_many(
+            org_id, space_id, [memory_id], max_depth=max_depth
+        )
+        return found[memory_id]
+
+    async def chunk_embedding(
+        self, org_id: str, space_id: str, memory_id: str, *, ordinal: int = 0
+    ) -> Vector | None:
+        async with self._session() as session:
+            await self._scope(session, org_id)
+            vector = await session.scalar(
+                select(ChunkRow.embedding).where(
+                    ChunkRow.org_id == org_id,
+                    ChunkRow.space_id == space_id,
+                    ChunkRow.memory_id == memory_id,
+                    ChunkRow.ordinal == ordinal,
+                )
+            )
+            return list(vector) if vector is not None else None
+
     # -- bitemporal history ----------------------------------------------------
 
     @staticmethod
@@ -1554,8 +1774,7 @@ class PostgresStore(MemoryStore):
                 f"index expects {self.dimensions}"
             )
         async with self._session() as session:
-            await self._scope(session, org_id)
-            await self._enable_iterative_scan(session, wanted=limit)
+            await self._scope_for_ann(session, org_id, limit)
             # `<=>` is cosine DISTANCE; the retrieval layer works in similarity.
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
             stmt = (
@@ -1624,6 +1843,10 @@ class PostgresStore(MemoryStore):
         back with the row because the consolidation functions compute their
         own similarity -- see the interface docstring for why that is worth
         the extra column rather than trusting a score from here.
+
+        The returned memories carry chunks WITHOUT vectors. They are for
+        comparison; anything that writes one back must `get_memory` it first,
+        or `upsert_memory` would store its chunks vectorless.
         """
         if not embedding or limit <= 0:
             return []
@@ -1633,11 +1856,15 @@ class PostgresStore(MemoryStore):
                 f"index expects {self.dimensions}"
             )
         async with self._session() as session:
-            await self._scope(session, org_id)
-            await self._enable_iterative_scan(session, wanted=limit)
+            await self._scope_for_ann(session, org_id, limit)
             distance = ChunkRow.embedding.cosine_distance(embedding).label("distance")
             stmt = (
                 select(MemoryRow, ChunkRow.embedding, distance)
+                # The matched chunk's vector is the explicit column above. The
+                # memory's own chunks come back WITHOUT vectors: consolidation
+                # reads id and content from them, and a write used to haul
+                # every chunk vector of up to 4x the candidate count to do so.
+                .options(_CHUNKS_WITHOUT_VECTORS)
                 .join(ChunkRow, ChunkRow.memory_id == MemoryRow.id)
                 .where(
                     ChunkRow.org_id == org_id,
@@ -1677,11 +1904,19 @@ class PostgresStore(MemoryStore):
     ) -> list[LexicalHit]:
         if not query.strip() or limit <= 0:
             return []
-        async with self._session() as session:
-            await self._scope(session, org_id)
+        if self.lexical_mode == "or":
+            or_text = _or_tsquery_text(query)
+            if or_text is None:
+                return []
+            # Every word quoted (see `_or_tsquery_text`), so `to_tsquery`
+            # sees no operators but the ORs this code wrote.
+            tsquery = func.to_tsquery("english", or_text)
+        else:
             # websearch_to_tsquery tolerates arbitrary user input; plainto_ and
             # to_tsquery raise on characters a user will absolutely type.
             tsquery = func.websearch_to_tsquery("english", query)
+        async with self._session() as session:
+            await self._scope(session, org_id)
             rank = func.ts_rank_cd(ChunkRow.search_vector, tsquery).label("rank")
             stmt = (
                 select(ChunkRow.memory_id, ChunkRow.id, ChunkRow.text, rank)

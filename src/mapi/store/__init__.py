@@ -22,6 +22,10 @@ def build_store(settings: Settings) -> MemoryStore:
             pool_size=settings.db_pool_size,
             max_overflow=settings.db_max_overflow,
             statement_timeout_ms=settings.db_statement_timeout_ms,
+            lexical_mode=settings.lexical_mode,
+            pool_recycle_s=settings.db_pool_recycle_s,
+            pool_pre_ping=settings.db_pool_pre_ping,
+            binary_vectors=settings.db_binary_vectors,
         )
     raise ConfigurationError(f"unknown store backend: {settings.store_backend}")
 

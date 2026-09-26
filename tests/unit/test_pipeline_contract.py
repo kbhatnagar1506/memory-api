@@ -341,8 +341,10 @@ async def test_a_memory_deleted_between_search_and_hydrate_is_skipped(
 
     original = service.store.get_memories
 
-    async def hiding(org_id: str, space_id: str, memory_ids: object) -> dict[str, object]:
-        found = await original(org_id, space_id, memory_ids)  # type: ignore[arg-type]
+    async def hiding(
+        org_id: str, space_id: str, memory_ids: object, **options: bool
+    ) -> dict[str, object]:
+        found = await original(org_id, space_id, memory_ids, **options)  # type: ignore[arg-type]
         found.pop(victim.id, None)
         return found  # type: ignore[return-value]
 

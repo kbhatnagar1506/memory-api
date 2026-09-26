@@ -343,6 +343,52 @@ class Settings(BaseSettings):
     max_request_bytes: int = Field(default=8_000_000, ge=1024)
     request_timeout_s: float = Field(default=30.0, gt=0)
 
+    # -- read path: per-request round trips (B6-B8, B13) ----------------------
+    #
+    # Every knob here trades a little staleness or a little memory for fewer
+    # round trips on the search path. All of them can be turned back to the old
+    # behaviour (0, "and", True) without a code change, so a regression found in
+    # production is a config push rather than a rollback.
+
+    #: Seconds an authenticated principal is reused without asking the store.
+    #: Every request used to look its key up by hash, then UPDATE the key's
+    #: last-used time -- two sessions, one of them a write on the one hot row
+    #: that a single-client deployment shares. A revoke through this process
+    #: evicts at once; another process sees it within this window. 0 disables.
+    auth_cache_ttl_s: float = Field(default=30.0, ge=0, le=3600)
+    #: Least time between two `last_used_at` writes for one key, per process.
+    #: The column answers "is this key still in use", which a minute of
+    #: resolution answers as well as a millisecond does. 0 writes every time.
+    touch_api_key_interval_s: float = Field(default=60.0, ge=0, le=86_400)
+    #: Seconds a space lookup is reused. Only hits are cached, so a space
+    #: created a moment ago is never reported missing; deleting a space evicts
+    #: it here at once. 0 disables.
+    space_cache_ttl_s: float = Field(default=30.0, ge=0, le=3600)
+    #: Query embeddings kept apart from document embeddings, so a bulk ingest
+    #: cannot evict the questions people keep asking. Stored as float32: about
+    #: 3 KB an entry at 768 dimensions against ~31 KB as a list of floats.
+    query_embedding_cache_size: int = Field(default=8192, ge=0)
+    #: How Postgres full-text search combines the words of a query.
+    #:
+    #: "and" is `websearch_to_tsquery`: every term must be present, which is
+    #: right for short keyword queries ("BLE firmware") and matches almost
+    #: nothing for a conversational question. "or" matches any term and lets
+    #: `ts_rank_cd` order by how many and how close -- the semantics of the
+    #: in-memory BM25 store every benchmark in this repo was measured on. The
+    #: default stays "and" until the eval arm that compares them says otherwise.
+    lexical_mode: Literal["and", "or"] = "and"
+    #: Seconds before a pooled connection is replaced. Replaces pre-ping, which
+    #: spent one round trip on EVERY checkout to catch the rare dead
+    #: connection; recycling retires connections before the proxy or server
+    #: would. -1 never recycles.
+    db_pool_recycle_s: int = Field(default=1800, ge=-1)
+    #: Ping each connection on checkout. Off: see `db_pool_recycle_s`.
+    db_pool_pre_ping: bool = False
+    #: Exchange vectors with Postgres in pgvector's binary format rather than
+    #: as text. A 768-dimension vector is ~3 KB binary against ~8 KB of text
+    #: that Python has to format on the way in and parse on the way out.
+    db_binary_vectors: bool = True
+
     @field_validator("chunk_overlap_tokens")
     @classmethod
     def _overlap_fits(cls, v: int, info: ValidationInfo) -> int:

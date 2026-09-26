@@ -33,13 +33,15 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Awaitable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, TypeVar
 
 from ...core.logging import get_logger
 from ...store.base import LexicalHit, MemoryFilter, MemoryStore, VectorHit
 from ..embeddings.base import EmbeddingProvider, Vector
-from ..models import Memory, MemoryStatus, RelationType, ScoredMemory
+from ..models import Memory, MemoryStatus, RelationEdge, RelationType, ScoredMemory
 from ..synthesis.classify import QuestionKind, classify
 from ..synthesis.scope import extract_scope
 from ..synthesis.understand import QueryIntent, QueryUnderstanding
@@ -55,6 +57,11 @@ from .temporal import apply_scope
 from .tuning import Fusion, fusion_for
 
 log = get_logger(__name__)
+
+T = TypeVar("T")
+A = TypeVar("A")
+B = TypeVar("B")
+C = TypeVar("C")
 
 #: Hard ceilings on what a comprehensive question may ask the store for.
 #: "Everything" is a shape of question, not a licence to scan a space: past
@@ -237,6 +244,15 @@ class SearchRequest:
     #: Names to never expand on. In a two-person dialogue the speakers appear
     #: in nearly every turn, so bridging on them returns the whole corpus.
     known_speakers: tuple[str, ...] = ()
+    #: A query embedding the CALLER already computed; stage 0 then makes no
+    #: embedding call. Internal, never on the wire: it is how multi-search
+    #: embeds a question once and runs it against several spaces.
+    #:
+    #: An EMPTY vector means the caller tried and the provider failed: run
+    #: lexical-only, exactly as a failed embedding here would, rather than
+    #: retrying the provider once per target. `use_expansion` is ignored when
+    #: this is set -- the caller owns the query vector.
+    query_vector: Vector | None = None
 
 
 @dataclass(slots=True)
@@ -314,6 +330,14 @@ class RetrievalPipeline:
         if self.understanding is not None:
             return (await self.understanding.intent(query)).kind
         return classify(query)
+
+    async def embed_query(self, query: str) -> Vector | None:
+        """The query vector a search of `query` would use; None if the provider failed.
+
+        Public so a caller searching several spaces with one question can pay
+        for one embedding and hand it to each `SearchRequest.query_vector`.
+        """
+        return await self._embed_query(query.strip())
 
     async def _embed_query(self, query: str, *, expand: bool = False) -> Vector | None:
         """Query-side embedding. A provider failure degrades to lexical-only.
@@ -413,6 +437,21 @@ class RetrievalPipeline:
         return entities, ordered[:fetch]
 
     async def search(self, request: SearchRequest) -> SearchResponse:
+        """Run the pipeline, and time all of it.
+
+        `total_ms` wraps every stage, including the ones that are not
+        individually timed; the gap between it and the sum of the stages is
+        where an unexplained slowdown lives. Three stages run concurrently --
+        `hydrate_ms`, `superseders_ms` and `conflicts_ms` -- so count the
+        largest of those, not their sum.
+        """
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        response = await self._search(request)
+        response.timings_ms["total_ms"] = round((loop.time() - started) * 1000, 2)
+        return response
+
+    async def _search(self, request: SearchRequest) -> SearchResponse:
         timings: dict[str, float] = {}
         loop = asyncio.get_running_loop()
 
@@ -437,10 +476,17 @@ class RetrievalPipeline:
         # trip, so understanding costs the difference between them rather
         # than its own full latency.
         t0 = loop.time()
-        embedding, intent = await asyncio.gather(
-            self._embed_query(query, expand=request.use_expansion),
-            self._intent(request),
-        )
+        embedding: Vector | None
+        if request.query_vector is not None:
+            # Embedded upstream (or tried and failed upstream -- empty). Only
+            # the intent remains, which is regex or a cached label.
+            embedding = request.query_vector or None
+            intent = await self._intent(request)
+        else:
+            embedding, intent = await asyncio.gather(
+                self._embed_query(query, expand=request.use_expansion),
+                self._intent(request),
+            )
         timings["embed_ms"] = (loop.time() - t0) * 1000
 
         # The classifier already ran, concurrently with the embedding. Reuse
@@ -568,12 +614,36 @@ class RetrievalPipeline:
         # which is what identified `request.limit` as the cap rather than any
         # coverage constant. `test_coverage.py` could not see it: its fixture
         # holds 20 facts, under the ceiling.
-        t0 = loop.time()
         pool = fused[: max(request.rerank_candidates, effective_limit)]
-        memories = await self.store.get_memories(
-            request.org_id, request.space_id, [f.id for f in pool]
+        pool_ids = [f.id for f in pool]
+        # The hydrate, and ALONGSIDE it the two relation lookups stages 6 and
+        # 9 need. Both need only the pool's ids, known from here on, and each
+        # is a session of its own -- BEGIN, tenant scope, query, ROLLBACK.
+        # Awaited in turn after scoring, they were two more round-trip ladders
+        # on the critical path of every search; overlapped, a remote database
+        # costs one ladder for all three. The answers are unchanged: each
+        # stage still acts only on what survives to it, reading a lookup made
+        # over a superset of that.
+        memories, superseders, contradictions = await _all(
+            _timed(
+                timings,
+                "hydrate_ms",
+                # Vectors only when MMR will read them. Nothing else
+                # downstream touches a chunk embedding, and hydrating a pool
+                # with them transferred -- and validated, float by float --
+                # every vector of every chunk just to serialize the text.
+                self.store.get_memories(
+                    request.org_id,
+                    request.space_id,
+                    pool_ids,
+                    with_embeddings=request.use_mmr,
+                ),
+            ),
+            _timed(timings, "superseders_ms", self._pool_superseders(pool_ids, request)),
+            _timed(timings, "conflicts_ms", self._pool_contradictions(pool_ids, request)),
         )
-        timings["hydrate_ms"] = (loop.time() - t0) * 1000
+        if request.include_superseded:
+            timings.pop("superseders_ms", None)
 
         bridged = {item.id for item in fused if "entity" in item.ranks}
         best_chunk = {h.memory_id: (h.chunk_id, h.text) for h in lexical_hits}
@@ -675,7 +745,7 @@ class RetrievalPipeline:
 
         # -- stage 6: supersession suppression -----------------------------------
         if not request.include_superseded:
-            scored = await self._suppress_superseded(scored, request)
+            scored = self._suppress_superseded(scored, superseders)
 
         # -- stage 6b: per-source cap --------------------------------------------
         if request.max_per_source > 0:
@@ -729,7 +799,7 @@ class RetrievalPipeline:
         if intent.comprehensive:
             for hit in final:
                 hit.explain.append(f"coverage window {effective_limit} ({intent.source})")
-        conflicts = await self._find_conflicts(final, request)
+        conflicts = self._find_conflicts(final, contradictions)
         confidence = assess([calibrated_score(s) for s in final], has_conflicts=bool(conflicts))
         return SearchResponse(
             results=final,
@@ -744,8 +814,19 @@ class RetrievalPipeline:
             intent=intent,
         )
 
-    async def _find_conflicts(
-        self, scored: list[ScoredMemory], request: SearchRequest
+    async def _pool_contradictions(
+        self, pool_ids: list[str], request: SearchRequest
+    ) -> list[RelationEdge]:
+        """CONTRADICTS edges inside the candidate pool; `_find_conflicts` narrows them."""
+        if len(pool_ids) < 2:
+            return []
+        return await self.store.get_relations_between(
+            request.org_id, request.space_id, pool_ids, type=RelationType.CONTRADICTS
+        )
+
+    @staticmethod
+    def _find_conflicts(
+        scored: list[ScoredMemory], edges: list[RelationEdge]
     ) -> list[tuple[str, str]]:
         """CONTRADICTS edges joining two memories in this result set.
 
@@ -755,15 +836,13 @@ class RetrievalPipeline:
         disagreement entirely. Reporting it lets the agent ask.
 
         Only pairs where BOTH sides are visible are reported: a conflict with
-        something the caller cannot see is not actionable.
+        something the caller cannot see is not actionable. `edges` were read
+        over the whole candidate pool, a superset of `scored`, so this filter
+        is what makes them about the results.
         """
         if len(scored) < 2:
             return []
-        ids = [s.memory.id for s in scored]
-        edges = await self.store.get_relations_between(
-            request.org_id, request.space_id, ids, type=RelationType.CONTRADICTS
-        )
-        present = set(ids)
+        present = {s.memory.id for s in scored}
         seen: set[tuple[str, str]] = set()
         out: list[tuple[str, str]] = []
         for edge in edges:
@@ -787,8 +866,25 @@ class RetrievalPipeline:
                 return chunk.embedding
         return None
 
-    async def _suppress_superseded(
-        self, scored: list[ScoredMemory], request: SearchRequest
+    async def _pool_superseders(
+        self, pool_ids: list[str], request: SearchRequest
+    ) -> dict[str, set[str]]:
+        """What transitively supersedes each pooled memory, for stage 6.
+
+        ONE store call for the whole pool. This was a call per candidate,
+        awaited in sequence, each a breadth-first walk issuing a session per
+        hop: with a 32-memory pool on a remote database, the largest cost in
+        a search and the only stage `timings_ms` did not show.
+        """
+        if request.include_superseded or not pool_ids:
+            return {}
+        return await self.store.reachable_superseders_many(
+            request.org_id, request.space_id, pool_ids
+        )
+
+    @staticmethod
+    def _suppress_superseded(
+        scored: list[ScoredMemory], superseders: dict[str, set[str]]
     ) -> list[ScoredMemory]:
         """Drop memories that a *present* result transitively supersedes.
 
@@ -804,23 +900,49 @@ class RetrievalPipeline:
         incoming SUPERSEDES edges answers the real question — "is anything that
         replaced this also in front of the user" — regardless of how many
         intermediate revisions happened, and regardless of whether those
-        intermediates matched the query.
-
-        One store round-trip per candidate, each an indexed lookup, only for
-        results that survive to this stage.
+        intermediates matched the query. `superseders` holds that walk for
+        every pooled memory (`_pool_superseders`); "present" is decided here,
+        on what survived to this stage.
         """
         present = {s.memory.id for s in scored}
-        out: list[ScoredMemory] = []
-        for s in scored:
-            if s.memory.status is MemoryStatus.SUPERSEDED:
-                continue
-            superseders = await self.store.reachable_superseders(
-                request.org_id, request.space_id, s.memory.id
-            )
-            if superseders & present:
-                continue
-            out.append(s)
-        return out
+        return [
+            s
+            for s in scored
+            if s.memory.status is not MemoryStatus.SUPERSEDED
+            and not (superseders.get(s.memory.id, set()) & present)
+        ]
+
+
+async def _timed(timings: dict[str, float], name: str, work: Awaitable[T]) -> T:
+    """Await `work`, recording its own wall time under `name` even if it fails."""
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    try:
+        return await work
+    finally:
+        timings[name] = (loop.time() - started) * 1000
+
+
+async def _all(
+    first: Coroutine[Any, Any, A],
+    second: Coroutine[Any, Any, B],
+    third: Coroutine[Any, Any, C],
+) -> tuple[A, B, C]:
+    """Run three awaitables concurrently; the first failure cancels the rest.
+
+    A TaskGroup rather than `gather`, so a failed hydrate does not leave the
+    relation lookups running -- holding pooled connections -- for an answer
+    nobody will read. Unwrapped on failure, because callers (and the API's
+    error mapping) expect the store's own exception, not an exception group.
+    """
+    try:
+        async with asyncio.TaskGroup() as group:
+            a = group.create_task(first)
+            b = group.create_task(second)
+            c = group.create_task(third)
+    except BaseExceptionGroup as grouped:
+        raise grouped.exceptions[0] from None
+    return a.result(), b.result(), c.result()
 
 
 __all__ = ["RetrievalPipeline", "SearchRequest", "SearchResponse"]

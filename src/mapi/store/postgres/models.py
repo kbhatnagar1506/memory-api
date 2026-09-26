@@ -22,7 +22,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     CheckConstraint,
@@ -40,6 +39,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from .vector import BinaryVector
 
 
 class Base(DeclarativeBase):
@@ -263,7 +264,11 @@ class ChunkRow(Base):
     token_estimate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Dimension is fixed at migration time. Changing embedding model dimensions
     # requires a migration and a re-index; there is no safe in-place change.
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
+    #
+    # BinaryVector is pgvector's own type plus a binary wire path (see
+    # vector.py). The column DDL is identical, so no migration: this changes
+    # how vectors travel, not how they are stored.
+    embedding: Mapped[list[float] | None] = mapped_column(BinaryVector(768))
     search_vector: Mapped[str | None] = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', text)", persisted=True),

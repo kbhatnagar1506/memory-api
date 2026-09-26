@@ -16,6 +16,8 @@ import abc
 import asyncio
 import math
 import time
+import unicodedata
+from array import array
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -72,6 +74,18 @@ def l2_normalize(vec: Sequence[float]) -> Vector:
     return [x / norm for x in vec]
 
 
+def normalize_query(text: str) -> str:
+    """The form of a query used both as its cache key and as what gets embedded.
+
+    NFKC folds compatibility characters (full-width letters, ligatures, the
+    non-breaking space a phone keyboard inserts) into their plain forms, and
+    whitespace is collapsed, so "who knows  Rust?" and "who knows Rust? " are
+    one question. Case is kept: the embedding model distinguishes "Go" from
+    "go", and a cache that merged them would answer one with the other's vector.
+    """
+    return " ".join(unicodedata.normalize("NFKC", text).split())
+
+
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
     """Cosine similarity, clamped to [-1, 1] against float drift."""
     if len(a) != len(b):
@@ -100,6 +114,7 @@ class EmbeddingProvider(abc.ABC):
         timeout_s: float = 20.0,
         max_attempts: int = 3,
         cache_size: int = 0,
+        query_cache_size: int = 0,
     ) -> None:
         if dimensions <= 0:
             raise ConfigurationError("embedding dimensions must be positive")
@@ -112,6 +127,9 @@ class EmbeddingProvider(abc.ABC):
         self.max_attempts = max_attempts
         self._cache: OrderedDict[str, Vector] = OrderedDict()
         self._cache_size = max(0, cache_size)
+        #: Query-side LRU, separate from `_cache`; see `_query_cache_get`.
+        self._query_cache: OrderedDict[str, array[float]] = OrderedDict()
+        self._query_cache_size = max(0, query_cache_size)
         # -- runtime limits, set by `configure()` ---------------------------
         # The defaults reproduce what every provider did before these knobs
         # existed, so a provider built directly (bench, tests) is unchanged.
@@ -191,6 +209,47 @@ class EmbeddingProvider(abc.ABC):
         self._cache.move_to_end(key)
         while len(self._cache) > self._cache_size:
             self._cache.popitem(last=False)
+
+    # -- query cache -------------------------------------------------------
+    #
+    # A second LRU for QUERY vectors, for two reasons the document cache
+    # cannot serve:
+    #
+    #   * Eviction pressure. Documents arrive in bulk -- one Muse upload is
+    #     hundreds of chunks -- and share `_cache` with nothing that repeats.
+    #     The questions a matcher asks every few minutes are exactly the
+    #     entries worth keeping, and one ingest used to push them all out.
+    #   * Size. A `list[float]` of 768 Python floats measured ~31 KB; the same
+    #     vector as `array('f')` is ~3 KB. float32 is what pgvector stores
+    #     anyway, so the precision given up here was never used downstream.
+    #
+    # Keys are normalized (`normalize_query`), and the provider embeds the
+    # normalized text, so two spellings that share a key also share the
+    # vector they would have produced.
+
+    def _query_cache_key(self, normalized: str) -> str:
+        return f"{self.name}:{self.model}:{self.dimensions}:{normalized}"
+
+    def _query_cache_get(self, normalized: str) -> Vector | None:
+        if self._query_cache_size == 0:
+            return None
+        key = self._query_cache_key(normalized)
+        packed = self._query_cache.get(key)
+        if packed is None:
+            return None
+        self._query_cache.move_to_end(key)
+        # A fresh list per hit: callers are free to mutate what they get, and
+        # a shared list would let one request corrupt the next one's query.
+        return packed.tolist()
+
+    def _query_cache_put(self, normalized: str, vec: Vector) -> None:
+        if self._query_cache_size == 0:
+            return
+        key = self._query_cache_key(normalized)
+        self._query_cache[key] = array("f", vec)
+        self._query_cache.move_to_end(key)
+        while len(self._query_cache) > self._query_cache_size:
+            self._query_cache.popitem(last=False)
 
     # -- validation --------------------------------------------------------
 
@@ -471,4 +530,5 @@ __all__ = [
     "Vector",
     "cosine_similarity",
     "l2_normalize",
+    "normalize_query",
 ]

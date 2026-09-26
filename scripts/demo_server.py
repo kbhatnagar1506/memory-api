@@ -48,7 +48,8 @@ CORPUS = pathlib.Path(__file__).with_name(".demo_corpus.json")
 VECTORS = pathlib.Path("bench/data/cache/vectors.sqlite")
 
 #: Same model and width the benchmark runs, so the cache is shared with it.
-MODEL = "text-embedding-004"
+#: gemini-embedding-001: text-embedding-004 is retired on the Developer API.
+MODEL = "gemini-embedding-001"
 DIMENSIONS = 768
 
 _DATE_RE = re.compile(r"(\d{4})/(\d{2})/(\d{2})(?:[^\d]+(\d{2}):(\d{2}))?")

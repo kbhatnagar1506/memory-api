@@ -15,6 +15,19 @@ from .deterministic import DeterministicEmbedder
 
 
 def build_embedder(settings: Settings) -> EmbeddingProvider:
+    """Construct the configured provider, with its runtime limits applied."""
+    provider = _construct(settings)
+    provider.configure(
+        concurrency=settings.embedding_concurrency,
+        query_timeout_s=settings.query_embedding_timeout_s,
+        query_attempts=settings.query_embedding_attempts,
+        query_hedge_ms=settings.query_embedding_hedge_ms,
+        max_retry_delay_s=settings.embedding_max_retry_delay_s,
+    )
+    return provider
+
+
+def _construct(settings: Settings) -> EmbeddingProvider:
     """Construct the configured provider. Import errors surface as config errors."""
     common = {
         "model": settings.embedding_model,

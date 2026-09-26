@@ -92,11 +92,39 @@ class Settings(BaseSettings):
 
     # -- embeddings -------------------------------------------------------
     embedding_backend: EmbeddingBackend = EmbeddingBackend.DETERMINISTIC
-    embedding_model: str = "text-embedding-004"
+    #: text-embedding-004 was retired on the Developer API (404), and every
+    #: deployment that still defaulted to it failed on its first write.
+    #: gemini-embedding-001 at 768 dimensions is the model the Vector(768)
+    #: column is sized for.
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimensions: int = Field(default=768, ge=8, le=4096)
     embedding_batch_size: int = Field(default=32, ge=1, le=512)
     embedding_timeout_s: float = Field(default=20.0, gt=0)
     embedding_cache_size: int = Field(default=4096, ge=0)
+    #: Document batches in flight at once, per request. Bulk ingest embeds
+    #: every item's chunks in one pass; sequential batches made a 100-item
+    #: bulk ~100 serial round trips, and unbounded fan-out is how a burst
+    #: turns into a wall of 429s. Two is the measured sweet spot on the
+    #: Developer API quota.
+    embedding_concurrency: int = Field(default=2, ge=1, le=16)
+    #: Hard deadline for ONE query embedding attempt. Search sits on a
+    #: caller's latency budget (facemash's is 1.2 s end to end), and the
+    #: document timeout above -- 20 s, three attempts -- let a stuck query
+    #: hold a request for a minute.
+    query_embedding_timeout_s: float = Field(default=1.2, gt=0, le=60)
+    #: Attempts for a query embedding, including the first. Two is "at most
+    #: one retry": a query that failed twice will not be saved by a third
+    #: inside any latency budget worth having.
+    query_embedding_attempts: int = Field(default=2, ge=1, le=3)
+    #: Fire a second, identical query request if the first has not answered
+    #: within this many milliseconds, and take whichever lands first. 0 is
+    #: off. Disables itself for a minute after any 429, because hedging into
+    #: a quota wall doubles the load that caused it.
+    query_embedding_hedge_ms: int = Field(default=0, ge=0, le=10_000)
+    #: Longest a write will wait on a provider's Retry-After before retrying.
+    #: A 429 that asks for longer fails now instead, carrying the hint back
+    #: to the caller, rather than holding the request past its own deadline.
+    embedding_max_retry_delay_s: float = Field(default=30.0, ge=0, le=300)
 
     # -- reranking --------------------------------------------------------
     #: Default OFF on measured evidence. The heuristic reranker is lexical
@@ -368,7 +396,30 @@ class Settings(BaseSettings):
             raise ValueError("max_limit must be >= default_limit")
         if self.store_backend is StoreBackend.POSTGRES and not self.database_url:
             raise ValueError("store_backend=postgres requires database_url")
+        self._embedding_batch_fits_provider()
         return self
+
+    def _embedding_batch_fits_provider(self) -> None:
+        """Refuse a batch size the Gemini Developer API rejects outright.
+
+        The Developer API answers 400 to a batch of 101 (verified live), and
+        a 400 is not retried -- so a batch size above 100 would fail every
+        large write, deterministically, after the service had booted fine.
+        Vertex takes larger batches, so the limit applies only when a key
+        selects the Developer API, which is the same rule the embedder uses.
+        """
+        if self.embedding_backend is not EmbeddingBackend.GEMINI:
+            return
+        # Imported here, not at module top: the embeddings package imports
+        # this module, and by the time a Settings is validated both exist.
+        from .domain.embeddings.gemini import DEVELOPER_API_MAX_BATCH
+
+        uses_key = bool(self.gemini_api_key or os.getenv("GEMINI_API_KEY"))
+        if uses_key and self.embedding_batch_size > DEVELOPER_API_MAX_BATCH:
+            raise ValueError(
+                f"embedding_batch_size={self.embedding_batch_size} exceeds the Gemini "
+                f"Developer API's limit of {DEVELOPER_API_MAX_BATCH} texts per request"
+            )
 
     @property
     def is_production(self) -> bool:

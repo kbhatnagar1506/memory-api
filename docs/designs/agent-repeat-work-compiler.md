@@ -87,9 +87,9 @@ agent ──LLM calls──▶ [LLM proxy] ──▶ model provider
                         │
         ┌───────────────┼────────────────────┐
      [miner]        [compiler]           [verifier]
-   segments,      flow per cluster,     replay against a reset
-   clusters,      guards, Deopt,        environment or recorded
-   report         llm_step              tool I/O; shadow
+   segments,      FlowSpec IR per       replay on pristine data
+   clusters,      cluster, guards,      copies (M1) or recorded
+   report         Deopt, llm_step       tool I/O (M2); episodes; shadow
                         │
                  [promotion + router]
         level 1: compiled flow exposed to the agent as a tool
@@ -102,58 +102,117 @@ agent ──LLM calls──▶ [LLM proxy] ──▶ model provider
 1. **Record.** Production: an OpenAI/Anthropic-compatible LLM proxy (one base-URL change) and a tool proxy (an MCP proxy that wraps MCP servers, plus a decorator for native function tools). Per run: input message(s), ordered steps (LLM call or tool call with name, args, result, latency), tokens, cost, final outcome.
 2. **Side-effect classes.** Each tool is `read` or `irreversible_write`. Declared per tool; any undeclared write defaults to `irreversible_write`. (A `reversible_write` class is deferred until a rule needs it.)
 3. **Miner.** Segments runs, parameterizes each segment by value provenance, clusters identical segment skeletons, and produces the repeat report (share of runs, tokens, cost, latency per cluster). Rules in the M1 spec.
-4. **Compiler.** Deterministic code generation from a cluster's skeleton, no LLM in the code generator: `INPUT` becomes a function parameter, `DEP` a path expression over an earlier tool result, `CONST` a literal, `SELECT` a pick from a list in a tool output (exact-match filter when the user supplied the value, `llm_step` otherwise), and `CHOICE` an enum over a small closed set of observed values. Every `llm_step(prompt, schema)` runs on a small model at temperature 0. An LLM is used only to write the `llm_step` prompts and the input-extraction schema. Guards assert the invariants observed in tool outputs (fields present, status values in the observed set); a guard failure raises `Deopt`. **Ordering rule:** within a compiled segment, all guards and reads run before its one write; a segment that cannot be ordered that way is not compiled.
+4. **Compiler.** In M1 the compiler emits a flow **IR**, not Python source (eng review D7): each flow is a pydantic `FlowSpec` (steps, bindings, guards, write) executed by one tested `FlowRunner`, which also implements prepare/commit. `render_python(spec)` prints readable Python for the audit artifact and the pitch; it is never executed in M1. The mapping from a cluster's skeleton is deterministic, with no LLM in the compiler: `INPUT` becomes a function parameter, `DEP` a path expression over an earlier tool result, `CONST` a literal, `TRANSFORM` a named normalization function applied to its source, `SELECT` a pick from a list in a tool output (exact-match filter when the user supplied the value, `llm_step` otherwise), and `CHOICE` an enum over a small closed set of observed values. Every `llm_step(prompt, schema)` runs on a small model at temperature 0. An LLM is used only to write the `llm_step` prompts and the input-extraction schema. Guards assert the invariants observed in tool outputs (fields present, status values in the observed set); a guard failure raises `Deopt`. **Ordering rule:** within a compiled segment, all guards and reads run before its one write; a segment that cannot be ordered that way is not compiled.
 5. **Verifier.** Replay against evidence; shadow runs in production. Matching the agent is necessary, not sufficient: only runs with a good outcome count as ground truth (τ-bench: end-state reward = 1; production: no reopen, reversal, or human override within a window).
-6. **Promotion and router.** States `candidate → verified → promoted`, with a per-flow kill switch and auto-demotion when guard failures or outcome regressions spike. Level 1 exposes the flow to the agent as a tool; on `Deopt` the agent gets a structured error and falls back to its primitive tools. Level 2 routes before the agent (M1 spec defines it). Who approves promotion in production is Open Question 1.
+6. **Promotion and router.** States `candidate → verified → promoted`, with a per-flow kill switch and auto-demotion when guard failures or outcome regressions spike. Level 1 exposes each flow to the agent as two tools (see "Level 1" in the M1 spec); on `Deopt` the agent gets a structured error and falls back to its primitive tools. Level 2 routes before the agent (M1 spec defines it). Who approves promotion in production is Open Question 1.
 
 ### Milestone 1 specification (the τ-bench acceptance test)
 
-**Scope.** Build in-process recording, miner, compiler, replay verifier, a static router, and the promotion rule. No HTTP proxy, no MCP proxy (both move to M2).
+**Scope.** Built in two steps; no scope cut (eng review D2):
+- **M1a (checkpoint):** in-process recording, miner, compiler, replay verifier, promotion rule, Level 1 routing (compiled flows exposed to the agent as tools), and the evaluator. Produces the first real numbers: plumbing works, clusters exist, Level 1's call cut and funnel.
+- **M1b:** Level 2 slot-filling, built after M1a and informed by its real clusters.
+- **Where the verdict comes from** (eng review D19). Level 1 can only shorten lookups, and most agent calls in τ-bench are customer-facing turns. On day one, compute Level 1's ceiling from dev baseline runs, counting prepare, commit, and small-model calls, and only reads a flow can cover. If it's under 31.25% (the lowest ceiling any Calls gate can pass), **M1a makes no go/no-go call**: it's reported as a checkpoint, and the verdict comes after M1b from the Level 2 arm.
+- **Oracle flows first** (eng review D20). Days 1-2: hand-write `FlowSpec`s for the write tools in train (cancel, modify address/items/payment, return, exchange) and run them through the same `FlowRunner` on dev. That gives the Level 1 and Level 2 ceilings before the miner exists, and becomes the miner's answer key: the miner is graded by binding recall and precision against the oracles. Oracle flows are measurement tools, not product.
+- **Funnel metric** per flow, in both arms: eligible → prepare called → committed → deopt (by reason). This separates "the agent ignored the tools" from "no coverage".
 
-**Configuration** (held constant across all arms; values are defaults to swap freely, but never between arms):
+No HTTP proxy, no MCP proxy (both move to M2).
+
+```
+M1a data flow
+  τ-bench train tasks ──▶ baseline agent runs ──▶ recorder ──▶ traces (per run, per step)
+                                                                  │
+                                            miner: normalize → segment → provenance → cluster
+                                                                  │  day-one gate (≥3 clusters)
+                                                     compiler: flow code per cluster
+                                                                  │
+                                  replay verifier (Env.reset per verify task) ──▶ promote / stay candidate
+                                                                  │
+  τ-bench test tasks ──▶ agent + promoted flows as tools (Level 1) ──▶ evaluator ──▶ gates report
+```
+
+**Configuration** (held constant across all arms; values are defaults to swap freely, but never between arms). **Enforced, not trusted** (eng review D24): every trace records a config fingerprint (agent model and prompt hash, user-simulator model and temperature with the D16 patch flag, small-model id, τ-bench commit, instruction-stripping script hash, our git sha). The evaluator refuses to compute any gate across traces whose fingerprints differ outside the arm-defining fields, and prints the mismatch.
 
 | Setting | Value |
 |---|---|
 | Benchmark | Original τ-bench, retail domain (sierra-research/tau-bench), pinned to the commit checked out on M1 day one |
-| Splits | Retail `train` tasks divided 70/30 into **compile** and **verify**; retail `test` tasks used only for the final evaluation (confirm split files at pin time) |
+| Splits | Retail `train` (500) divided 70/30 into **compile** and **verify**; `dev` (20, human-style) for tuning, diagnostics, and the smoke test; `test` (115) used only for the final evaluation |
+| Instruction stripping | Train instructions state IDs (order ID in ~100%, payment ID in ~82%) while test mostly doesn't (~9% and 0%). Compile/verify use **ID-stripped copies**: remove `#W…` and `via <payment_id>`, describe items by name, drop tasks whose order becomes ambiguous. Grading is unchanged (database-hash comparison). Publish the stripping script and the stripped vs original mix with results (eng review D17). |
 | Agent | τ-bench's tool-calling agent strategy, stock prompt, `claude-haiku-4-5-20251001` (fastest) |
 | User simulator | τ-bench `llm` user strategy, `claude-sonnet-5`, temperature 0 |
 | Small model (`llm_step`, input extraction) | `claude-haiku-4-5-20251001` |
 | Trials | 4 recorded runs per compile/verify task; k = 4 trials per test task for the final evaluation (pass^4) |
+| Collection order | Staged (eng review D13). Stage 1: 1 trial per compile task (350 runs), then the day-one gate. Stage 2, only if the gate passes: the remaining compile trials and the verify split. |
 
-**Recording.** Wrap the τ-bench environment's tool dispatch and the agent's completion call in-process. Side-effect classes declared by hand: `cancel_pending_order`, `modify_pending_order_address`, `modify_pending_order_items`, `modify_pending_order_payment`, `return_delivered_order_items`, `exchange_delivered_order_items`, `modify_user_address`, and `transfer_to_human_agents` are `irreversible_write`; everything else is `read`. (Confirm tool names at pin time.)
+**Collection runner** (eng review D14). Don't use τ-bench's `run.py`: it names each checkpoint with a timestamp (no resume) and rewrites one growing JSON file after every result. Instead, drive tasks through τ-bench's `Env` and agent directly:
+- bounded concurrency (start at 8 workers) with exponential backoff on 429s;
+- one trace file per (split, task, trial), written to a temp file and atomically renamed;
+- on restart, skip any (task, trial) that already has a file;
+- load finished traces into SQLite for mining.
+
+**Recording** (revised by eng review D16). Record at the **agent's own call site**, meaning its tool calls and completions, and stop at `done`. Do **not** hook `Env.step`: when a run ends, `calculate_reward` replays the ground-truth `task.actions` through `Env.step`, so an env-level hook would log the answer key at the end of every trace. Patch τ-bench's user simulator to temperature 0 for every arm (it passes no temperature by default). `test_recorder.py` asserts no steps after `done` and that the recorded tool-step count equals the agent's tool-call count. Side-effect classes declared by hand: `cancel_pending_order`, `modify_pending_order_address`, `modify_pending_order_items`, `modify_pending_order_payment`, `return_delivered_order_items`, `exchange_delivered_order_items`, `modify_user_address`, and `transfer_to_human_agents` are `irreversible_write`; everything else is `read`. (Confirm tool names at pin time.)
 
 **Miner rules.**
+0. **Normalize first** (eng review D4). τ-bench tools return strings: JSON on success, `"Error: …"` on failure (tools return it directly, and `Env.step` wraps any exception as `f"Error: {e}"`). One normalization stage, shared by the miner, the guards, and the evaluator:
+   - parse each observation as JSON, falling back to text;
+   - mark `"Error:"` observations as failed calls;
+   - drop failed calls, `think` calls, and back-to-back duplicate reads from skeletons (the raw trace keeps everything);
+   - compiled code treats any `"Error:"` result as a guard failure and raises `Deopt`.
 1. **Authentication is its own segment type.** Its only output is `user_id`, whichever lookup path produced it (`find_user_id_by_email`, `find_user_id_by_name_zip`, or email failing then name+zip). Later segments take `user_id` as a context parameter, so authentication variants never split intent clusters and a second write in the same conversation has a defined source for `user_id`. In M1 the authentication segment is **hand-written** (email lookup first, name+zip on failure) and excluded from compilation and promotion, because it has a branch and branch alignment is M2.
-2. **Segment** the rest of each run at its irreversible writes: a segment is the reads leading to one write, plus the write. Cluster segments, not whole runs, so multi-intent conversations and varying lengths don't make every run unique.
+2. **Segment** the rest of each run at its irreversible writes. A segment is the write plus only the reads whose outputs feed the write's arguments or guards (its provenance graph); exploratory reads that feed nothing are dropped from the skeleton (eng review D20). Cluster segments, not whole runs, so multi-intent conversations, varying lengths, and incidental browsing don't make every run unique.
 3. **Fold loops:** consecutive repeats of the same read tool with the same argument provenance collapse to one `for_each` step.
 4. **Provenance** for each argument value, in precedence order:
    - A value that is one element (or a subset) of a list in an earlier tool output: `SELECT(candidates = orders[*])`, whether or not the user also stated it. The generated code filters by exact match when the user supplied the value (with a guard that exactly one element matches) and otherwise calls an `llm_step` to pick. One label for both cases, so users who state an ID and users who don't land in the same cluster.
-   - Matches a scalar field of an earlier tool output: `DEP` (most recent output wins).
+   - Matches a scalar field of an earlier tool output: record **every** (tool, path) it matches in that run. One match is a `DEP`; several are `suspected`. Across the cluster, a `DEP` survives only if the same (tool, path) explains the value in every run. If runs disagree, the argument becomes a `SELECT` over the union of candidate paths (eng review D5, following TraceCompiler's uniqueness rule).
+   - Matches after normalization only (strip `#`, whitespace, case): `TRANSFORM(fn, source)`, where `fn` is a named normalization function and `source` is resolved by the same rules. Values computed through the `calculate` tool are not compiled in M1.
    - Matches the user's messages only: `INPUT`.
    - Otherwise: `CONST`.
    - Values of length under 3, small integers (0-9), and booleans are excluded from matching.
+   - Every binding keeps its evidence (run id, step, path) so a compiled argument can be traced back to the runs that justify it.
 5. **Wildcard paths:** `DEP` and `SELECT` paths generalize list indexes (`items[*].item_id`). A list-valued argument (`item_ids`, `new_item_ids`) is a multi-select `SELECT` whose output schema is a subset of the candidates.
 6. **Constants must be constant:** a `CONST` compiles as a literal only if it is identical in every run of the cluster. If it varies over a small closed set (at most 5 distinct values, each seen in at least 2 distinct tasks; for example, `cancel_pending_order`'s `reason`), it becomes an enum `CHOICE` `llm_step` over the observed values. If it varies beyond that (free text, such as `transfer_to_human_agents`'s `summary`), the segment is **not compiled** and stays with the agent. In M1, segments ending in `transfer_to_human_agents` are never compiled.
 7. **Day-one gate:** before writing the compiler, run the miner on the baseline compile-split traces and count segment clusters with at least 20 successful runs drawn from at least 10 distinct tasks. **If there are fewer than 3, stop and fix the miner first**; the rest of M1 depends on this.
 
-**Level 2 (slot-filling route).** Retail policy requires authenticating the user and getting an explicit yes before any write, and the simulated user reveals details only when asked. So level 2 is a loop, not a one-shot bypass:
+**Level 1 (prepare / commit, M1a).** Retail policy (`wiki.md`: "list the action detail and obtain explicit user confirmation (yes)" before any database update) means one bundled read-and-write tool can't be used correctly. Each promoted flow becomes two tools (eng review D3):
+- `prepare_<flow>(inputs)` runs the reads, guards, `SELECT` and `CHOICE` steps and returns a single-use proposal: the exact write call (name and args) plus the details the agent must show the user.
+- `commit_<flow>(proposal_id)` runs exactly that write after re-checking the guards against current data. It refuses unknown, already-used, or stale proposal ids with a structured error.
+
+The agent shows the proposal, gets "yes", and commits. The write is exactly what the user approved; no model call happens between approval and write.
+
+**Deopt reasons** (eng review D8). Every hand-back is `Deopt(reason, step, evidence)`, where `reason` is one of `guard_failed`, `tool_error`, `select_ambiguous`, `select_empty`, `choice_invalid`, `proposal_unknown`, `proposal_used`, or `proposal_stale`. The agent receives a one-line structured error telling it to continue with primitive tools. The evaluator reports fallback rate by reason and by flow, which is what the "iterate once" band acts on.
+
+```
+agent ──prepare_return(order_id, items?)──▶ reads + guards + SELECT ──▶ proposal #p1 {write, details}
+agent ──"here's what I'll do… ok?"──▶ user ──"yes"──▶ agent
+agent ──commit_return(#p1)──▶ re-check guards ──▶ exact write ──▶ result
+      (guard fail / unknown / used / stale id → structured error → agent uses primitive tools)
+```
+
+**Level 2 (slot-filling route, M1b).** Retail policy requires authenticating the user and getting an explicit yes before any write, and the simulated user reveals details only when asked. So level 2 is a loop, not a one-shot bypass:
 1. Run the hand-written authentication segment (templated questions, lookup reads) to get `user_id`.
 2. Classify the intent at each user turn until confident (small model; route only above a confidence threshold tuned on the **verify** split). Openers often don't name the intent.
 3. Ask a templated question for each missing `INPUT`; extract the answer with one small-model call per user turn.
-4. Run the compiled segment's reads, guards, `SELECT`, and `CHOICE` steps.
-5. Ask a templated confirmation before the write; write only on an explicit yes.
+4. Call `FlowRunner.prepare` (the same prepare as Level 1; eng review D9).
+5. Render the proposal's details as a templated confirmation; on an explicit yes, call `FlowRunner.commit`. Level 1 and Level 2 share one executor and differ only in who talks to the user.
 6. After the write, re-classify the next user turn and route again, or hand to the agent if not confident.
 7. On `Deopt` at any point, hand the agent the full transcript and the steps already taken.
+
+**M1b TODO (eng review):** τ-bench only awards reward when required outputs (e.g. a refund total) are actually said to the user. Level 2's templated confirmations and result messages must render every value the task's `outputs` list could require. Build a coverage check that compares, per flow, the proposal fields against the outputs seen in train ground truth before M1b's first test run.
 
 **What counts as an LLM call:** every runtime model call from any component (agent, intent classifier, extraction, `SELECT` and `CHOICE` steps, confirmation parsing), except the user simulator. The replay judge counts toward compile cost, not runtime. Templated turns are not LLM calls, but the report counts them separately as "turns" so the savings aren't hidden.
 
 **Ceiling first.** Before building either arm, compute from baseline traces the maximum possible LLM-call reduction per arm. Level 1 cannot remove user-facing turns. Level 2 can, but still spends at least one extraction call per user turn. Each arm's go threshold is 50%, or 80% of its ceiling if that is lower.
 
-**Verification and promotion.** Replay runs against the τ-bench environment reset to the task's initial state (its tools are deterministic), so there are no unrecorded-call gaps. A flow is promoted only if, on the verify split:
-- it has at least 8 good-outcome verify runs from at least 4 distinct tasks (otherwise it stays a candidate),
-- side-effecting calls (name and args) match the good-outcome agent runs 100%, and
-- an LLM judge rates at least 95% of user-facing replies as equivalent.
+**Verification and promotion** (revised by eng review D22). Verification runs the same path the test does.
+- **Pre-check (fast, local):** deterministic replay of τ-bench's tools against a fresh copy of pristine data. `INPUT` values come from the user's messages, **never** from recorded write args (that would be circular). A flow that fails here never reaches the episode check.
+- **Promotion check (real Level 1 episodes on the verify split):** agent plus user simulator plus the candidate flow, the same setup as test.
+
+`prepare` takes an explicit `hint` argument for each `SELECT` site: the agent's own description of what to pick (e.g. "the desk lamp order"). A flow is promoted only if, on the verify split:
+- it has at least 8 good-outcome verify episodes from at least 4 distinct tasks (otherwise it stays a candidate),
+- every `SELECT`/`CHOICE` site scores at least 95% on the pick-accuracy eval (D12). Cases are (hint, candidates) pairs with the value the agent chose in good-outcome compile-split runs, matching what `prepare` actually sees at Level 1. They are scored at temperature 0, reported per flow and per site, and re-run whenever pick prompts change.
+- side-effecting calls (name and args) in the episodes match the task's ground truth 100% for deterministic arguments (D21), and
+- Level 2 only (M1b): an LLM judge rates at least 95% of templated user-facing replies as equivalent. At Level 1 the agent still writes every reply, so no judge is needed.
+
+Replay never calls `Env.reset`, because reset also starts a new simulated user (`self.user.reset(...)`, a model call). The verifier loads pristine data once via `data_load_func()` and gives each replay a deepcopy, so replay makes zero model calls (eng review D16, superseding D15).
 
 Recorded-response replay (cassettes) is for M2, when replay can't reset a real environment.
 
@@ -161,13 +220,31 @@ Recorded-response replay (cassettes) is for M2, when replay can't reset a real e
 
 ### Milestones
 
-- **M1: acceptance test.** Everything in the M1 spec above. Report per arm (level 1, level 2) against the plain agent on the test split: LLM calls per task, templated turns per task, tokens per task, success (end-state reward) with 95% CI, pass^4, fallback rate, wrong irreversible actions, compile cost and break-even runs, p50 latency; plus the problem number (share of segments in compiled clusters), treated as a lower bound, not a market size.
+- **M1: acceptance test.** Everything in the M1 spec above, in two steps: M1a reports Level 1 against the gates; M1b adds Level 2 and the same report. Report per arm (level 1, level 2) against the plain agent on the test split: LLM calls per task, templated turns per task, tokens per task, success (end-state reward) with 95% CI, pass^4, fallback rate, wrong irreversible actions, compile cost and break-even runs, p50 latency; plus the problem number (share of segments in compiled clusters), treated as a lower bound, not a market size.
 - **M2: shadow and generality.** HTTP LLM proxy, MCP proxy against arbitrary MCP servers, cassette replay, branch alignment within clusters, shadow mode in production-like settings. AppWorld head-to-head with TraceCompiler's published intents.
 - **M3: first outside traces.** Import traces from existing observability formats (OpenTelemetry GenAI spans, LangSmith/Langfuse exports) and generate the free report for 3-5 agent teams.
 
 ### Stack
 
-Python 3.13, typed, pydantic models for traces, SQLite for M1 (Postgres from M2), pytest for generated replay tests.
+Python 3.13, typed, pydantic models for traces and `FlowSpec`, SQLite for M1 (Postgres from M2), pytest for the miner, compiler, and runner.
+
+### Test plan (M1a, eng review D10)
+
+Unit tests use hand-built fixture traces (no model calls), under `tests/fixtures/traces/`. Every path in the review's coverage diagram has a test:
+
+| Test file | Asserts |
+|---|---|
+| `test_recorder.py` | tool, respond, and terminate steps recorded with observation and source; completion wrap records model, tokens, cost, latency; a litellm retry after a 429 records one logical call; **no steps recorded after `done`** and recorded tool-step count equals the agent's tool-call count (no ground-truth replay leakage, D16) |
+| `test_normalize.py` | JSON observation parsed; non-JSON kept as text; `"Error:"` marked failed; `think`, failed calls, and back-to-back duplicate reads dropped from the skeleton but kept in the raw trace |
+| `test_segment.py` | auth via email, via name+zip, and email-fail-then-zip all yield one auth segment with `user_id`; runs with 0, 1, and 2+ writes; transfer segments excluded; loop folding |
+| `test_provenance.py` | each kind: SELECT single and subset, unique DEP, suspected DEP, cross-run agreement keeps DEP, disagreement becomes SELECT, TRANSFORM (`#W123` vs `W123`), INPUT, CONST; short values and booleans excluded; evidence recorded |
+| `test_constants.py` | identical CONST becomes a literal; closed set (≤5 values, each in ≥2 tasks) becomes CHOICE; 6 values or free text is not compiled |
+| `test_cluster_gate.py` | day-one gate at the boundaries: 19 vs 20 runs, 9 vs 10 tasks, 2 vs 3 clusters |
+| `test_compiler.py` | each binding kind maps to the right `FlowSpec` step; a write that isn't last is refused; `render_python` output covers every kind |
+| `test_runner.py` | prepare: guard pass and fail, tool_error, SELECT exact one/zero/many, SELECT llm pick (stubbed), CHOICE valid/invalid; commit: happy path, unknown id, used id, stale (guard now fails), write returns `"Error:"`; each maps to its Deopt reason |
+| `test_verifier.py` | reset-replay exact match promotes; one mismatched write arg keeps the flow a candidate; below 8 runs or 4 tasks stays a candidate |
+| `test_e2e_dev_smoke.py` (E2E, eng review D11) | the full M1a pipeline on τ-bench's 20 retail **dev** tasks, 1 trial each, with flow-count thresholds lowered for the smoke run: every stage produces non-empty, schema-valid output and the report renders. **Must pass before the full train run**, and re-runs after every change. Tests plumbing, not results. |
+| `test_gates.py` | call counting includes every component except the user simulator; Calls gate at exactly 50%, at 80% of ceiling, and ceiling-scaled thresholds under 25% can't pass; paired one-sided bootstrap gates: a synthetic tie passes and a synthetic regression larger than the margin fails (D18); traces with mismatched config fingerprints are refused with the differing fields named (D24); determinism grouping by extracted inputs; Safety ignores free-text args; every decision band (go, iterate, rethink per arm) at its boundaries |
 
 ## Open Questions
 
@@ -175,25 +252,28 @@ Python 3.13, typed, pydantic models for traces, SQLite for M1 (Postgres from M2)
 2. **Pricing.** Leading with determinism conflicts with share-of-savings pricing; determinism buyers usually pay per workflow or per seat. Decide after M1.
 3. **Report ingestion.** Logs (no install, easier yes) vs. proxy (full tool I/O, needed for replay). Likely logs for the report, proxy for compilation.
 4. **Is τ-bench's repeat share representative?** No, it's designed around a few jobs. Real traces (M3) are the market test.
-5. **Where the code lives (blocks M1's first commit).** A new repo, or a module of memory-api (declarative memory; this is procedural memory)? Recommendation: a new repo, since the buyer and product differ. Founder to confirm.
+5. ~~Where the code lives.~~ **Resolved (eng review D6):** a new private repo (e.g. `kbhatnagar1506/agent-compiler`), bootstrapped from memory-api's pyproject, Makefile, strict mypy, and CI config. This design doc moves there with the first commit.
 6. **Azure source.** Find the primary source for the 0% to 45% / >70% claim, or drop it.
 7. **Name.** Replace "muscle memory."
 
 ## Success Criteria
 
-**M1**, measured on the test split, with a named arm: **go if at least one arm passes every gate**; the passing arm becomes the product's first shape.
+**M1**, measured on the test split, with a named arm: **go if at least one arm passes every gate**; the passing arm becomes the product's first shape. M1a alone makes a go/no-go call only if Level 1's measured ceiling is at least 31.25%; otherwise the verdict waits for M1b (D19).
 
 | Gate | Pass condition |
 |---|---|
 | Calls | LLM calls per task (as defined in the M1 spec) cut by at least the arm's threshold (50%, or 80% of the arm's ceiling if lower). An arm whose threshold falls under 25% cannot pass this gate. |
-| Answers | Success point estimate within 3 points of the plain agent. Report the 95% CI; if its lower bound is worse than -6 points, rerun with k = 8 and apply the same point-estimate rule to the rerun. |
-| Determinism | Over the trials in which compiled code made a write, grouped by the input values compiled code extracted: writes are identical within every group (groups with differing inputs are reported as simulator variance, not failures); and the lower bound of the arm's pass^4 95% CI is no worse than the baseline's pass^4 minus 3 points |
-| Safety | Zero wrong irreversible actions from compiled code, and the arm's total no higher than the baseline's. A wrong irreversible action is an irreversible call whose name and non-free-text args are not in the task's ground-truth action list (free-text args such as `summary` are excluded from the comparison). |
+| Answers | Paired, one-sided: the 95% lower bound of (arm success − baseline success), bootstrapped over the same test tasks, is no worse than −`m_success` |
+| Determinism | Over the trials in which compiled code made a write, grouped by the input values compiled code extracted: writes are identical within every group (groups with differing inputs are reported as simulator variance, not failures); and the paired 95% lower bound of (arm pass^4 − baseline pass^4) is no worse than −`m_pass4` |
+| Safety | Each write argument's provenance is recorded at runtime (D21). **Zero** wrong irreversible actions caused by a deterministic argument (DEP, CONST, TRANSFORM, exact-match SELECT). Wrong writes caused by model-picked (SELECT/CHOICE) or agent-supplied arguments count toward the arm's wrong-write rate, and the paired 95% upper bound of (arm wrong-write rate − baseline wrong-write rate) is no more than `m_safety`. A wrong irreversible action is an irreversible call whose name and non-free-text args are not in the task's ground-truth action list (free-text args such as `summary` are excluded from the comparison). |
+
+**Gate statistics** (eng review D18). Every comparison is **paired** (arm and baseline on the same test tasks) and **one-sided**, using a bootstrap over tasks with 10,000 resamples. The margins `m_success`, `m_pass4`, and `m_safety` come from a power calculation on dev-split variance, fixed and written into this doc **before any test run**. If 115 tasks × k = 4 can't support a 3-point margin, the doc states the margin it can support instead of pretending. A tie must pass; a real regression must fail.
 | Cost | Reported separately: compile cost and break-even runs (not a gate for M1) |
 
 - **Go:** one arm passes all four gates.
 - **Iterate once, then decide:** the best arm passes Answers, Determinism, and Safety, cuts calls by at least 25%, and fails the Calls gate.
-- **Rethink** (evaluated per arm; the idea is in rethink only if every arm is): calls cut under 25%, success drops more than 3 points, determinism fails, any wrong irreversible action from compiled code, or the arm's total wrong irreversible actions exceed the baseline's.
+- **Test protocol** (eng review D23): all iteration diagnostics (fallback by reason, funnel, pick accuracy) come from dev and verify, never from test. Each arm runs on test exactly once per configuration. Any later test run is labeled **tuned** in the report, next to the first.
+- **Rethink** (evaluated per arm; the idea is in rethink only if every arm is): calls cut under 25%, or the Answers, Determinism, or Safety gate fails.
 
 **M2:** ≥99% exact agreement on side-effecting calls over ≥200 shadow runs per promoted flow; on AppWorld, match or beat TraceCompiler's 34→11 call reduction on the same intent with a higher state-test pass rate than its 15/21.
 
@@ -222,3 +302,131 @@ Before writing gateway code, send one message to **Erik Dunteman** (Butter's fou
 - "realon aint live and i dont have the data." You corrected a wrong premise with a fact instead of going along with it, which saved a plan pointed at data that doesn't exist.
 - "cheap... i meant fastest." You optimize for time to signal. At this stage that's the right thing to optimize.
 - Three times I asked for a name or a number and got an option click; the answers came alive on what to build ("deploy something, ask tasks, build our own benchmark, perform and talk in metrics"). The build questions energize you. The buyer questions are the ones to push yourself through, and the Erik message is the first.
+
+## Engineering Review (2026-09-28)
+
+Reviewed by /plan-eng-review against τ-bench's source at commit `59a200c6` (verified: `Env.reset` reloads data and calls the user simulator; `calculate_reward` replays ground-truth actions through `Env.step`; tools return strings with inline `"Error:"`; retail splits are 500 train / 20 dev / 115 test; `wiki.md` requires confirmation before writes). Every change above marked "eng review D<N>" came from this review.
+
+### Decisions
+
+| # | Issue | Decision | By |
+|---|---|---|---|
+| D2 | Step 0: M1 built two arms at once | Sequence Level 1 (M1a), then Level 2 (M1b); no cut | founder |
+| D3 | Bundled read+write tool breaks the confirm-before-write policy | `prepare_<flow>` / `commit_<flow>` with single-use proposals | founder |
+| D4 | Tool outputs are strings with inline errors and retries | One normalization stage shared by miner, guards, evaluator | founder |
+| D5 | "Most recent output wins" can mis-wire provenance | Cross-run provenance, `suspected` edges, `TRANSFORM` class, evidence per binding | founder |
+| D6 | Where the code lives | New private repo, tooling copied from memory-api | founder |
+| D7 | Generated Python per flow | `FlowSpec` IR + one `FlowRunner`; `render_python` for audit only | founder |
+| D8 | Fallbacks carry no reason | `Deopt(reason, step, evidence)` with 8 reasons; per-reason reporting | founder |
+| D9 | Level 2 re-describes prepare/commit | Level 2 reuses `FlowRunner.prepare/commit` | founder |
+| D10 | No test plan | Full unit test plan with fixture traces | founder |
+| D11 | No end-to-end dry run | Dev-split E2E smoke must pass before the full run | founder |
+| D12 | Model picks unmeasured | Pick-accuracy eval, ≥95% per site for promotion | founder |
+| D13 | All trials collected before the day-one gate | Staged collection (1 trial per compile task first) | founder |
+| D14 | τ-bench `run.py` can't resume | Own resumable, atomic, one-file-per-run collection | founder |
+| D15 | Reset reloads data per replay | Superseded by D16 | founder |
+| D16 | Recorder would capture the answer key; reset calls the simulator | Record at the agent call site; replay on pristine copies; patch simulator temperature | founder |
+| D17 | Train states IDs, test doesn't | ID-stripped compile/verify instructions; dev for tuning | founder |
+| D18 | Gates fail a neutral arm | Paired, one-sided bootstrap gates with powered margins | founder |
+| D19 | Level 1 likely can't reach any Calls gate | M1a is a checkpoint; verdict needs Level 2 if the L1 ceiling is under 31.25% | founder |
+| D20 | No answer key for the miner; exploratory reads split clusters | Oracle flows first; provenance-graph segments | founder |
+| D21 | Zero-tolerance Safety vs a 95% picker | Zero tolerance for deterministic args; model/agent args compared with the baseline | founder |
+| D22 | Verification didn't run the Level 1 path | `hint` args; promotion via real Level 1 episodes on verify | founder |
+| D23 | Iteration would tune on test | Diagnostics from dev/verify; one test run per arm; later runs labeled tuned | founder |
+| D24 | Config drift between arms is silent | Config fingerprint on every trace, enforced by the evaluator | auto (founder: "do everything, don't ask") |
+| TODO | Level 2 replies must carry required outputs | Added to the M1b spec and the new repo's TODOS.md | auto (same) |
+
+### NOT in scope (M1)
+
+- **HTTP LLM proxy and MCP proxy:** M2. M1 records in-process; the proxies add nothing to the τ-bench measurement.
+- **Recorded-response (cassette) replay:** M2, when replay can't reset a real environment.
+- **Branch alignment inside clusters:** M2. M1 compiles branch-free segments; authentication is hand-written.
+- **Shadow mode, kill switch, auto-demotion:** M2 production concerns; M1 promotes offline.
+- **AppWorld head-to-head with TraceCompiler:** M2.
+- **Distribution (PyPI, Docker, GHCR, CI publish):** deferred until there's something to ship after M1.
+- **Trace import from observability tools and the free report:** M3.
+- **Human-approval policy, pricing, naming, the Azure source:** Open Questions 1, 2, 6, 7.
+
+### What already exists
+
+- **τ-bench** supplies the environment, deterministic tools, user simulator, ground-truth actions, reward, and the train/dev/test splits. M1 reuses all of it.
+- **Not reused:** `run.py`, because it has no resume and rewrites one growing file (D14). `Env.reset` for replay, because it makes a simulator call (D16).
+- **memory-api:** only its tooling conventions carry over (pyproject, strict mypy, Makefile, CI). No shared code; declarative memory is a different product (D6).
+- **TraceCompiler:** its uniqueness rule for provenance is adopted (D5). No public code was found, so nothing is vendored.
+
+### Failure modes
+
+| Codepath | Realistic failure | Test | Handling | Visible? |
+|---|---|---|---|---|
+| Collection runner | 429 storm or laptop sleep mid-run | `test_recorder` (retry = one call) | backoff, atomic files, resume (D14) | yes, logged |
+| Recorder | ground-truth replay leaks into traces | `test_recorder` (no steps after `done`) | agent call-site hook (D16) | yes, test fails |
+| Normalize | unexpected observation format | `test_normalize` | text fallback, `"Error:"` marking (D4) | yes |
+| Miner provenance | common value matches the wrong source | `test_provenance` | cross-run check, `suspected`, SELECT fallback (D5) | yes, evidence per binding |
+| Miner gate | too few clusters | `test_cluster_gate` | day-one gate stops the build (rule 7, D13) | yes |
+| Compiler | write can't be ordered last | `test_compiler` | segment not compiled | yes, reported |
+| FlowRunner prepare | hint matches zero or many candidates | `test_runner` | `Deopt(select_empty/select_ambiguous)` (D8) | yes, per-reason funnel |
+| FlowRunner commit | stale or reused proposal | `test_runner` | `Deopt(proposal_stale/used)` | yes |
+| Verifier | flow passes replay, fails real episodes | `test_verifier` | promotion requires L1 episodes on verify (D22) | yes |
+| Picker | prompt regression lowers accuracy | pick-accuracy eval | ≥95% per site gate (D12) | yes |
+| Level 1 integration | agent never calls the new tools | funnel metric | reported per flow (D19) | yes |
+| Evaluator | arms ran with different settings | `test_gates` (fingerprint mismatch) | refuse to compute (D24) | yes, error |
+| Evaluator | gate statistics fail a tie | `test_gates` (synthetic tie) | paired one-sided bootstrap (D18) | yes |
+
+**Critical gaps:** 1 found (silent config drift between arms), resolved by D24. None remain.
+
+### Worktree parallelization
+
+| Step | Modules | Depends on |
+|---|---|---|
+| S0 repo bootstrap + shared models (trace, `FlowSpec`, proposal, `Deopt`, fingerprint) | `models/` | — |
+| S1 recorder, collection runner, simulator patch, stripping script | `collect/` | S0 |
+| S2 normalize + miner | `mine/` | S0 (fixtures); S1 traces for the day-one gate |
+| S3 `FlowRunner` + prepare/commit + oracle flows | `runtime/`, `flows/` | S0 |
+| S4 compiler + `render_python` | `compile/` | S0, S2 |
+| S5 verifier + pick eval | `verify/` | S3, S4 |
+| S6 evaluator: counting, funnel, gates, power calc | `eval/` | S0 |
+| S7 Level 1 agent integration | `agent/` | S3 |
+| S8 Level 2 (M1b) | `agent/`, `runtime/` | S3, S7 |
+
+- **Lane A:** S1 (`collect/`).
+- **Lane B:** S3 → S7 (`runtime/`, `flows/`, `agent/`).
+- **Lane C:** S6 (`eval/`).
+- **Lane D:** S2 → S4 (`mine/`, `compile/`).
+
+**Execution order:** S0 first. Then launch A, B, C, and D in parallel. Merge all four, then S5, then the dev smoke (D11). S8 comes after M1a.
+
+**Conflict:** S7 and S8 both touch `agent/`; S8 is later by design, so they're sequential.
+
+### Implementation Tasks
+
+Synthesized from this review's findings. Each task derives from a specific decision above.
+
+- [ ] **T1 (P1, human: ~1 hr / CC: ~10 min)** repo: bootstrap private `agent-compiler` from memory-api's tooling, move this doc, and add TODOS.md. Source: D6. Verify: `make test` and `mypy --strict` pass on an empty package.
+- [ ] **T2 (P1, human: ~half day / CC: ~20 min)** models: trace, step, `FlowSpec`, proposal, `Deopt` reasons, config fingerprint. Source: D7, D8, D24. Verify: pydantic round-trip tests.
+- [ ] **T3 (P1, human: ~1 day / CC: ~45 min)** collect: agent call-site recorder, resumable atomic runner, simulator temperature patch. Source: D14, D16. Verify: `test_recorder.py`.
+- [ ] **T4 (P1, human: ~half day / CC: ~30 min)** collect: instruction-stripping script, stripped compile/verify sets, published mix. Source: D17. Verify: stripped tasks have no `#W`/payment ids; ground-truth hash unchanged.
+- [ ] **T5 (P1, human: ~half day / CC: ~20 min)** mine: normalization stage. Source: D4. Verify: `test_normalize.py`.
+- [ ] **T6 (P1, human: ~1-2 days / CC: ~1 hr)** runtime: `FlowRunner` prepare/commit, hint args, `Deopt` taxonomy. Source: D3, D8, D22. Verify: `test_runner.py`.
+- [ ] **T7 (P1, human: ~1-2 days / CC: ~1-2 hrs)** flows: oracle flows for the train write tools, plus dev ceilings for L1 and L2. Source: D19, D20. Verify: oracle flows reach reward 1 on dev tasks they cover; ceilings reported.
+- [ ] **T8 (P1, human: ~1-2 days / CC: ~1 hr)** eval: call counting, funnel, paired one-sided bootstrap, power calc, fingerprint enforcement, bands, test protocol. Source: D18, D19, D21, D23, D24. Verify: `test_gates.py`.
+- [ ] **T9 (P1, human: ~2-3 days / CC: ~2 hrs)** mine: auth segment, provenance-graph segments, cross-run provenance, TRANSFORM, constants rule, clustering, staged day-one gate. Source: D5, D13, D20. Verify: `test_segment.py`, `test_provenance.py`, `test_constants.py`, `test_cluster_gate.py`, recall vs oracles.
+- [ ] **T10 (P1, human: ~1 day / CC: ~45 min)** compile: skeleton → `FlowSpec`, and `render_python`. Source: D7. Verify: `test_compiler.py`.
+- [ ] **T11 (P1, human: ~1-2 days / CC: ~1 hr)** verify: replay pre-check on pristine copies, L1 episode promotion, pick eval. Source: D12, D16, D22. Verify: `test_verifier.py`, pick-eval report.
+- [ ] **T12 (P1, human: ~half day / CC: ~30 min)** agent: register prepare/commit tools with τ-bench's tool-calling agent. Source: D3. Verify: dev episode commits a prepared proposal after "yes".
+- [ ] **T13 (P1, human: ~half day / CC: ~20 min)** e2e: dev-split smoke test. Source: D11. Verify: `test_e2e_dev_smoke.py` green before any full run.
+- [ ] **T14 (P2, human: ~1-2 wks / CC: ~2 days)** M1b: Level 2 slot-filling on the shared `FlowRunner`, with required-outputs coverage. Source: D9, TODO. Verify: same gates on dev, then one test run.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | `/plan-eng-review` outside voice (Codex not installed → native Claude subagent) | Independent 2nd opinion | 1 | unavailable (native fallback ran) | 8 findings, 8 accepted |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (PLAN) | 22 issues, 1 critical gap (resolved) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** codex / plan-review / unavailable (CLI not installed). A native Claude subagent ran in its place; it is not outside-model coverage. 8 findings, all accepted (D16–D23). 2 of them overturned decisions this review had recommended (D2 → D19, D15 → D16).
+- **VERDICT:** ENG CLEARED — ready to implement M1a (tasks T1–T13). Two decisions (D24 and the M1b TODO) were auto-chosen at the founder's instruction and are recorded in the Decisions table.
+
+NO UNRESOLVED DECISIONS

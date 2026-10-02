@@ -361,6 +361,8 @@ async def get_memory_context(
         derivatives=[as_response(m) for m in context.derivatives],
         references=[as_response(m) for m in context.references],
         contradicts=[as_response(m) for m in context.contradicts],
+        depends_on=[as_response(m) for m in context.depends_on],
+        dependents=[as_response(m) for m in context.dependents],
     )
 
 

@@ -4,6 +4,7 @@ functions by the functions they use, both walkable as a dependency graph."""
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 
 import httpx
 import pytest
@@ -193,3 +194,55 @@ async def test_the_api_walks_dependencies_and_search_brings_them(
         f"/v1/spaces/{space_id}/search", json={"query": "cancel_order write order_id"}
     )
     assert all(h["dependencies"] is None for h in plain.json()["results"])
+
+
+async def test_a_memory_s_context_shows_what_it_uses_and_what_uses_it(
+    client: httpx.AsyncClient, space_id: str
+) -> None:
+    async def write(content: str) -> str:
+        made = await client.post(f"/v1/spaces/{space_id}/memories", json={"content": content})
+        return str(made.json()["memory"]["id"])
+
+    lookup = await write("Looks up the order.\n\n" + json.dumps({"output": "read:get_order"}))
+    recipe = await write("Cancels an order.\n\n" + json.dumps({"output": "recipe:cancel"}))
+    await client.post(
+        f"/v1/spaces/{space_id}/memories/{recipe}/relations",
+        json={"target_id": lookup, "relation": "depends_on"},
+    )
+    of_recipe = (await client.get(f"/v1/spaces/{space_id}/memories/{recipe}/context")).json()
+    of_lookup = (await client.get(f"/v1/spaces/{space_id}/memories/{lookup}/context")).json()
+    assert [m["id"] for m in of_recipe["depends_on"]] == [lookup]
+    assert [m["id"] for m in of_lookup["dependents"]] == [recipe]
+
+
+async def test_a_big_space_reads_as_pages_with_every_edge_once(
+    client: httpx.AsyncClient, space_id: str
+) -> None:
+    ids = []
+    for i in range(7):
+        made = await client.post(
+            f"/v1/spaces/{space_id}/memories",
+            json={"content": f"Function {i} does step {i}.\n\n" + json.dumps({"step": i})},
+        )
+        ids.append(made.json()["memory"]["id"])
+    for a, b in pairwise(ids):  # a chain: each uses the one before
+        await client.post(
+            f"/v1/spaces/{space_id}/memories/{b}/relations",
+            json={"target_id": a, "relation": "depends_on"},
+        )
+    nodes, edges, cursor, pages = [], [], None, 0
+    while True:
+        params = {"limit": 3, **({"cursor": cursor} if cursor else {})}
+        page = (await client.get(f"/v1/spaces/{space_id}/graph", params=params)).json()
+        nodes += [n["id"] for n in page["nodes"]]
+        edges += [
+            (e["source"], e["target"]) for e in page["edges"] if e["type"] == "depends_on"
+        ]
+        pages += 1
+        cursor = page.get("next_cursor")
+        if not cursor:
+            break
+    assert pages == 3 and sorted(nodes) == sorted(ids)
+    assert sorted(edges) == sorted((b, a) for a, b in pairwise(ids))  # each edge once
+    whole = (await client.get(f"/v1/spaces/{space_id}/graph")).json()
+    assert whole["next_cursor"] is None and len(whole["nodes"]) == 7

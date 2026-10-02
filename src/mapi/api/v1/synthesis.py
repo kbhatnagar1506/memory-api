@@ -126,6 +126,7 @@ async def get_graph(
     service: ServiceDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
     limit: Annotated[int, Query(ge=1, le=1000)] = 300,
+    cursor: str | None = None,
 ) -> GraphResponse:
     """Memories and the typed relations between them: `supersedes`,
     `contradicts`, `derived_from`, `references`.
@@ -136,7 +137,7 @@ async def get_graph(
     exactly one parent and the only question it answers is where the text
     came from."""
     _validate_space_id(space_id)
-    g = await service.get_graph(principal.org_id, space_id, limit=limit)
+    g = await service.get_graph(principal.org_id, space_id, limit=limit, cursor=cursor)
     degree = g.degree
     return GraphResponse(
         space_id=g.space_id,
@@ -163,4 +164,5 @@ async def get_graph(
             for e in g.edges
         ],
         counts=g.counts,
+        next_cursor=g.next_cursor,
     )

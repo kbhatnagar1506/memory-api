@@ -264,6 +264,9 @@ class GraphResponse(Response):
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     counts: dict[str, Any]
+    #: Set when the space has more memories than `limit`: pass it as `cursor` for the
+    #: next page. Each page holds the edges leaving its memories.
+    next_cursor: str | None = None
 
 
 class ConsolidateResponse(Response):
@@ -302,6 +305,8 @@ class MemoryContextResponse(Response):
     derivatives: list[MemoryResponse]
     references: list[MemoryResponse]
     contradicts: list[MemoryResponse]
+    depends_on: list[MemoryResponse] = Field(default_factory=list)
+    dependents: list[MemoryResponse] = Field(default_factory=list)
 
 
 class MemoryVersionListResponse(Response):

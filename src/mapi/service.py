@@ -94,6 +94,9 @@ class MemoryContext:
     derivatives: list[Memory]
     references: list[Memory]
     contradicts: list[Memory]
+    #: What this memory uses, and what uses it (`depends_on`, both directions).
+    depends_on: list[Memory] = field(default_factory=list)
+    dependents: list[Memory] = field(default_factory=list)
 
 
 #: The edges a memory rests on: what it `depends_on` (a function on the functions whose
@@ -129,6 +132,8 @@ class Graph:
     edges: list[RelationEdge]
     degree: dict[str, int]
     counts: dict[str, Any]
+    #: The next page's cursor, when the space has more memories than this page.
+    next_cursor: str | None = None
 
 
 @dataclass(slots=True)
@@ -1155,7 +1160,9 @@ class MemoryService:
             "head": forward[-1].source_id if forward else memory_id,
         }
 
-    async def get_graph(self, org_id: str, space_id: str, *, limit: int = 300) -> Graph:
+    async def get_graph(
+        self, org_id: str, space_id: str, *, limit: int = 300, cursor: str | None = None
+    ) -> Graph:
         """Every memory in a space plus the typed edges between them.
 
         The edges are the point. A graph built from write-time extraction is a
@@ -1169,6 +1176,11 @@ class MemoryService:
         Nodes carry status, so a viewer can show a superseded fact greyed
         behind its replacement and a STALE derivation as a fact whose evidence
         moved. Both are states no extraction-time graph represents.
+
+        A space bigger than `limit` is read in pages (`cursor`, then each page's
+        `next_cursor`): a page holds its memories and every edge leaving them, so
+        reading all pages gives every edge exactly once. A single page, the whole space,
+        keeps only the edges between its own memories.
         """
         await self.get_space_or_raise(org_id, space_id)
         page = await self.store.list_memories(
@@ -1176,18 +1188,23 @@ class MemoryService:
             space_id,
             filters=MemoryFilter(statuses=frozenset(MemoryStatus)),
             limit=limit,
-            cursor=None,
+            cursor=cursor,
         )
         memories = page.items
         ids = [m.id for m in memories]
-        edges = await self.store.get_relations_between(org_id, space_id, ids) if ids else []
+        paged = cursor is not None or page.next_cursor is not None
+        edges = (
+            await self.store.get_relations_between(org_id, space_id, ids, within=not paged)
+            if ids
+            else []
+        )
 
         present = set(ids)
         # `contradicts` is stored as a symmetric pair; render one line, not two.
         seen: set[tuple[str, str, str]] = set()
         out_edges = []
         for e in edges:
-            if e.source_id not in present or e.target_id not in present:
+            if e.source_id not in present or (not paged and e.target_id not in present):
                 continue
             key = (
                 (min(e.source_id, e.target_id), max(e.source_id, e.target_id), e.type)
@@ -1209,6 +1226,7 @@ class MemoryService:
             memories=memories,
             edges=out_edges,
             degree=degree,
+            next_cursor=page.next_cursor,
             counts={
                 "memories": len(memories),
                 "edges": len(out_edges),
@@ -1335,6 +1353,8 @@ class MemoryService:
             ),
             derivatives=await resolve(ids_of(incoming, RelationType.DERIVED_FROM, source=True)),
             references=await resolve(ids_of(outgoing, RelationType.REFERENCES, source=False)),
+            depends_on=await resolve(ids_of(outgoing, RelationType.DEPENDS_ON, source=False)),
+            dependents=await resolve(ids_of(incoming, RelationType.DEPENDS_ON, source=True)),
             contradicts=await resolve(
                 ids_of(outgoing, RelationType.CONTRADICTS, source=False)
                 + ids_of(incoming, RelationType.CONTRADICTS, source=True)

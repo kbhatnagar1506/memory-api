@@ -1044,6 +1044,7 @@ class PostgresStore(MemoryStore):
         memory_ids: Sequence[str],
         *,
         type: RelationType | None = None,
+        within: bool = True,
     ) -> list[RelationEdge]:
         ids = list(memory_ids)
         if not ids:
@@ -1054,8 +1055,9 @@ class PostgresStore(MemoryStore):
                 RelationEdgeRow.org_id == org_id,
                 RelationEdgeRow.space_id == space_id,
                 RelationEdgeRow.source_id.in_(ids),
-                RelationEdgeRow.target_id.in_(ids),
             )
+            if within:
+                stmt = stmt.where(RelationEdgeRow.target_id.in_(ids))
             if type is not None:
                 stmt = stmt.where(RelationEdgeRow.type == type.value)
             stmt = stmt.order_by(RelationEdgeRow.created_at, RelationEdgeRow.id)

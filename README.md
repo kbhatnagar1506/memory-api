@@ -311,7 +311,10 @@ make check     # lint + strict mypy + full suite
 - **Unit** — algorithms in isolation, heavy on edge cases: empty input, CJK and
   emoji, NUL bytes, 500KB documents, malformed LLM output, dimension
   mismatches, zero vectors, clock skew.
-- **Conformance** — one suite over both storage backends. Postgres runs in CI.
+- **Conformance** — one suite over both storage backends. Postgres runs in CI,
+  and locally without Docker: `scripts/local_postgres.py` starts Postgres with
+  pgvector (`pip install pgserver`) as the same unprivileged role CI uses, and
+  prints the `MAPI_TEST_DATABASE_URL` to export.
 - **End-to-end** — the real ASGI app: auth, scopes, cross-tenant isolation,
   pagination, concurrency, the error contract.
 

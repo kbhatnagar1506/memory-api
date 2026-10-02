@@ -533,6 +533,7 @@ class InMemoryStore(MemoryStore):
         memory_ids: Sequence[str],
         *,
         type: RelationType | None = None,
+        within: bool = True,
     ) -> list[RelationEdge]:
         id_set = set(memory_ids)
         found: dict[str, RelationEdge] = {}
@@ -541,7 +542,7 @@ class InMemoryStore(MemoryStore):
                 edge = self._edges[edge_id]
                 if (
                     edge.org_id == org_id
-                    and edge.target_id in id_set
+                    and (not within or edge.target_id in id_set)
                     and (type is None or edge.type == type)
                 ):
                     found[edge.id] = edge

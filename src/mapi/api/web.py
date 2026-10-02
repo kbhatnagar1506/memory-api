@@ -222,6 +222,8 @@ async def api_context(
         "derivatives": brief(ctx.derivatives),
         "references": brief(ctx.references),
         "contradicts": brief(ctx.contradicts),
+        "depends_on": brief(ctx.depends_on),
+        "dependents": brief(ctx.dependents),
     }
 
 

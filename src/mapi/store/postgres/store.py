@@ -311,26 +311,28 @@ class PostgresStore(MemoryStore):
                 min(_HNSW_EF_SEARCH_CEILING, wanted * _HNSW_EF_SEARCH_MULTIPLE),
             )
             try:
-                await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
+                # In a savepoint: a failed SET must not roll back the transaction, which
+                # holds this request's tenant scope (`_scope`). Rolled back, row-level
+                # security would hide every row and the search would return nothing.
+                async with session.begin_nested():
+                    await session.execute(text(f"SET LOCAL hnsw.ef_search = {ef}"))
                 self._ef_search_supported = True
             except Exception as exc:
                 self._ef_search_supported = False
-                await session.rollback()
                 log.warning("pgvector_ef_search_unavailable", error=str(exc)[:160])
 
         if self._iterative_scan_supported is False:
             return
         try:
-            await session.execute(text("SET LOCAL hnsw.iterative_scan = 'relaxed_order'"))
-            await session.execute(
-                text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
-            )
+            # A savepoint, as above: the failed SET is undone, the tenant scope is kept.
+            async with session.begin_nested():
+                await session.execute(text("SET LOCAL hnsw.iterative_scan = 'relaxed_order'"))
+                await session.execute(
+                    text(f"SET LOCAL hnsw.max_scan_tuples = {int(self._max_scan_tuples)}")
+                )
             self._iterative_scan_supported = True
         except Exception as exc:
             self._iterative_scan_supported = False
-            # A failed SET aborts the enclosing transaction; without a rollback
-            # the actual search that follows would die on InFailedSQLTransaction.
-            await session.rollback()
             log.warning(
                 "pgvector_iterative_scan_unavailable",
                 error=str(exc)[:160],

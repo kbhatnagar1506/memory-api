@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run the migrations, waiting for the database: on Cloud Run the Cloud SQL socket can appear a
+# few seconds after the container starts, and a job that fails on its first connection would
+# fail the deploy for nothing. Gives up after about a minute.
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  alembic upgrade head && exit 0
+  echo "migrate: database not ready (attempt $attempt), retrying in 5s" >&2
+  sleep 5
+done
+exit 1

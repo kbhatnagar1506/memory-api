@@ -552,6 +552,7 @@ class PostgresStore(MemoryStore):
                         key_hash=key.key_hash,
                         prefix=key.prefix,
                         scopes=[s.value for s in key.scopes],
+                        space_ids=sorted(key.space_ids) if key.space_ids is not None else None,
                         created_at=key.created_at,
                         expires_at=key.expires_at,
                     )
@@ -569,6 +570,7 @@ class PostgresStore(MemoryStore):
             key_hash=row.key_hash,
             prefix=row.prefix,
             scopes=frozenset(Scope(s) for s in row.scopes),
+            space_ids=frozenset(row.space_ids) if row.space_ids is not None else None,
             created_at=row.created_at,
             last_used_at=row.last_used_at,
             expires_at=row.expires_at,

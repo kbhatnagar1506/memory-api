@@ -652,6 +652,9 @@ class CreateApiKeyRequest(Request):
     name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
     scopes: list[Scope] = Field(default_factory=list)
     expires_at: datetime | None = None
+    #: Limit the key to these spaces (one tenant's own). Omitted: every space of the
+    #: organization. An admin key can't be limited.
+    space_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
 
 
 class ApiKeyResponse(Response):
@@ -659,6 +662,7 @@ class ApiKeyResponse(Response):
     name: str
     prefix: str
     scopes: list[Scope]
+    space_ids: list[str] | None = None
     created_at: datetime
     last_used_at: datetime | None
     expires_at: datetime | None

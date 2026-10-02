@@ -23,6 +23,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
 RUN useradd --create-home --uid 10001 mapi
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
+# Migrations ship in the image, so a deploy can run them with the same code and settings:
+#   alembic upgrade head   (a Cloud Run job or Heroku release phase, before traffic moves)
+COPY alembic.ini ./
+COPY migrations ./migrations
+COPY bin/migrate bin/start ./bin/
 USER mapi
 
 EXPOSE 8000

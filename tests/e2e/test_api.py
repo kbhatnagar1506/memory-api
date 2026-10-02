@@ -144,6 +144,68 @@ async def test_one_org_cannot_read_anothers_memories(app_context, client, space_
         assert search.status_code == 404
 
 
+async def test_a_key_limited_to_one_space_reaches_no_other(client, space_id) -> None:
+    """One organization, two tenants: each tenant's key sees its own space and nothing of the
+    other's, on every route that names a space."""
+    other = (await client.post("/v1/spaces", json={"slug": "tenant-b", "name": "B"})).json()[
+        "id"
+    ]
+    await client.post(f"/v1/spaces/{other}/memories", json={"content": "tenant b's secret"})
+
+    minted = await client.post("/v1/keys", json={"name": "tenant a", "space_ids": [space_id]})
+    assert minted.status_code == 201
+    assert minted.json()["key"]["space_ids"] == [space_id]
+    plaintext = minted.json()["plaintext"]
+
+    transport = client._transport
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"Authorization": f"Bearer {plaintext}"},
+    ) as tenant_a:
+        own = await tenant_a.post(
+            f"/v1/spaces/{space_id}/memories", json={"content": "a's note"}
+        )
+        assert own.status_code == 201
+        assert (await tenant_a.get(f"/v1/spaces/{space_id}/memories")).status_code == 200
+
+        listed = await tenant_a.get("/v1/spaces")
+        assert [s["id"] for s in listed.json()["items"]] == [space_id]
+
+        reads = [
+            tenant_a.get(f"/v1/spaces/{other}"),
+            tenant_a.get(f"/v1/spaces/{other}/memories"),
+            tenant_a.post(f"/v1/spaces/{other}/memories", json={"content": "x"}),
+            tenant_a.post(f"/v1/spaces/{other}/search", json={"query": "secret"}),
+            tenant_a.get(f"/v1/spaces/{other}/graph"),
+            tenant_a.delete(f"/v1/spaces/{other}"),
+        ]
+        for response in await asyncio.gather(*reads):
+            assert response.status_code == 404, response.request.url
+
+        # Can't widen itself: no new spaces, no keys.
+        assert (
+            await tenant_a.post("/v1/spaces", json={"slug": "c", "name": "C"})
+        ).status_code == 403
+        assert (await tenant_a.post("/v1/keys", json={"name": "x"})).status_code == 403
+
+    # The other tenant's data is untouched.
+    assert (await client.get(f"/v1/spaces/{other}")).status_code == 200
+
+
+async def test_space_limits_are_checked_when_minting(client, space_id) -> None:
+    admin = await client.post(
+        "/v1/keys", json={"name": "x", "scopes": ["admin"], "space_ids": [space_id]}
+    )
+    assert admin.status_code == 422
+    missing = await client.post(
+        "/v1/keys", json={"name": "x", "space_ids": ["spc_00000000000000000000000000"]}
+    )
+    assert missing.status_code == 422
+    whole = await client.post("/v1/keys", json={"name": "x"})
+    assert whole.json()["key"]["space_ids"] is None
+
+
 # -- spaces --------------------------------------------------------------------
 
 

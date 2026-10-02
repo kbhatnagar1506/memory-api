@@ -149,6 +149,10 @@ class ApiKeyRow(Base):
     scopes: Mapped[list[str]] = mapped_column(
         ARRAY(String).with_variant(JSON, "sqlite"), nullable=False
     )
+    # NULL: every space of the org. Otherwise the only spaces the key may touch.
+    space_ids: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String).with_variant(JSON, "sqlite"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

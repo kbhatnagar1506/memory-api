@@ -446,6 +446,10 @@ class ApiKey(Base):
     #: First characters of the plaintext, for identification in a UI.
     prefix: str
     scopes: frozenset[Scope]
+    #: The spaces this key may touch; None is every space of its organization. A key handed
+    #: to one tenant of a multi-tenant caller (AgentCompile: one space per customer) is
+    #: scoped to that tenant's space, so it cannot read or write another's.
+    space_ids: frozenset[str] | None = None
     created_at: datetime = Field(default_factory=utcnow)
     last_used_at: datetime | None = None
     expires_at: datetime | None = None

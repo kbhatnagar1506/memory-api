@@ -514,6 +514,35 @@ async def test_api_key_lookup_by_hash(tenant) -> None:
     assert Scope.SEARCH in found.scopes
 
 
+async def test_api_key_keeps_its_spaces(tenant) -> None:
+    """A key limited to spaces comes back limited to exactly those; an unlimited key, None."""
+    store, org, space = tenant
+    limited = await store.create_api_key(
+        ApiKey(
+            org_id=org.id,
+            name="one tenant",
+            key_hash=_key_hash(org, "s"),
+            prefix="sm_ssss",
+            scopes=frozenset({Scope.SEARCH}),
+            space_ids=frozenset({space.id}),
+        )
+    )
+    found = await store.get_api_key_by_hash(_key_hash(org, "s"))
+    assert found is not None and found.id == limited.id
+    assert found.space_ids == frozenset({space.id})
+    await store.create_api_key(
+        ApiKey(
+            org_id=org.id,
+            name="whole org",
+            key_hash=_key_hash(org, "u"),
+            prefix="sm_uuuu",
+            scopes=frozenset({Scope.SEARCH}),
+        )
+    )
+    unlimited = await store.get_api_key_by_hash(_key_hash(org, "u"))
+    assert unlimited is not None and unlimited.space_ids is None
+
+
 async def test_revoked_key_reports_inactive(tenant) -> None:
     store, org, _ = tenant
     digest = _key_hash(org, "b")

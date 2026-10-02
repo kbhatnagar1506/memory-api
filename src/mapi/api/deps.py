@@ -15,7 +15,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from ..config import Settings
-from ..core.errors import ForbiddenError, RateLimitedError, UnauthorizedError
+from ..core.errors import ForbiddenError, NotFoundError, RateLimitedError, UnauthorizedError
 from ..core.logging import org_id_var
 from ..core.metrics import RATE_LIMITED
 from ..core.security import hash_key, looks_like_key, parse_authorization
@@ -29,6 +29,17 @@ class Principal:
     org_id: str
     key_id: str
     scopes: frozenset[Scope]
+    #: The spaces this key may touch; None is every space of its organization.
+    spaces: frozenset[str] | None = None
+
+    def allows_space(self, space_id: str) -> bool:
+        return self.spaces is None or space_id in self.spaces
+
+    def require_space(self, space_id: str) -> None:
+        # Not found, not forbidden: a key scoped to one tenant's space learns nothing about
+        # whether another space exists.
+        if not self.allows_space(space_id):
+            raise NotFoundError("space not found")
 
     def require(self, scope: Scope) -> None:
         if Scope.ADMIN not in self.scopes and scope not in self.scopes:
@@ -78,7 +89,10 @@ async def authenticate(request: Request) -> Principal:
         raise UnauthorizedError("invalid or expired API key")
 
     principal = Principal(
-        org_id=record.org_id, key_id=record.id, scopes=frozenset(record.scopes)
+        org_id=record.org_id,
+        key_id=record.id,
+        scopes=frozenset(record.scopes),
+        spaces=record.space_ids,
     )
     request.state.principal = principal
     org_id_var.set(principal.org_id)
@@ -104,6 +118,16 @@ async def enforce_rate_limit(
             retry_after=decision.retry_after,
         )
     return principal
+
+
+async def space_access(request: Request) -> None:
+    """Every route that names a space (`/spaces/{space_id}/...`) checks the key may use it:
+    one dependency on the whole API, so a route added later cannot forget it."""
+    space_id = request.path_params.get("space_id")
+    if space_id is None:
+        return
+    principal = await authenticate(request)
+    principal.require_space(str(space_id))
 
 
 def require_scope(scope: Scope) -> Callable[..., Awaitable[Principal]]:

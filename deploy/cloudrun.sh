@@ -14,13 +14,19 @@
 #   BOOTSTRAP=1 deploy/cloudrun.sh   also seed the first admin key from mapi-bootstrap-key
 #                                    (once; deploy again without it right after)
 set -euo pipefail
+# Production settings: no bootstrap key (BOOTSTRAP=1 is refused in production; seed the first
+# admin key against a staging deploy), rate limits per instance (the service is private: its
+# only callers are our own, through IAM), five database connections per instance with no
+# overflow (it shares a small Cloud SQL instance with the endpoint), one instance always warm.
+# gcloud runs as CLOUDSDK_CORE_ACCOUNT, or the account that can deploy to agentcompile-prod.
+export CLOUDSDK_CORE_ACCOUNT="${CLOUDSDK_CORE_ACCOUNT:-krishna@profitwise.app}"
 cd "$(dirname "$0")/.."
 P=agentcompile-prod
 R=us-central1
 SQL="$P:$R:agentcompile-db"
 SA="agentcompile-run@$P.iam.gserviceaccount.com"
 TAG="$R-docker.pkg.dev/$P/agentcompile/mapi:$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M)"
-ENV="MAPI_ENVIRONMENT=staging,MAPI_STORE_BACKEND=postgres,MAPI_EMBEDDING_BACKEND=gemini,MAPI_EMBEDDING_MODEL=gemini-embedding-001,MAPI_EMBEDDING_DIMENSIONS=768,MAPI_GOOGLE_CLOUD_PROJECT=$P,MAPI_GOOGLE_CLOUD_LOCATION=$R"
+ENV="MAPI_ENVIRONMENT=production,MAPI_RATE_LIMIT_PER_INSTANCE_OK=true,MAPI_DB_POOL_SIZE=5,MAPI_DB_MAX_OVERFLOW=0,MAPI_STORE_BACKEND=postgres,MAPI_EMBEDDING_BACKEND=gemini,MAPI_EMBEDDING_MODEL=gemini-embedding-001,MAPI_EMBEDDING_DIMENSIONS=768,MAPI_GOOGLE_CLOUD_PROJECT=$P,MAPI_GOOGLE_CLOUD_LOCATION=$R"
 SECRETS="MAPI_DATABASE_URL=mapi-database-url:latest,MAPI_API_KEY_PEPPER=mapi-api-key-pepper:latest"
 if [[ "${BOOTSTRAP:-}" == 1 ]]; then SECRETS="$SECRETS,MAPI_BOOTSTRAP_ADMIN_KEY=mapi-bootstrap-key:latest"; fi
 
@@ -30,5 +36,5 @@ gcloud run deploy mapi --project $P --region $R --image "$TAG" --port 8000 \
   --command /app/bin/start \
   --service-account "$SA" --add-cloudsql-instances "$SQL" \
   --set-env-vars "$ENV" --set-secrets "$SECRETS" \
-  --cpu 1 --memory 1Gi --min-instances 0 --max-instances 3
+  --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3
 gcloud run services describe mapi --project $P --region $R --format='value(status.url)'

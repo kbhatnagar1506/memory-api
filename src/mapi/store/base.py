@@ -296,8 +296,11 @@ class MemoryStore(abc.ABC):
         memory_ids: Sequence[str],
         *,
         type: RelationType | None = None,
+        within: bool = True,
     ) -> list[RelationEdge]:
-        """Edges whose source AND target are both within `memory_ids`.
+        """Edges whose source AND target are both within `memory_ids` (with `within`
+        False: every edge whose source is, wherever its target is -- a page of a graph
+        read in pages, with the edges that leave it).
 
         The induced subgraph over a result set. Note what this does NOT give
         you: transitive reachability. If A supersedes B supersedes C and only

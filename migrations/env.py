@@ -42,9 +42,17 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+#: One advisory lock for Mapi's migrations: every instance migrates as it starts.
+_MIGRATION_LOCK = 7_362_201
+
+
 def _do_run(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
+        if connection.dialect.name == "postgresql":
+            # Held until this transaction commits: instances starting together migrate one at
+            # a time, and the ones after the first find nothing left to do.
+            connection.exec_driver_sql(f"SELECT pg_advisory_xact_lock({_MIGRATION_LOCK})")
         context.run_migrations()
 
 

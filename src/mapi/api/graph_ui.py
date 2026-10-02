@@ -555,6 +555,8 @@ async function show(id) {
       ['derived from', ctx.derived_from],
       ['derivatives', ctx.derivatives],
       ['contradicts', ctx.contradicts],
+      ['depends on', ctx.depends_on || []],
+      ['used by', ctx.dependents || []],
       ['references', ctx.references],
     ];
     let any = false;
@@ -637,7 +639,11 @@ async function loadSpace() {
   } else ask.hidden = true;
 
   const g = await api(`${BASE}/graph?space=${SPACE}&limit=400`);
-  allNodes = g.nodes; allEdges = g.edges; sel = null;
+  // A space read in pages can name memories this page doesn't hold: draw only edges
+  // between memories on screen.
+  const shown = new Set(g.nodes.map(n => n.id));
+  allNodes = g.nodes; allEdges = g.edges.filter(e => shown.has(e.source) && shown.has(e.target));
+  sel = null;
   nodes = allNodes; edges = allEdges;
   byId = Object.fromEntries(nodes.map(n => [n.id, n]));
   sessions = [...new Set(nodes.map(sessionOf).filter(Boolean))].sort();

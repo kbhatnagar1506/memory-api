@@ -434,6 +434,12 @@ class SearchRequestBody(Request):
     #: Still exposed, because MMR is the right tool for a corpus that genuinely
     #: accumulates restatements. Opt in per request.
     use_mmr: bool = False
+    #: Bring each hit's dependencies with it: the pieces of its own memory the matched
+    #: piece uses (code, JSON), and the memories it rests on (`derived_from`,
+    #: `references`), up to `dependency_depth` hops. Off by default: it costs a walk
+    #: per hit, and a question about a fact needs none.
+    with_dependencies: bool = False
+    dependency_depth: int = Field(default=2, ge=1, le=5)
     #: OFF, for the same reason and on stronger evidence than MMR's.
     #:
     #: The reranker was the shipped default and is the WORST of the five
@@ -540,10 +546,30 @@ class IntentBlock(Response):
     comprehensive: bool
 
 
+class ChunkDependency(Response):
+    """A piece of the hit's own memory that the matched piece uses."""
+
+    ordinal: int
+    text: str
+
+
+class DependencyRef(Response):
+    """A memory the hit depends on, `depth` hops away along dependency edges."""
+
+    id: str
+    summary: str
+    content: str
+    depth: int
+
+
 class SearchHit(Response):
     memory: MemoryResponse
     score: float
     matched_text: str = ""
+    #: With `with_dependencies`: what the matched piece and its memory depend on,
+    #: dependencies first.
+    chunk_dependencies: list[ChunkDependency] | None = None
+    dependencies: list[DependencyRef] | None = None
     vector_score: float | None = None
     lexical_score: float | None = None
     fusion_score: float | None = None
@@ -574,6 +600,30 @@ class ConfidenceBlock(Response):
     has_conflicts: bool
     reason: str
     refusal_reason: str | None = None
+
+
+class ChunkNode(Response):
+    ordinal: int
+    depends_on: list[int]
+    token_estimate: int
+
+
+class DependencyNode(Response):
+    memory: MemoryResponse
+    depth: int
+    #: The memory's pieces and which use which: its own internal dependency graph.
+    chunks: list[ChunkNode]
+
+
+class DependenciesResponse(Response):
+    """A memory's dependency closure: `nodes` in `order`, dependencies first and the
+    memory itself last, with the edges between them."""
+
+    memory_id: str
+    order: list[str]
+    nodes: list[DependencyNode]
+    edges: list[RelationResponse]
+    truncated: bool
 
 
 class SearchResponseBody(Response):

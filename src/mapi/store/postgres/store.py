@@ -23,6 +23,7 @@ from typing import Any, cast
 
 from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import raiseload
 
 from ...core.errors import (
     BadRequestError,
@@ -204,8 +205,17 @@ class PostgresStore(MemoryStore):
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
             from .models import HNSW_INDEX_DDL
+            from .rls import ensure_row_level_security, role_bypasses_row_level_security
 
             await conn.execute(text(HNSW_INDEX_DDL))
+            # A schema made here, not by the migrations, is isolated by the same policies.
+            await ensure_row_level_security(conn)
+            if await role_bypasses_row_level_security(conn):
+                log.warning(
+                    "row_level_security_bypassed",
+                    reason="the database role is a superuser or BYPASSRLS; tenant isolation "
+                    "rests on the application's filters alone",
+                )
 
     async def aclose(self) -> None:
         await self._engine.dispose()
@@ -222,7 +232,7 @@ class PostgresStore(MemoryStore):
     # -- mapping ------------------------------------------------------------
 
     @staticmethod
-    def _to_memory(row: MemoryRow) -> Memory:
+    def _to_memory(row: MemoryRow, *, chunks: bool = True) -> Memory:
         return Memory(
             id=row.id,
             org_id=row.org_id,
@@ -248,7 +258,7 @@ class PostgresStore(MemoryStore):
                     token_estimate=c.token_estimate,
                     embedding=list(c.embedding) if c.embedding is not None else None,
                 )
-                for c in row.chunks
+                for c in (row.chunks if chunks else [])
             ],
         )
 
@@ -552,6 +562,7 @@ class PostgresStore(MemoryStore):
                         key_hash=key.key_hash,
                         prefix=key.prefix,
                         scopes=[s.value for s in key.scopes],
+                        space_ids=sorted(key.space_ids) if key.space_ids is not None else None,
                         created_at=key.created_at,
                         expires_at=key.expires_at,
                     )
@@ -569,6 +580,7 @@ class PostgresStore(MemoryStore):
             key_hash=row.key_hash,
             prefix=row.prefix,
             scopes=frozenset(Scope(s) for s in row.scopes),
+            space_ids=frozenset(row.space_ids) if row.space_ids is not None else None,
             created_at=row.created_at,
             last_used_at=row.last_used_at,
             expires_at=row.expires_at,
@@ -1236,6 +1248,10 @@ class PostgresStore(MemoryStore):
             stmt = (
                 select(MemoryRow, ChunkRow.embedding, distance)
                 .join(ChunkRow, ChunkRow.memory_id == MemoryRow.id)
+                # The matched chunk's embedding is all consolidation reads. Loading every
+                # neighbour's chunks too (the relationship is selectin) fetched up to 256
+                # memories' worth of full vectors on every write.
+                .options(raiseload(MemoryRow.chunks))
                 .where(
                     ChunkRow.org_id == org_id,
                     ChunkRow.space_id == space_id,
@@ -1257,7 +1273,7 @@ class PostgresStore(MemoryStore):
                 if current is None or similarity > current[0]:
                     best[row.id] = (
                         similarity,
-                        self._to_memory(row),
+                        self._to_memory(row, chunks=False),
                         list(chunk_embedding),
                     )
             ordered = sorted(best.values(), key=lambda t: (-t[0], t[1].id))
@@ -1319,7 +1335,9 @@ class PostgresStore(MemoryStore):
                 .limit(limit)
             )
             return [
-                (memory_id, list(vector)) for memory_id, vector in await session.execute(stmt)
+                (memory_id, list(vector))
+                for memory_id, vector in await session.execute(stmt)
+                if vector is not None
             ]
 
 

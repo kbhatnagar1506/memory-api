@@ -1,0 +1,7 @@
+#!/bin/sh
+# Cloud Run entrypoint: bring the schema up to date (idempotent; waits for the database), then
+# serve. Running the migrations here rather than in a separate job keeps them on the same
+# Cloud SQL connection the service itself uses.
+/app/bin/migrate || exit 1
+exec uvicorn mapi.main:app --factory --host 0.0.0.0 --port "${PORT:-8000}" \
+  --proxy-headers --forwarded-allow-ips='*'

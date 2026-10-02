@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from ...core.errors import NotFoundError, ValidationError
+from ...core.errors import ForbiddenError, NotFoundError, ValidationError
 from ...core.ids import is_valid
 from ...domain.models import Scope, Space
 from ...store.base import MemoryFilter
@@ -43,6 +43,8 @@ async def create_space(
     service: ServiceDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_WRITE))],
 ) -> SpaceResponse:
+    if principal.spaces is not None:
+        raise ForbiddenError("this key is limited to its spaces and can't create one")
     space = await service.create_space(
         principal.org_id,
         slug=body.slug,
@@ -58,7 +60,9 @@ async def list_spaces(
     store: StoreDep,
     principal: Annotated[Principal, Depends(require_scope(Scope.SPACES_READ))],
 ) -> SpaceListResponse:
-    spaces = await store.list_spaces(principal.org_id)
+    spaces = [
+        s for s in await store.list_spaces(principal.org_id) if principal.allows_space(s.id)
+    ]
     items = []
     for space in spaces:
         count = await store.count_memories(space.org_id, space.id, filters=MemoryFilter())

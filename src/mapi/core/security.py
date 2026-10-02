@@ -110,6 +110,7 @@ def build_api_key(
     pepper: str,
     scopes: frozenset[Scope] | None = None,
     expires_at: object | None = None,
+    space_ids: frozenset[str] | None = None,
 ) -> tuple[ApiKey, str]:
     """Create an ApiKey record plus the one-time plaintext."""
     generated = generate_key(pepper)
@@ -119,6 +120,7 @@ def build_api_key(
         key_hash=generated.key_hash,
         prefix=generated.prefix,
         scopes=scopes or default_scopes(),
+        space_ids=space_ids,
         created_at=utcnow(),
         expires_at=expires_at,  # type: ignore[arg-type]
     )

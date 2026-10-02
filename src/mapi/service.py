@@ -33,7 +33,7 @@ from .core.logging import get_logger
 from .core.metrics import EMBEDDINGS, INGESTED, SEARCH_LATENCY, SEARCH_STAGE_LATENCY
 from .core.quota import Quota, check_bytes, check_memories, check_writes
 from .domain.association import propose_associations
-from .domain.chunking import chunk_text, normalize
+from .domain.chunking import chunk_content, normalize
 from .domain.consolidation import (
     ContradictionProposal,
     DuplicateKind,
@@ -541,10 +541,16 @@ class MemoryService:
         )
 
         # -- chunk and embed --------------------------------------------------
-        pieces = chunk_text(
+        # Sized to the content: prose in overlapping windows, code and JSON whole or cut
+        # only between their structural units. metadata.content_type ("prose", "code",
+        # "json") overrides detection.
+        hinted = (metadata or {}).get("content_type")
+        pieces = chunk_content(
             cleaned,
             target_tokens=self.settings.chunk_target_tokens,
             overlap_tokens=self.settings.chunk_overlap_tokens,
+            max_tokens=self.settings.chunk_structured_max_tokens,
+            kind=hinted if hinted in ("prose", "code", "json") else None,
         )
         if not pieces:
             raise ValidationError("content produced no chunks", field="content")
@@ -564,7 +570,12 @@ class MemoryService:
             else ""
         )
         try:
-            result = await self.embedder.embed([for_embedding(p.text, header) for p in pieces])
+            result = await self.embedder.embed(
+                [
+                    for_embedding(p.text, "\n".join(x for x in (header, p.context) if x))
+                    for p in pieces
+                ]
+            )
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="ok").inc(len(pieces))
         except Exception:
             EMBEDDINGS.labels(provider=self.embedder.name, outcome="error").inc()

@@ -123,9 +123,10 @@ async def test_a_write_cannot_be_aimed_at_another_tenant(pg) -> None:
             await pg._scope(session, org_a)
             await session.execute(
                 text(
-                    "INSERT INTO memories "
-                    "(id, org_id, space_id, content, content_sha256, occurred_at) "
-                    "VALUES ('mem_rlsprobe0000000000000000', :org, :space, 'x', 'h', now())"
+                    "INSERT INTO memories (id, org_id, space_id, content, summary, kind, "
+                    "meta, tags, source, status, content_sha256, occurred_at, version) "
+                    "VALUES ('mem_rlsprobe0000000000000000', :org, :space, 'x', '', "
+                    "'episodic', '{}', '{}', '', 'active', 'h', now(), 1)"
                 ),
                 {"org": org_b, "space": space_b},
             )

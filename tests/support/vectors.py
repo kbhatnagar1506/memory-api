@@ -44,13 +44,14 @@ THE CONVENTIONS, all load-bearing:
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Mapping, Sequence
 
 Vector = list[float]
 
 #: Matches `TEST_DIMENSIONS` in tests/conftest.py and the width the conformance
 #: suite expects of a real database (`MAPI_TEST_DIMENSIONS`, default 128).
-DIMS = 128
+DIMS = int(os.getenv("MAPI_TEST_DIMENSIONS", "128"))
 
 #: The query direction. Reserved: no distractor may use it.
 ANCHOR = 0

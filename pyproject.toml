@@ -104,7 +104,7 @@ disallow_untyped_decorators = false
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "google.*", "redis.*"]
+module = ["pgvector.*", "google.*", "redis.*", "openai.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

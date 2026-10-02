@@ -23,7 +23,8 @@ from mapi.main import create_app
 from mapi.service import MemoryService
 from mapi.store.memory import InMemoryStore
 
-TEST_DIMENSIONS = 128
+# A real database's vector column is fixed (768 in production); CI sets this to match it.
+TEST_DIMENSIONS = int(os.getenv("MAPI_TEST_DIMENSIONS", "128"))
 TEST_PEPPER = "test-pepper"
 
 

@@ -204,8 +204,11 @@ class PostgresStore(MemoryStore):
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
             from .models import HNSW_INDEX_DDL
+            from .rls import ensure_row_level_security
 
             await conn.execute(text(HNSW_INDEX_DDL))
+            # A schema made here, not by the migrations, is isolated by the same policies.
+            await ensure_row_level_security(conn)
 
     async def aclose(self) -> None:
         await self._engine.dispose()
@@ -1321,7 +1324,9 @@ class PostgresStore(MemoryStore):
                 .limit(limit)
             )
             return [
-                (memory_id, list(vector)) for memory_id, vector in await session.execute(stmt)
+                (memory_id, list(vector))
+                for memory_id, vector in await session.execute(stmt)
+                if vector is not None
             ]
 
 

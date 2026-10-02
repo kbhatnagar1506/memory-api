@@ -50,6 +50,8 @@ jobs:
       - name: Test
         env:
           MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi:mapi@localhost:5432/mapi_test
+          # The schema's vector column is 768 wide (migration 0001, models.ChunkRow).
+          MAPI_TEST_DIMENSIONS: "768"
         run: pytest --cov=mapi --cov-report=term-missing --cov-report=xml
       - name: Enforce coverage floor
         run: coverage report --fail-under=80

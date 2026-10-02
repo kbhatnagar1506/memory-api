@@ -115,7 +115,7 @@ class GeminiEmbedder(EmbeddingProvider):
         }
         response = await self._client.aio.models.embed_content(
             model=self.model,
-            contents=list(texts),  # type: ignore[arg-type]  # SDK stub is narrower than runtime
+            contents=list(texts),
             config=types.EmbedContentConfig(**config),
         )
         embeddings = getattr(response, "embeddings", None)

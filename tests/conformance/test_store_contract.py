@@ -727,7 +727,6 @@ async def test_deleting_a_memory_removes_its_edges(tenant) -> None:
     assert await store.list_relations(org.id, space.id, a.id, direction="out") == []
 
 
-
 async def test_a_dependency_edge_round_trips(tenant) -> None:
     """`depends_on` is a stored relation like the others (migration 0008 allows it)."""
     store, org, space = tenant
@@ -738,6 +737,7 @@ async def test_a_dependency_edge_round_trips(tenant) -> None:
         org.id, space.id, recipe.id, direction="out", type=RelationType.DEPENDS_ON
     )
     assert [(e.target_id, e.type) for e in out] == [(function.id, RelationType.DEPENDS_ON)]
+
 
 async def test_walk_supersession_chain_both_directions(tenant) -> None:
     store, org, space = tenant

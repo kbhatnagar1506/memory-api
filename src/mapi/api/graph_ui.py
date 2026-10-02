@@ -269,7 +269,8 @@ const BASE = `/orgs/${ORG}/api`;
 let SPACE = qs.get('space');
 
 const EDGE_COLOR = { supersedes:'#b8860b', contradicts:'#c2352a',
-                     derived_from:'#2b6ea8', references:'#3f7a5f' };
+                     derived_from:'#2b6ea8', references:'#3f7a5f',
+                     depends_on:'#6b4fa8' };
 const NODE_COLOR = { active:'#2f9e5e', superseded:'#a8a49c',
                      stale:'#c2352a', archived:'#c9c5bd' };
 // Distinct hues for sessions. Twelve, then it wraps -- a legend nobody can

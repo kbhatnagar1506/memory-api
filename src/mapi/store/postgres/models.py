@@ -279,7 +279,7 @@ class RelationEdgeRow(Base):
         UniqueConstraint("space_id", "source_id", "target_id", "type", name="uq_edges_triple"),
         CheckConstraint("source_id <> target_id", name="ck_edges_no_self_loop"),
         CheckConstraint(
-            "type in ('supersedes','contradicts','derived_from','references')",
+            "type in ('supersedes','contradicts','derived_from','references','depends_on')",
             name="ck_edges_type_valid",
         ),
         CheckConstraint(

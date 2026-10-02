@@ -96,9 +96,11 @@ class MemoryContext:
     contradicts: list[Memory]
 
 
-#: The edges a memory rests on: a function uses (`derived_from`) the functions whose output
-#: it needs, a recipe `references` its functions, a claim is `derived_from` its episodes.
-DEPENDENCY_RELATIONS = (RelationType.DERIVED_FROM, RelationType.REFERENCES)
+#: The edges a memory rests on: what it `depends_on` (a function on the functions whose
+#: output it needs, a recipe on its functions) and what it is `derived_from` (a claim from
+#: its episodes). Never `references`: Mapi's own associations are stored as that, and
+#: "about the same thing" is not "needs".
+DEPENDENCY_RELATIONS = (RelationType.DEPENDS_ON, RelationType.DERIVED_FROM)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1233,7 +1235,7 @@ class MemoryService:
         limit: int = 50,
     ) -> Dependencies:
         """The memory's dependency closure: every memory reachable along its outgoing
-        `derived_from` and `references` edges, up to `depth` hops and `limit` memories.
+        `depends_on` and `derived_from` edges, up to `depth` hops and `limit` memories.
 
         Breadth-first, so a limit keeps the nearest dependencies. Cycles end the walk
         (a node is visited once). Only this space's edges exist to follow: a link

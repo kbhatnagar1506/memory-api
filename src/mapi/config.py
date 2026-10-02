@@ -255,6 +255,9 @@ class Settings(BaseSettings):
     max_content_bytes: int = Field(default=1_000_000, ge=1)
     chunk_target_tokens: int = Field(default=320, ge=16, le=4096)
     chunk_overlap_tokens: int = Field(default=48, ge=0, le=1024)
+    #: Code and JSON (a function, a recipe) stay one chunk up to this size, and past it
+    #: split only between structural units (domain/chunking.py).
+    chunk_structured_max_tokens: int = Field(default=1536, ge=128, le=8192)
     dedupe_threshold: float = Field(
         default=0.97,
         ge=0.0,

@@ -126,6 +126,33 @@ async def _add(store, org, space, text: str, *, embedder=None, **kw) -> Memory:
     return await store.upsert_memory(memory)
 
 
+async def test_chunk_dependencies_round_trip(tenant) -> None:
+    """The pieces of one function keep which pieces they use."""
+    store, org, space = tenant
+    embedder = DeterministicEmbedder(dimensions=DIMENSIONS)
+    texts = ["first piece", "second piece", "third piece"]
+    vectors = await embedder.embed(texts)
+    memory = Memory(org_id=org.id, space_id=space.id, content=" ".join(texts))
+    memory = memory.model_copy(
+        update={
+            "chunks": [
+                Chunk(memory_id=memory.id, ordinal=i, text=t, embedding=v, depends_on=deps)
+                for i, (t, v, deps) in enumerate(
+                    zip(texts, vectors.vectors, ([], [0], [0, 1]), strict=True)
+                )
+            ]
+        }
+    )
+    await store.upsert_memory(memory)
+    fetched = await store.get_memory(org.id, space.id, memory.id)
+    assert fetched is not None
+    assert [c.depends_on for c in sorted(fetched.chunks, key=lambda c: c.ordinal)] == [
+        [],
+        [0],
+        [0, 1],
+    ]
+
+
 # -- spaces --------------------------------------------------------------------
 
 

@@ -272,6 +272,9 @@ class Chunk(Base):
     text: NonEmptyStr
     token_estimate: int = Field(default=0, ge=0)
     embedding: list[float] | None = None
+    #: Ordinals of this memory's chunks that this one depends on (it uses a name they
+    #: define): the dependency graph between the pieces of one function or file.
+    depends_on: list[int] = Field(default_factory=list)
 
     @field_validator("embedding")
     @classmethod

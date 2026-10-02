@@ -247,6 +247,10 @@ class ChunkRow(Base):
     # Dimension is fixed at migration time. Changing embedding model dimensions
     # requires a migration and a re-index; there is no safe in-place change.
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
+    #: Ordinals of the chunks of the same memory this one depends on (migration 0007).
+    depends_on: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer).with_variant(JSON, "sqlite"), nullable=True
+    )
     search_vector: Mapped[str | None] = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', text)", persisted=True),

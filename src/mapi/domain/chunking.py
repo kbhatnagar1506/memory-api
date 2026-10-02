@@ -21,6 +21,9 @@ instead (`chunk_structured`):
                member's path) is embedded with every later chunk, so each piece says
                whose piece it is; a stored chunk is always an exact span of the
                caller's text
+    depends_on the pieces form a dependency graph: a chunk that uses a name another
+               chunk defines (a step id it reads from, a function it calls) depends on
+               that chunk, so whoever retrieves one piece can walk to what it needs
 
 Termination is guaranteed: every recursion either reduces the unit size or falls
 through to a hard split, and `_hard_split` always makes progress. That matters
@@ -30,6 +33,7 @@ longer than the chunk budget.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from dataclasses import dataclass
@@ -89,6 +93,8 @@ class TextChunk:
     token_estimate: int
     #: Embedded ahead of `text`, never stored: what a structured chunk is part of.
     context: str = ""
+    #: Ordinals of the chunks this one uses (names it references that they define).
+    depends_on: tuple[int, ...] = ()
 
 
 def normalize(text: str) -> str:
@@ -307,7 +313,79 @@ def chunk_structured(
             )
         )
         i = j
-    return chunks
+    return _with_dependencies(chunks, kind)
+
+
+# Names a JSON member defines (`"id": "r11"`, `"output": "read:get_order"`) and a code
+# unit defines (a def, class, function or top-level binding).
+_JSON_DEFINES = re.compile(r'"(?:id|name|key|step_id|output)"\s*:\s*"((?:[^"\\]|\\.){1,200})"')
+_JSON_STRING = re.compile(r'"((?:[^"\\]|\\.){1,300})"')
+_CODE_DEFINES = re.compile(
+    r"^\s*(?:async\s+def|def|class|async\s+function|function|func|pub\s+fn|fn|struct|enum|"
+    r"interface|type)\s+([A-Za-z_]\w*)|^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)\s*=",
+    re.MULTILINE,
+)
+_IDENTIFIER = re.compile(r"\b[A-Za-z_]\w*\b")
+
+
+def _defines(text: str, kind: ContentKind) -> set[str]:
+    if kind == "json":
+        return {m.group(1) for m in _JSON_DEFINES.finditer(text)}
+    return {a or b for a, b in _CODE_DEFINES.findall(text)}
+
+
+def _references(text: str, kind: ContentKind) -> set[str]:
+    if kind == "json":
+        out: set[str] = set()
+        for m in _JSON_STRING.finditer(text):
+            value = m.group(1)
+            out.add(value)
+            out.add(re.split(r"[.\[\s]", value, maxsplit=1)[0])  # "r11.items[*].id" -> r11
+        return out
+    return set(_IDENTIFIER.findall(text))
+
+
+def _with_dependencies(chunks: list[TextChunk], kind: ContentKind) -> list[TextChunk]:
+    """Each chunk with the chunks defining the names it uses: the pieces' dependency graph."""
+    defined: dict[str, int] = {}
+    for chunk in chunks:
+        for name in _defines(chunk.text, kind):
+            defined.setdefault(name, chunk.ordinal)
+    return [
+        dataclasses.replace(
+            chunk,
+            depends_on=tuple(
+                sorted(
+                    {
+                        defined[name]
+                        for name in _references(chunk.text, kind)
+                        if name in defined and defined[name] != chunk.ordinal
+                    }
+                )
+            ),
+        )
+        for chunk in chunks
+    ]
+
+
+def chunk_closure(
+    depends_on: dict[int, tuple[int, ...]], start: int, *, limit: int = 16
+) -> list[int]:
+    """Every chunk `start` depends on, transitively, dependencies first (a chunk before any
+    chunk that uses it); `start` itself last. Cycles end the walk; at most `limit` chunks."""
+    order: list[int] = []
+    seen: set[int] = set()
+
+    def visit(node: int) -> None:
+        if node in seen or len(seen) >= limit:
+            return
+        seen.add(node)
+        for dep in depends_on.get(node, ()):
+            visit(dep)
+        order.append(node)
+
+    visit(start)
+    return order
 
 
 def _json_start(text: str) -> int | None:
@@ -508,6 +586,7 @@ __all__ = [
     "MAX_STRUCTURED_TOKENS",
     "ContentKind",
     "TextChunk",
+    "chunk_closure",
     "chunk_content",
     "chunk_structured",
     "chunk_text",

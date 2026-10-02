@@ -257,6 +257,7 @@ class PostgresStore(MemoryStore):
                     text=c.text,
                     token_estimate=c.token_estimate,
                     embedding=list(c.embedding) if c.embedding is not None else None,
+                    depends_on=list(c.depends_on or []),
                 )
                 for c in (row.chunks if chunks else [])
             ],
@@ -711,6 +712,7 @@ class PostgresStore(MemoryStore):
                         text=chunk.text,
                         token_estimate=chunk.token_estimate,
                         embedding=chunk.embedding,
+                        depends_on=list(chunk.depends_on) or None,
                     )
                 )
         return memory

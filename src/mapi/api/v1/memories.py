@@ -16,8 +16,11 @@ from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import (
     BulkCreateMemoryRequest,
     BulkCreateMemoryResponse,
+    ChunkNode,
     CreateMemoryRequest,
     CreateMemoryResponse,
+    DependenciesResponse,
+    DependencyNode,
     EraseAttestation,
     LineageResponse,
     LinkRequest,
@@ -286,6 +289,47 @@ async def get_lineage(
     _validate_memory_id(memory_id)
     lineage = await service.get_lineage(principal.org_id, space_id, memory_id)
     return LineageResponse(**lineage)  # type: ignore[arg-type]
+
+
+@router.get(
+    "/{memory_id}/dependencies",
+    response_model=DependenciesResponse,
+    summary="Everything a memory depends on, as a graph to traverse",
+)
+async def get_dependencies(
+    space_id: str,
+    memory_id: str,
+    service: ServiceDep,
+    principal: Annotated[Principal, Depends(require_scope(Scope.MEMORIES_READ))],
+    depth: Annotated[int, Query(ge=1, le=8)] = 3,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> DependenciesResponse:
+    _validate_space_id(space_id)
+    _validate_memory_id(memory_id)
+    found = await service.get_dependencies(
+        principal.org_id, space_id, memory_id, depth=depth, limit=limit
+    )
+    return DependenciesResponse(
+        memory_id=found.memory_id,
+        order=found.order,
+        nodes=[
+            DependencyNode(
+                memory=MemoryResponse.from_domain(found.memories[m]),
+                depth=found.depth[m],
+                chunks=[
+                    ChunkNode(
+                        ordinal=c.ordinal,
+                        depends_on=list(c.depends_on),
+                        token_estimate=c.token_estimate,
+                    )
+                    for c in sorted(found.memories[m].chunks, key=lambda c: c.ordinal)
+                ],
+            )
+            for m in found.order
+        ],
+        edges=[RelationResponse.from_domain(e) for e in found.edges],
+        truncated=found.truncated,
+    )
 
 
 @router.get(

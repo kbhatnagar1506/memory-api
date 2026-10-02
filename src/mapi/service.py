@@ -96,6 +96,28 @@ class MemoryContext:
     contradicts: list[Memory]
 
 
+#: The edges a memory rests on: a function uses (`derived_from`) the functions whose output
+#: it needs, a recipe `references` its functions, a claim is `derived_from` its episodes.
+DEPENDENCY_RELATIONS = (RelationType.DERIVED_FROM, RelationType.REFERENCES)
+
+
+@dataclass(frozen=True, slots=True)
+class Dependencies:
+    """Everything a memory depends on, walked along its outgoing dependency edges.
+
+    `order` lists the dependencies first: a memory comes before every memory that uses
+    it, and the root is last -- the order to read (or rebuild) them in. `depth` is each
+    memory's distance from the root. `truncated` says the walk stopped at its limit.
+    """
+
+    memory_id: str
+    order: list[str]
+    memories: dict[str, Memory]
+    edges: list[RelationEdge]
+    depth: dict[str, int]
+    truncated: bool
+
+
 @dataclass(frozen=True, slots=True)
 class Graph:
     """A space as memories plus the typed relations between them."""
@@ -589,6 +611,7 @@ class MemoryService:
                 text=piece.text,
                 token_estimate=piece.token_estimate,
                 embedding=vector,
+                depends_on=list(piece.depends_on),
             )
             for piece, vector in zip(pieces, result.vectors, strict=True)
         ]
@@ -1198,6 +1221,73 @@ class MemoryService:
                     t.value: sum(1 for e in out_edges if e.type is t) for t in RelationType
                 },
             },
+        )
+
+    async def get_dependencies(
+        self,
+        org_id: str,
+        space_id: str,
+        memory_id: str,
+        *,
+        depth: int = 3,
+        limit: int = 50,
+    ) -> Dependencies:
+        """The memory's dependency closure: every memory reachable along its outgoing
+        `derived_from` and `references` edges, up to `depth` hops and `limit` memories.
+
+        Breadth-first, so a limit keeps the nearest dependencies. Cycles end the walk
+        (a node is visited once). Only this space's edges exist to follow: a link
+        between spaces is refused when it is written.
+        """
+        root = await self.get_memory(org_id, space_id, memory_id)
+        seen: dict[str, int] = {memory_id: 0}
+        edges: list[RelationEdge] = []
+        frontier = [memory_id]
+        truncated = False
+        while frontier:
+            following: list[str] = []
+            for source in frontier:
+                if seen[source] >= depth:
+                    continue
+                for relation in DEPENDENCY_RELATIONS:
+                    for edge in await self.store.list_relations(
+                        org_id, space_id, source, direction="out", type=relation
+                    ):
+                        if edge.target_id not in seen:
+                            if len(seen) > limit:
+                                truncated = True
+                                continue
+                            seen[edge.target_id] = seen[source] + 1
+                            following.append(edge.target_id)
+                        edges.append(edge)
+            frontier = following
+        found = await self.store.get_memories(
+            org_id, space_id, [m for m in seen if m != memory_id]
+        )
+        memories = {memory_id: root, **found}
+        kept = [e for e in edges if e.source_id in memories and e.target_id in memories]
+        uses: dict[str, list[str]] = {}
+        for edge in kept:
+            uses.setdefault(edge.source_id, []).append(edge.target_id)
+        order: list[str] = []
+        visited: set[str] = set()
+
+        def visit(node: str) -> None:  # dependencies before what uses them
+            if node in visited:
+                return
+            visited.add(node)
+            for dep in sorted(uses.get(node, []), key=lambda m: (seen.get(m, 0), m)):
+                visit(dep)
+            order.append(node)
+
+        visit(memory_id)
+        return Dependencies(
+            memory_id=memory_id,
+            order=order,
+            memories=memories,
+            edges=kept,
+            depth={m: seen[m] for m in memories},
+            truncated=truncated,
         )
 
     async def get_memory_context(

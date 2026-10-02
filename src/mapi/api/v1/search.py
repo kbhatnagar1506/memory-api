@@ -6,14 +6,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from ...core.errors import ValidationError
+from ...core.errors import NotFoundError, ValidationError
 from ...core.ids import is_valid
-from ...domain.models import Scope, utcnow
+from ...domain.chunking import chunk_closure
+from ...domain.models import Scope, ScoredMemory, utcnow
 from ...domain.retrieval.pipeline import SearchRequest
+from ...service import MemoryService
 from ...store.base import MemoryFilter
 from ..deps import Principal, ServiceDep, SettingsDep, require_scope
 from ..schemas import (
+    ChunkDependency,
     ConfidenceBlock,
+    DependencyRef,
     IntentBlock,
     SearchHit,
     SearchRequestBody,
@@ -21,6 +25,52 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/spaces/{space_id}", tags=["search"])
+
+#: Memories brought along per hit, nearest first: enough for a function and what it uses.
+DEPENDENCIES_PER_HIT = 12
+
+
+async def _with_dependencies(
+    hit: SearchHit,
+    scored: ScoredMemory,
+    service: MemoryService,
+    org_id: str,
+    space_id: str,
+    depth: int,
+) -> SearchHit:
+    """The hit plus what it depends on: the pieces of its memory the matched piece uses,
+    and the memories it rests on, each dependencies first."""
+    memory = scored.memory
+    chunks = memory.chunks
+    if scored.matched_chunk_id and not chunks:
+        chunks = (await service.get_memory(org_id, space_id, memory.id)).chunks
+    by_ordinal = {c.ordinal: c for c in chunks}
+    matched = next((c for c in chunks if c.id == scored.matched_chunk_id), None)
+    pieces: list[ChunkDependency] = []
+    if matched is not None:
+        graph = {c.ordinal: tuple(c.depends_on) for c in chunks}
+        pieces = [
+            ChunkDependency(ordinal=o, text=by_ordinal[o].text)
+            for o in chunk_closure(graph, matched.ordinal)
+            if o != matched.ordinal and o in by_ordinal
+        ]
+    try:
+        found = await service.get_dependencies(
+            org_id, space_id, memory.id, depth=depth, limit=DEPENDENCIES_PER_HIT
+        )
+    except NotFoundError:  # erased between the search and the walk
+        return hit.model_copy(update={"chunk_dependencies": pieces, "dependencies": []})
+    refs = [
+        DependencyRef(
+            id=m,
+            summary=found.memories[m].summary,
+            content=found.memories[m].content,
+            depth=found.depth[m],
+        )
+        for m in found.order
+        if m != memory.id
+    ]
+    return hit.model_copy(update={"chunk_dependencies": pieces, "dependencies": refs})
 
 
 @router.post("/search", response_model=SearchResponseBody, summary="Hybrid search")
@@ -93,9 +143,17 @@ async def search(
         known_speakers=tuple(body.known_speakers),
     )
     result = await service.search(request)
+    hits = [SearchHit.from_domain(r, explain=body.explain) for r in result.results]
+    if body.with_dependencies:
+        hits = [
+            await _with_dependencies(
+                hit, scored, service, principal.org_id, space_id, body.dependency_depth
+            )
+            for hit, scored in zip(hits, result.results, strict=True)
+        ]
     return SearchResponseBody(
         query=result.query,
-        results=[SearchHit.from_domain(r, explain=body.explain) for r in result.results],
+        results=hits,
         count=len(result.results),
         total_candidates=result.total_candidates,
         strategies=result.strategies,

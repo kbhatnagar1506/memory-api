@@ -63,4 +63,15 @@ async def ensure_row_level_security(conn: Any) -> None:
             )
 
 
-__all__ = ["TENANT_TABLES", "ensure_row_level_security"]
+async def role_bypasses_row_level_security(conn: Any) -> bool:
+    """Whether the connected role ignores the policies: a superuser or a BYPASSRLS role does,
+    even on FORCEd tables. Then the application's own filters are the only isolation."""
+    row = (
+        await conn.execute(
+            text("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        )
+    ).first()
+    return bool(row and row[0])
+
+
+__all__ = ["TENANT_TABLES", "ensure_row_level_security", "role_bypasses_row_level_security"]

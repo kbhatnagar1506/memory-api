@@ -47,9 +47,22 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "${{ matrix.python }}", cache: pip}
       - run: pip install -e ".[dev]"
+      - name: An application role, as in production
+        # The container's POSTGRES_USER is a superuser, and a superuser bypasses row-level
+        # security even when it is FORCEd. The tests connect as an ordinary role so the
+        # tenant policies are actually in force, as they are for the deployed app.
+        env:
+          PGPASSWORD: mapi
+        run: |
+          psql -h localhost -U mapi -d mapi_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE ROLE mapi_app LOGIN PASSWORD 'mapi_app' NOSUPERUSER NOBYPASSRLS;
+          GRANT CREATE ON DATABASE mapi_test TO mapi_app;
+          GRANT ALL ON SCHEMA public TO mapi_app;
+          SQL
       - name: Test
         env:
-          MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi:mapi@localhost:5432/mapi_test
+          MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi_app:mapi_app@localhost:5432/mapi_test
           # The schema's vector column is 768 wide (migration 0001, models.ChunkRow).
           MAPI_TEST_DIMENSIONS: "768"
         run: pytest --cov=mapi --cov-report=term-missing --cov-report=xml

@@ -510,6 +510,9 @@ class MemoryStore(abc.ABC):
         consolidation functions keep computing their own similarity. They are
         the tested surface; making them trust a number from the store would
         move that arithmetic into two backends that must then agree forever.
+
+        A returned memory need not carry its chunks: the matched embedding
+        comes alongside it, and that is all the consumers read.
         """
 
     @abc.abstractmethod

@@ -23,6 +23,7 @@ from typing import Any, cast
 
 from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import noload
 
 from ...core.errors import (
     BadRequestError,
@@ -1247,6 +1248,10 @@ class PostgresStore(MemoryStore):
             stmt = (
                 select(MemoryRow, ChunkRow.embedding, distance)
                 .join(ChunkRow, ChunkRow.memory_id == MemoryRow.id)
+                # The matched chunk's embedding is all consolidation reads. Loading every
+                # neighbour's chunks too (the relationship is selectin) fetched up to 256
+                # memories' worth of full vectors on every write.
+                .options(noload(MemoryRow.chunks))
                 .where(
                     ChunkRow.org_id == org_id,
                     ChunkRow.space_id == space_id,

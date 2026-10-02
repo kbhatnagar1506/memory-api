@@ -65,7 +65,12 @@ jobs:
           MAPI_TEST_DATABASE_URL: postgresql+asyncpg://mapi_app:mapi_app@localhost:5432/mapi_test
           # The schema's vector column is 768 wide (migration 0001, models.ChunkRow).
           MAPI_TEST_DIMENSIONS: "768"
-        run: pytest --cov=mapi --cov-report=term-missing --cov-report=xml
+        # The slow lane is in-memory sweeps whose latency bounds assume the default
+        # width (an exact scan is linear in it); it needs no database.
+        run: |
+          pytest -m "not slow" --cov=mapi --cov-report=
+          MAPI_TEST_DATABASE_URL= MAPI_TEST_DIMENSIONS=128 pytest -m slow \
+            --cov=mapi --cov-append --cov-report=term-missing --cov-report=xml
       - name: Enforce coverage floor
         run: coverage report --fail-under=80
 

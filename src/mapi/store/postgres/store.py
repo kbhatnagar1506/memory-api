@@ -23,7 +23,7 @@ from typing import Any, cast
 
 from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import noload
+from sqlalchemy.orm import raiseload
 
 from ...core.errors import (
     BadRequestError,
@@ -232,7 +232,7 @@ class PostgresStore(MemoryStore):
     # -- mapping ------------------------------------------------------------
 
     @staticmethod
-    def _to_memory(row: MemoryRow) -> Memory:
+    def _to_memory(row: MemoryRow, *, chunks: bool = True) -> Memory:
         return Memory(
             id=row.id,
             org_id=row.org_id,
@@ -258,7 +258,7 @@ class PostgresStore(MemoryStore):
                     token_estimate=c.token_estimate,
                     embedding=list(c.embedding) if c.embedding is not None else None,
                 )
-                for c in row.chunks
+                for c in (row.chunks if chunks else [])
             ],
         )
 
@@ -1251,7 +1251,7 @@ class PostgresStore(MemoryStore):
                 # The matched chunk's embedding is all consolidation reads. Loading every
                 # neighbour's chunks too (the relationship is selectin) fetched up to 256
                 # memories' worth of full vectors on every write.
-                .options(noload(MemoryRow.chunks))
+                .options(raiseload(MemoryRow.chunks))
                 .where(
                     ChunkRow.org_id == org_id,
                     ChunkRow.space_id == space_id,
@@ -1273,7 +1273,7 @@ class PostgresStore(MemoryStore):
                 if current is None or similarity > current[0]:
                     best[row.id] = (
                         similarity,
-                        self._to_memory(row),
+                        self._to_memory(row, chunks=False),
                         list(chunk_embedding),
                     )
             ordered = sorted(best.values(), key=lambda t: (-t[0], t[1].id))

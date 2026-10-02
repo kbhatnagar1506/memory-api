@@ -90,7 +90,13 @@ class RelationType(StrEnum):
     SUPERSEDES = "supersedes"
     CONTRADICTS = "contradicts"
     DERIVED_FROM = "derived_from"
+    #: Mapi's own associations ("about the same thing") use this too, so it never means
+    #: "needs": a dependency is DEPENDS_ON.
     REFERENCES = "references"
+    #: The source uses the target: a function uses the functions whose output it needs, a
+    #: recipe uses its functions. Written by callers, never inferred; the dependency walk
+    #: follows it.
+    DEPENDS_ON = "depends_on"
 
     @property
     def symmetric(self) -> bool:

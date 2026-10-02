@@ -116,13 +116,14 @@ async def test_a_memory_s_dependencies_are_walked_dependencies_first() -> None:
     pick = await _function(service, org, space, "value:cancel_order.order_id")
     recipe = await _function(service, org, space, "recipe:cancel_order")
     unrelated = await _function(service, org, space, "read:get_weather")
-    for source, target, relation in (
-        (check, lookup, RelationType.DERIVED_FROM),
-        (pick, lookup, RelationType.DERIVED_FROM),
-        (recipe, check, RelationType.REFERENCES),
-        (recipe, pick, RelationType.REFERENCES),
-    ):
-        await service.link(org, space, source_id=source, target_id=target, relation=relation)
+    for source, target in ((check, lookup), (pick, lookup), (recipe, check), (recipe, pick)):
+        await service.link(
+            org, space, source_id=source, target_id=target, relation=RelationType.DEPENDS_ON
+        )
+    # "About the same thing" is not "needs": an association is never walked.
+    await service.link(
+        org, space, source_id=recipe, target_id=unrelated, relation=RelationType.REFERENCES
+    )
 
     found = await service.get_dependencies(org, space, recipe)
     assert set(found.order) == {lookup, check, pick, recipe} and unrelated not in found.order
@@ -148,8 +149,8 @@ async def test_a_dependency_cycle_ends_the_walk() -> None:
     service, org, space = await _service()
     a = await _function(service, org, space, "read:a")
     b = await _function(service, org, space, "read:b")
-    await service.link(org, space, source_id=a, target_id=b, relation=RelationType.DERIVED_FROM)
-    await service.link(org, space, source_id=b, target_id=a, relation=RelationType.REFERENCES)
+    await service.link(org, space, source_id=a, target_id=b, relation=RelationType.DEPENDS_ON)
+    await service.link(org, space, source_id=b, target_id=a, relation=RelationType.DERIVED_FROM)
     found = await service.get_dependencies(org, space, a)
     assert found.order == [b, a]
 
@@ -169,7 +170,7 @@ async def test_the_api_walks_dependencies_and_search_brings_them(
     recipe = await write(_recipe(40))
     linked = await client.post(
         f"/v1/spaces/{space_id}/memories/{recipe}/relations",
-        json={"target_id": lookup, "relation": "references"},
+        json={"target_id": lookup, "relation": "depends_on"},
     )
     assert linked.status_code == 201, linked.text
 

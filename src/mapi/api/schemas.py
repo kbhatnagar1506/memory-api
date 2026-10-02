@@ -435,8 +435,8 @@ class SearchRequestBody(Request):
     #: accumulates restatements. Opt in per request.
     use_mmr: bool = False
     #: Bring each hit's dependencies with it: the pieces of its own memory the matched
-    #: piece uses (code, JSON), and the memories it rests on (`derived_from`,
-    #: `references`), up to `dependency_depth` hops. Off by default: it costs a walk
+    #: piece uses (code, JSON), and the memories it rests on (`depends_on`,
+    #: `derived_from`), up to `dependency_depth` hops. Off by default: it costs a walk
     #: per hit, and a question about a fact needs none.
     with_dependencies: bool = False
     dependency_depth: int = Field(default=2, ge=1, le=5)

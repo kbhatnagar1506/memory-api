@@ -22,7 +22,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("chunks", sa.Column("depends_on", postgresql.ARRAY(sa.Integer()), nullable=True))
+    op.add_column(
+        "chunks", sa.Column("depends_on", postgresql.ARRAY(sa.Integer()), nullable=True)
+    )
 
 
 def downgrade() -> None:

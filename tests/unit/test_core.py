@@ -213,6 +213,20 @@ def test_production_validation_catches_insecure_defaults() -> None:
     assert "redis_url" in joined
 
 
+def test_a_private_deployment_may_rate_limit_per_instance_when_it_says_so() -> None:
+    deployed = {
+        "environment": "production",
+        "store_backend": "postgres",
+        "database_url": "postgresql+asyncpg://u:p@h/db",
+        "api_key_pepper": "x" * 40,
+        "embedding_backend": "gemini",
+        "google_cloud_project": "p",
+    }
+    assert any("redis_url" in p for p in Settings(**deployed).validate_production())
+    said = Settings(**deployed, rate_limit_per_instance_ok=True).validate_production()
+    assert said == []
+
+
 def test_local_environment_has_no_production_complaints() -> None:
     assert Settings(environment="local").validate_production() == []
 

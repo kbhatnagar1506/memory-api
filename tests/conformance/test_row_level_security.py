@@ -109,6 +109,25 @@ async def test_an_unscoped_session_sees_nothing_at_all(pg) -> None:
     assert rows == 0, "an unscoped session could read tenant data"
 
 
+async def test_no_session_setting_unlocks_other_tenants(pg) -> None:
+    """Any session can set a custom setting, so none may widen what it sees: the old
+    `app.bypass_rls` escape hatch is gone (migration 0009)."""
+    org_a, _, text_a = await _org_with_memory(pg, "J")
+    _, _, text_b = await _org_with_memory(pg, "K")
+
+    async with pg._session() as session, session.begin():
+        await pg._scope(session, org_a)
+        await session.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+        visible = {r[0] for r in await session.execute(text("SELECT content FROM memories"))}
+        policies = {
+            r[0] for r in await session.execute(text("SELECT policyname FROM pg_policies"))
+        }
+
+    assert text_a in visible
+    assert text_b not in visible
+    assert not any(p.endswith("_admin_bypass") for p in policies)
+
+
 async def test_a_write_cannot_be_aimed_at_another_tenant(pg) -> None:
     """WITH CHECK, not just USING.
 

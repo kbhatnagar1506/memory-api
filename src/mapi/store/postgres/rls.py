@@ -1,4 +1,4 @@
-"""Row-level security on the tenant tables, the same policies migration 0005 creates.
+"""Row-level security on the tenant tables, the policies migrations 0005 and 0009 leave.
 
 `PostgresStore.initialize()` applies them to a schema it built itself (development, tests),
 so a database made without the migrations is isolated the same way production is. Each step
@@ -53,14 +53,10 @@ async def ensure_row_level_security(conn: Any) -> None:
                     "WITH CHECK (org_id = current_setting('app.org_id', true))"
                 )
             )
-        if f"{table}_admin_bypass" not in policies:
-            await conn.execute(
-                text(
-                    f"CREATE POLICY {table}_admin_bypass ON {table} "
-                    "USING (current_setting('app.bypass_rls', true) = 'on') "
-                    "WITH CHECK (current_setting('app.bypass_rls', true) = 'on')"
-                )
-            )
+        if f"{table}_admin_bypass" in policies:
+            # Gone since migration 0009: any session could set `app.bypass_rls`. Work across
+            # tenants (migrations, backups, operators) uses a role with BYPASSRLS instead.
+            await conn.execute(text(f"DROP POLICY {table}_admin_bypass ON {table}"))
 
 
 async def role_bypasses_row_level_security(conn: Any) -> bool:

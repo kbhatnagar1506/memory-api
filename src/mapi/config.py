@@ -313,6 +313,10 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=600, ge=1)
     rate_limit_burst: int = Field(default=120, ge=1)
     redis_url: str | None = None
+    #: Production without Redis, said on purpose: a private deployment whose only callers
+    #: are its owner's own services (behind Cloud Run IAM), where a per-instance limit is
+    #: an acceptable backstop. Never for a deployment the public can reach.
+    rate_limit_per_instance_ok: bool = False
 
     # -- request handling --------------------------------------------------
     max_request_bytes: int = Field(default=8_000_000, ge=1024)
@@ -397,8 +401,11 @@ class Settings(BaseSettings):
             problems.append("embedding_backend=deterministic produces non-semantic vectors")
         if self.bootstrap_admin_key:
             problems.append("bootstrap_admin_key must not be set in production")
-        if not self.redis_url:
-            problems.append("redis_url is unset: rate limiting would be per-process only")
+        if not self.redis_url and not self.rate_limit_per_instance_ok:
+            problems.append(
+                "redis_url is unset: rate limiting would be per-process only "
+                "(set rate_limit_per_instance_ok for a private, internal deployment)"
+            )
         return problems
 
 
